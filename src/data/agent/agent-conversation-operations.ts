@@ -48,6 +48,10 @@ export class AgentConversationOperations {
         current_focus: "Analyzing user request and creating initial plan",
         constraints: [],
         preferences: {},
+        failure_history: {
+          failed_tool_attempts: {},
+          recent_failures: [],
+        },
       },
       created_at: now,
       updated_at: now,

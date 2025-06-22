@@ -65,6 +65,16 @@ export interface PlanPool {
     current_focus: string;         // What the agent is currently focusing on
     constraints: string[];         // Any constraints or requirements
     preferences: Record<string, any>; // User preferences
+    failure_history: {             // Track failure patterns to avoid repetition
+      failed_tool_attempts: Record<string, number>; // Tool name -> failure count
+      recent_failures: Array<{     // Recent failure details
+        tool: string;
+        description: string;
+        error: string;
+        timestamp: string;
+        attempt_count: number;
+      }>;
+    };
   };
   created_at: string;
   updated_at: string;

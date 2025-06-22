@@ -27,6 +27,9 @@ export class PlanTool extends BaseTool {
     } else if (planType === "evaluate") {
       console.log("📊 [Plan Tool] Evaluating progress...");
       return await this.evaluateProgress(task, context);
+    } else if (planType === "failure_analysis") {
+      console.log("⚠️  [Plan Tool] Analyzing failure patterns...");
+      return await this.analyzeFailures(task, context);
     }
 
     console.log(`❌ [Plan Tool] Unknown plan type: ${planType}`);
@@ -291,16 +294,33 @@ export class PlanTool extends BaseTool {
       }
     }).join("\n");
 
+    // Include failure history information
+    const failureHistory = context.plan_pool.context.failure_history;
+    const hasFailures = Object.keys(failureHistory.failed_tool_attempts).length > 0;
+    const failureInfo = hasFailures ? `
+IMPORTANT - Historical Failures to Consider:
+${Object.entries(failureHistory.failed_tool_attempts).map(([tool, count]) => 
+  `- ${tool}: Failed ${count} time(s)`).join('\n')}
+
+Recent Failure Details:
+${failureHistory.recent_failures.slice(-3).map(f => 
+  `- ${f.tool}: "${f.description}" failed with: ${f.error} (Attempt #${f.attempt_count})`).join('\n')}
+
+When creating the plan, if a tool has failed multiple times (3+), consider alternative approaches or different tools to achieve the same goal.` : "";
+
     const systemPrompt = `You are an intelligent planning agent for character and worldbook generation. Create a detailed execution plan.
 
 Available tools:
 ${toolsDescription}
+${failureInfo}
 
 Create a plan with goals and tasks. Each tool will determine its own execution details based on the task description.
 
+CRITICAL: If any tool has failed 3+ times, avoid using it for similar tasks and consider alternative approaches.
+
 Respond in JSON format:
 {{
-  "reasoning": "Your reasoning for this plan",
+  "reasoning": "Your reasoning for this plan, including consideration of any failure patterns",
   "confidence": 0.8,
   "goals": [
     {{
@@ -316,10 +336,10 @@ Respond in JSON format:
       "tool": "TOOL_NAME",
       "dependencies": [],
       "priority": 1-10,
-      "reasoning": "Why this task is needed"
+      "reasoning": "Why this task is needed and why this tool was chosen"
     }}
   ],
-  "alternatives": ["Alternative approaches considered"]
+  "alternatives": ["Alternative approaches considered, especially for previously failed tools"]
 }}`;
 
     return ChatPromptTemplate.fromMessages([
@@ -351,10 +371,24 @@ Make the plan comprehensive but efficient.`],
       }
     }).join("\n");
 
+    // Include failure history information
+    const failureHistory = context.plan_pool.context.failure_history;
+    const hasFailures = Object.keys(failureHistory.failed_tool_attempts).length > 0;
+    const failureInfo = hasFailures ? `
+
+IMPORTANT - Failure Analysis:
+${Object.entries(failureHistory.failed_tool_attempts).map(([tool, count]) => 
+  `- ${tool}: Failed ${count} time(s) - ${count >= 3 ? 'AVOID this tool for similar tasks!' : 'Use with caution'}`).join('\n')}
+
+Recent Failures (learn from these):
+${failureHistory.recent_failures.slice(-5).map(f => 
+  `- ${f.tool}: "${f.description}" failed: ${f.error} (Attempt #${f.attempt_count})`).join('\n')}` : "";
+
     const systemPrompt = `You are updating an existing plan based on current progress. Analyze what has been completed and what still needs to be done.
 
 Available tools:
 ${toolsDescription}
+${failureInfo}
 
 Current state:
 - Completed tasks: ${context.plan_pool.completed_tasks.length}
@@ -362,9 +396,14 @@ Current state:
 - Character data: ${context.current_result.character_data ? "Generated" : "Not generated"}
 - Worldbook data: ${context.current_result.worldbook_data ? "Generated" : "Not generated"}
 
+CRITICAL RULES:
+1. If a tool has failed 3+ times, DO NOT use it again for similar tasks
+2. Consider why previous attempts failed and propose different approaches
+3. Look for patterns in failures and avoid repeating them
+
 Respond in JSON format:
 {{
-  "reasoning": "Why these updates are needed",
+  "reasoning": "Why these updates are needed, including analysis of any failures",
   "confidence": 0.7,
   "new_tasks": [
     {{
@@ -372,13 +411,13 @@ Respond in JSON format:
       "tool": "TOOL_NAME", 
       "dependencies": [],
       "priority": 1-10,
-      "reasoning": "Why this task is needed"
+      "reasoning": "Why this task is needed and why this tool was chosen (considering failure history)"
     }}
   ],
   "context_updates": {{
     "current_focus": "What to focus on next"
   }},
-  "alternatives": ["Alternative approaches considered"]
+  "alternatives": ["Alternative approaches considered, especially to avoid repeated failures"]
 }}`;
 
     return ChatPromptTemplate.fromMessages([
@@ -438,6 +477,99 @@ What should be done next to complete the character and worldbook generation?`],
     for (const task of basicTasks) {
       await PlanPoolOperations.addTask(context.conversation_id, task);
     }
+  }
+
+  /**
+   * Analyze failure patterns and suggest alternatives
+   */
+  private async analyzeFailures(task: PlanTask, context: ToolExecutionContext): Promise<ToolExecutionResult> {
+    await this.addThought(
+      context.conversation_id,
+      "reasoning",
+      "Analyzing repeated failures to identify alternative strategies",
+      task.id,
+    );
+
+    const failureHistory = context.plan_pool.context.failure_history;
+    const criticallyFailedTools = Object.entries(failureHistory.failed_tool_attempts)
+      .filter(([tool, count]) => count >= 3);
+
+    const analysisResult = {
+      critical_tools: criticallyFailedTools,
+      total_failures: Object.values(failureHistory.failed_tool_attempts).reduce((a, b) => a + b, 0),
+      recent_failure_patterns: this.identifyFailurePatterns(failureHistory.recent_failures),
+      recommended_actions: this.suggestAlternatives(criticallyFailedTools, context),
+    };
+
+    await this.addMessage(
+      context.conversation_id,
+      "agent",
+      `⚠️  **Failure Analysis Complete**\n\n**Critical Tools:** ${criticallyFailedTools.map(([tool, count]) => `${tool} (${count} failures)`).join(', ')}\n**Total Failures:** ${analysisResult.total_failures}\n\n**Recommendations:**\n${analysisResult.recommended_actions.join('\n')}`,
+      "agent_thinking",
+    );
+
+    // Update plan context to reflect failure analysis
+    await PlanPoolOperations.updatePlanContext(context.conversation_id, {
+      current_focus: "Implementing alternative strategies due to repeated failures",
+    });
+
+    return {
+      success: true,
+      result: analysisResult,
+      should_continue: true,
+      should_update_plan: true,
+    };
+  }
+
+  /**
+   * Identify patterns in recent failures
+   */
+  private identifyFailurePatterns(recentFailures: any[]): string[] {
+    const patterns = [];
+    const errorTypes = recentFailures.map(f => f.error.toLowerCase());
+    
+    if (errorTypes.some(e => e.includes('timeout') || e.includes('network'))) {
+      patterns.push("Network/timeout issues detected");
+    }
+    if (errorTypes.some(e => e.includes('parse') || e.includes('json'))) {
+      patterns.push("Data parsing issues detected");
+    }
+    if (errorTypes.some(e => e.includes('auth') || e.includes('key'))) {
+      patterns.push("Authentication issues detected");
+    }
+    
+    return patterns;
+  }
+
+  /**
+   * Suggest alternative approaches for failed tools
+   */
+  private suggestAlternatives(criticallyFailedTools: [string, number][], context: ToolExecutionContext): string[] {
+    const suggestions = [];
+    
+    for (const [tool, count] of criticallyFailedTools) {
+      switch (tool) {
+        case "SEARCH":
+          suggestions.push("• Instead of SEARCH tool, use ASK_USER to gather inspiration and references directly");
+          break;
+        case "OUTPUT":
+          suggestions.push("• Break OUTPUT tasks into smaller parts and ask user for input/validation");
+          suggestions.push("• Use ASK_USER to gather more specific requirements before generating content");
+          break;
+        case "ASK_USER":
+          suggestions.push("• Provide more specific and clear questions to the user");
+          suggestions.push("• Use OUTPUT tool to generate example responses for user guidance");
+          break;
+        default:
+          suggestions.push(`• Find alternative approach for ${tool} functionality`);
+      }
+    }
+    
+    if (suggestions.length === 0) {
+      suggestions.push("• Consider manual intervention or simplified approach");
+    }
+    
+    return suggestions;
   }
 
   /**

@@ -309,13 +309,34 @@ export class AgentEngine {
     const mainGoal = conversation.plan_pool.goal_tree.find(g => g.type === "main_goal");
     if (mainGoal?.status === "completed") return false;
 
+    // Check completion status first
+    const completion = await this.checkCompletion();
+    if (completion.completed) return false;
+
     // Check if we have any pending tasks
     const hasPendingTasks = conversation.plan_pool.current_tasks.some(t => t.status === "pending");
     if (hasPendingTasks) return true;
 
-    // Check completion status
-    const completion = await this.checkCompletion();
-    return !completion.completed;
+    // Check failure patterns - if all tools have failed too many times, consider stopping
+    const failureHistory = conversation.plan_pool.context.failure_history;
+    const criticalFailures = Object.entries(failureHistory.failed_tool_attempts)
+      .filter(([tool, count]) => count >= 5); // Tool failed 5+ times
+
+    if (criticalFailures.length >= 2) {
+      console.log("⚠️  [Evaluation] Multiple tools have failed repeatedly, may need intervention");
+      // Still continue but add a warning task
+      await PlanPoolOperations.addTask(this.conversationId, {
+        description: "Review and resolve repeated tool failures before continuing",
+        tool: ToolType.UPDATE_PLAN,
+        parameters: { type: "failure_analysis" },
+        dependencies: [],
+        status: "pending",
+        priority: 10,
+        reasoning: "Multiple tools have failed repeatedly, need to reassess strategy",
+      });
+    }
+
+    return true;
   }
 } 
  

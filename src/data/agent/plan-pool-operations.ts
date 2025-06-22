@@ -54,6 +54,29 @@ export class PlanPoolOperations {
       completedTask.completed_at = new Date().toISOString();
       conversation.plan_pool.completed_tasks.push(completedTask);
       conversation.plan_pool.current_tasks.splice(taskIndex, 1);
+
+      // Record failure history for failed tasks
+      if (updates.status === "failed") {
+        const toolName = completedTask.tool;
+        const failureHistory = conversation.plan_pool.context.failure_history;
+        
+        // Increment failure count for this tool
+        failureHistory.failed_tool_attempts[toolName] = (failureHistory.failed_tool_attempts[toolName] || 0) + 1;
+        
+        // Add to recent failures (keep only last 10)
+        failureHistory.recent_failures.push({
+          tool: toolName,
+          description: completedTask.description,
+          error: (updates.result as any)?.error || "Unknown error",
+          timestamp: completedTask.completed_at!,
+          attempt_count: failureHistory.failed_tool_attempts[toolName],
+        });
+        
+        // Keep only the 10 most recent failures
+        if (failureHistory.recent_failures.length > 10) {
+          failureHistory.recent_failures = failureHistory.recent_failures.slice(-10);
+        }
+      }
     }
 
     await AgentConversationOperations.updateConversation(conversation);
