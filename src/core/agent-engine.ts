@@ -135,6 +135,12 @@ export class AgentEngine {
           content: `User provided: ${userInput}`,
         });
 
+        // Analyze if user input requires complete replan
+        const needsCompleteReplan = await this.analyzeUserInputForReplan(userInput);
+        if (needsCompleteReplan) {
+          await this.createCompleteReplanTask(userInput);
+        }
+
         await AgentConversationOperations.updateStatus(this.conversationId, AgentStatus.THINKING);
         continue;
       }
@@ -316,6 +322,88 @@ export class AgentEngine {
     }
 
     return true;
+  }
+
+  /**
+   * Analyze user input to determine if complete replan is needed
+   */
+  private async analyzeUserInputForReplan(userInput: string): Promise<boolean> {
+    // Simple heuristic analysis for now
+    const changeIndicators = [
+      // Direct change requests
+      "change", "different", "instead", "modify", "alter", "switch",
+      // Requirement changes  
+      "actually", "no wait", "forget that", "never mind", "let me",
+      // New directions
+      "new", "fresh", "start over", "completely different",
+      // Negative feedback
+      "not what", "wrong", "don't want", "not like", "hate"
+    ];
+
+    const userInputLower = userInput.toLowerCase();
+    const hasChangeIndicator = changeIndicators.some(indicator => 
+      userInputLower.includes(indicator)
+    );
+
+    // Also check if user is providing substantially new information
+    const conversation = await AgentConversationOperations.getConversationById(this.conversationId);
+    if (!conversation) return false;
+
+    const previousUserMessages = conversation.messages
+      .filter(msg => msg.role === "user")
+      .slice(-5) // Last 5 user messages
+      .map(msg => msg.content);
+
+    // If this is a significant departure from previous messages, trigger replan
+    const isSubstantiallyNew = userInput.length > 50 && 
+      !previousUserMessages.some(prevMsg => 
+        this.calculateSimilarity(userInput, prevMsg) > 0.6
+      );
+
+    await ThoughtBufferOperations.addThought(this.conversationId, {
+      type: "decision",
+      content: `User input analysis: changeIndicator=${hasChangeIndicator}, substantiallyNew=${isSubstantiallyNew}, needsReplan=${hasChangeIndicator || isSubstantiallyNew}`,
+    });
+
+    return hasChangeIndicator || isSubstantiallyNew;
+  }
+
+  /**
+   * Create a complete replan task when user input indicates major changes needed
+   */
+  private async createCompleteReplanTask(userInput: string): Promise<void> {
+    await PlanPoolOperations.addTask(this.conversationId, {
+      description: `Complete replan based on new user requirements: ${userInput.substring(0, 100)}...`,
+      tool: ToolType.PLAN,
+      parameters: { 
+        type: "complete_replan",
+        trigger_input: userInput
+      },
+      dependencies: [],
+      status: "pending",
+      priority: 10, // Highest priority - should execute immediately
+      reasoning: "User input indicates significant changes to requirements, need to remove obsolete tasks and create new plan",
+    });
+
+    await ThoughtBufferOperations.addDecision(this.conversationId, {
+      decision: "Triggered complete replan",
+      reasoning: `User input indicated major changes: "${userInput.substring(0, 200)}..."`,
+      alternatives_considered: ["Simple replan", "Continue with current plan"],
+      confidence: 0.8,
+    });
+  }
+
+  /**
+   * Simple text similarity calculation
+   */
+  private calculateSimilarity(text1: string, text2: string): number {
+    const words1 = text1.toLowerCase().split(/\s+/);
+    const words2 = text2.toLowerCase().split(/\s+/);
+    
+    const commonWords = words1.filter(word => words2.includes(word));
+    const totalWords = Math.max(words1.length, words2.length);
+    
+    return totalWords > 0 ? commonWords.length / totalWords : 0;
   }
 } 
  

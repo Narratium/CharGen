@@ -28,12 +28,13 @@ export interface PlanTask {
   tool: ToolType;
   parameters: Record<string, any>;
   dependencies: string[];          // Task IDs this task depends on
-  status: "pending" | "executing" | "completed" | "failed";
+  status: "pending" | "executing" | "completed" | "failed" | "obsolete";
   result?: any;
   reasoning?: string;              // Why this task is needed
   priority: number;                // Execution priority (1-10)
   created_at: string;
   completed_at?: string;
+  obsolete_reason?: string;        // Why this task was marked obsolete
 }
 
 // Goal tree structure for hierarchical planning

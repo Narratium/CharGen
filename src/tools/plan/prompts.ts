@@ -159,4 +159,96 @@ Create new tasks that move us closer to a complete, high-quality character and w
     
     return suggestions;
   }
+
+  /**
+   * Get task removal analysis prompt
+   */
+  static get ANALYZE_TASK_REMOVAL_PROMPT(): string {
+    return `You are an intelligent planning system analyzing whether current tasks and goals are still relevant given new user input.
+
+Recent user input: {recent_user_input}
+
+Current tasks:
+{current_tasks}
+
+Current goals:
+{current_goals}
+
+Task summary:
+{task_summary}
+
+Analyze the recent user input and determine:
+1. Which tasks are no longer relevant and should be removed
+2. Which goals are no longer relevant and should be removed  
+3. The reason for these changes
+4. The new focus direction
+
+Return a JSON response with this exact structure:
+{{{{
+  "removal_criteria": [
+    {{{{ "tool": "ToolType", "status": "pending", "descriptionContains": "keyword" }}}}
+  ],
+  "goals_to_remove": ["goal_id_1", "goal_id_2"],
+  "reason": "Explanation of why tasks/goals are obsolete",
+  "new_focus": "What the new planning focus should be"
+}}}}
+
+Guidelines:
+- Only mark tasks/goals as obsolete if they clearly conflict with new user requirements
+- Be conservative - prefer updating over removing unless there's clear conflict
+- Consider task dependencies when suggesting removals
+- Provide clear reasoning for decisions`;
+  }
+
+  /**
+   * Get new plan creation prompt
+   */
+  static get CREATE_NEW_PLAN_PROMPT(): string {
+    return `You are an intelligent planning system creating a new execution plan based on updated user requirements.
+
+User requirements: {user_requirements}
+New focus: {new_focus}
+Conversation ID: {conversation_id}
+
+Create a comprehensive plan that addresses the updated user requirements. Focus on what the user is asking for now.
+
+Return a JSON response with this exact structure:
+{{{{
+  "tasks": [
+    {{{{
+      "description": "Detailed task description",
+      "tool": "ToolType",
+      "parameters": {{}},
+      "dependencies": [],
+      "status": "pending",
+      "reasoning": "Why this task is needed",
+      "priority": 5
+    }}}}
+  ],
+  "goals": [
+    {{{{
+      "description": "Goal description",
+      "type": "primary",
+      "parent_id": null,
+      "children": [],
+      "status": "pending",
+      "metadata": {{}}
+    }}}}
+  ],
+  "summary": "Brief summary of the new plan"
+}}}}
+
+Available tool types: ASK_USER, SEARCH, OUTPUT, PLAN
+- ASK_USER: Get user input and clarification
+- SEARCH: Find creative inspiration and references  
+- OUTPUT: Generate character data or worldbook entries
+- PLAN: Create or update execution plans
+
+Guidelines:
+- Create tasks that directly address the user's current needs
+- Ensure tasks have appropriate dependencies
+- Include both character and worldbook generation if both are needed
+- Make tasks specific and actionable
+- Use appropriate tool types for each task`;
+  }
 } 

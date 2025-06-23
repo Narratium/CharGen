@@ -455,6 +455,26 @@ ${failureContext}
   }
 
   /**
+   * Create a simple prompt with variable substitution (for analysis tasks)
+   */
+  protected createSimplePrompt(
+    promptTemplate: string,
+    variables: Record<string, any>
+  ): ChatPromptTemplate {
+    let processedPrompt = promptTemplate;
+    
+    // Replace variables in the format {variable_name}
+    for (const [key, value] of Object.entries(variables)) {
+      const placeholder = `{${key}}`;
+      processedPrompt = processedPrompt.replace(new RegExp(placeholder, 'g'), String(value));
+    }
+    
+    return ChatPromptTemplate.fromMessages([
+      ["system", processedPrompt],
+    ]);
+  }
+
+  /**
    * Extract JSON from response that might contain markdown code blocks
    */
   protected extractJsonFromResponse(response: string): string {

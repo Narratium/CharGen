@@ -3,6 +3,7 @@ import { ToolType, ToolExecutionContext, ToolExecutionResult, PlanTask } from ".
 import { PlanPoolOperations } from "../../data/agent/plan-pool-operations";
 import { ThoughtBufferOperations } from "../../data/agent/thought-buffer-operations";
 import { PlanPrompts } from "./prompts";
+import { AgentConversationOperations } from "../../data/agent/agent-conversation-operations";
 
 /**
  * Plan Tool - Core planning and replanning functionality
@@ -20,6 +21,8 @@ export class PlanTool extends BaseTool {
       return await this.createInitialPlan(task, context);
     } else if (planType === "replan") {
       return await this.updatePlan(task, context);
+    } else if (planType === "complete_replan") {
+      return await this.completeReplan(task, context);
     } else if (planType === "evaluate") {
       return await this.evaluateProgress(task, context);
     } else if (planType === "failure_analysis") {
@@ -253,6 +256,166 @@ export class PlanTool extends BaseTool {
       result: evaluationResult,
       should_continue: true,
     };
+  }
+
+  /**
+   * Complete replan - removes obsolete tasks and creates new plan based on user input
+   */
+  private async completeReplan(task: PlanTask, context: ToolExecutionContext): Promise<ToolExecutionResult> {
+    try {
+      // Get current task summary for analysis
+      const taskSummary = await PlanPoolOperations.getTaskSummary(context.conversation_id);
+      const currentPlan = await PlanPoolOperations.getCurrentPlan(context.conversation_id);
+      
+      // Analyze which tasks should be removed
+      const removalAnalysis = await this.analyzeTaskRemoval(context, taskSummary, currentPlan);
+      
+      // Remove obsolete tasks
+      let removedCount = 0;
+      for (const criteria of removalAnalysis.removal_criteria) {
+        const removed = await PlanPoolOperations.removeTasksByCriteria(
+          context.conversation_id,
+          criteria,
+          removalAnalysis.reason
+        );
+        removedCount += removed;
+      }
+
+      // Remove obsolete goals if specified
+      for (const goalId of removalAnalysis.goals_to_remove) {
+        await PlanPoolOperations.removeGoal(context.conversation_id, goalId);
+      }
+
+      // Create new plan based on updated context
+      const newPlanResult = await this.createNewPlanFromContext(context, removalAnalysis.new_focus);
+      
+      await this.addMessage(
+        context.conversation_id,
+        "agent",
+        `🔄 **Complete Replan Executed**\n\n**Removed:** ${removedCount} obsolete tasks, ${removalAnalysis.goals_to_remove.length} goals\n**Added:** ${newPlanResult.tasks?.length || 0} new tasks\n\n**Reason:** ${removalAnalysis.reason}\n**New Focus:** ${removalAnalysis.new_focus}`,
+        "agent_thinking",
+      );
+      
+      return {
+        success: true,
+        result: {
+          removed_tasks: removedCount,
+          removed_goals: removalAnalysis.goals_to_remove.length,
+          new_tasks: newPlanResult.tasks?.length || 0,
+          new_goals: newPlanResult.goals?.length || 0,
+          plan_summary: newPlanResult.summary
+        },
+        should_continue: true,
+      };
+    } catch (error) {
+      console.warn("Complete replan failed, using fallback:", error);
+      
+      // Fallback: clear all pending tasks and create simple new ones
+      const removedCount = await PlanPoolOperations.clearPendingTasks(context.conversation_id, "Complete replan fallback");
+      await this.createFallbackPlan(context);
+      
+      return {
+        success: true,
+        result: {
+          removed_tasks: removedCount,
+          removed_goals: 0,
+          new_tasks: 4, // fallback creates 4 tasks
+          plan_summary: "Fallback replan executed"
+        },
+        should_continue: true,
+      };
+    }
+  }
+
+  /**
+   * Analyze which tasks and goals should be removed based on new context
+   */
+  private async analyzeTaskRemoval(
+    context: ToolExecutionContext, 
+    taskSummary: any, 
+    currentPlan: any
+  ): Promise<{
+    removal_criteria: Array<{tool?: string; status?: string; descriptionContains?: string}>;
+    goals_to_remove: string[];
+    reason: string;
+    new_focus: string;
+  }> {
+    // Get conversation to access message history
+    const conversation = await AgentConversationOperations.getConversationById(context.conversation_id);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${context.conversation_id}`);
+    }
+
+    const recentUserMessages = conversation.messages
+      .filter((msg: any) => msg.role === "user")
+      .slice(-3)
+      .map((msg: any) => msg.content)
+      .join("\n");
+
+    // Create contextual prompt using the template
+    const systemPrompt = PlanPrompts.ANALYZE_TASK_REMOVAL_PROMPT;
+    const promptTemplate = await this.createSimplePrompt(systemPrompt, {
+      recent_user_input: recentUserMessages,
+      current_tasks: JSON.stringify(currentPlan.current_tasks, null, 2),
+      current_goals: JSON.stringify(currentPlan.goal_tree, null, 2),
+      task_summary: JSON.stringify(taskSummary, null, 2)
+    });
+    
+    const analysisResult = await this.executeLLMChain(promptTemplate, {}, context, {
+      parseJson: true,
+      errorMessage: "Failed to analyze task removal"
+    });
+
+    return analysisResult || {
+      removal_criteria: [{ status: "pending" }],
+      goals_to_remove: [],
+      reason: "User input changed requirements",
+      new_focus: "Adapt to new user requirements"
+    };
+  }
+
+  /**
+   * Create new plan based on current context and focus
+   */
+  private async createNewPlanFromContext(context: ToolExecutionContext, newFocus: string): Promise<any> {
+    // Get conversation to access message history - consistent with base-tool pattern
+    const conversation = await AgentConversationOperations.getConversationById(context.conversation_id);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${context.conversation_id}`);
+    }
+
+    const recentUserMessages = conversation.messages
+      .filter((msg: any) => msg.role === "user")
+      .slice(-3)
+      .map((msg: any) => msg.content)
+      .join("\n");
+
+    // Create contextual prompt using base-tool method - consistent with other tools
+    const systemPrompt = PlanPrompts.CREATE_NEW_PLAN_PROMPT;
+    const promptTemplate = await this.createSimplePrompt(systemPrompt, {
+      user_requirements: recentUserMessages,
+      new_focus: newFocus,
+      conversation_id: context.conversation_id
+    });
+    
+    const newPlan = await this.executeLLMChain(promptTemplate, {}, context, {
+      parseJson: true,
+      errorMessage: "Failed to create new plan"
+    });
+
+    if (newPlan?.tasks) {
+      for (const newTask of newPlan.tasks) {
+        await PlanPoolOperations.addTask(context.conversation_id, newTask);
+      }
+    }
+
+    if (newPlan?.goals) {
+      for (const newGoal of newPlan.goals) {
+        await PlanPoolOperations.addGoal(context.conversation_id, newGoal);
+      }
+    }
+
+    return newPlan || { tasks: [], goals: [], summary: "Fallback plan created" };
   }
 
   /**

@@ -170,5 +170,142 @@ export class PlanPoolOperations {
     
     await AgentConversationOperations.updateConversation(conversation);
   }
+
+  /**
+   * Remove task from current tasks (mark as obsolete)
+   */
+  static async removeTask(conversationId: string, taskId: string, reason?: string): Promise<void> {
+    const conversation = await AgentConversationOperations.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    const taskIndex = conversation.plan_pool.current_tasks.findIndex(t => t.id === taskId);
+    if (taskIndex === -1) {
+      throw new Error(`Task not found: ${taskId}`);
+    }
+
+    // Move to completed with obsolete status
+    const obsoleteTask = conversation.plan_pool.current_tasks[taskIndex];
+    obsoleteTask.status = "obsolete" as any;
+    obsoleteTask.completed_at = new Date().toISOString();
+    if (reason) {
+      obsoleteTask.obsolete_reason = reason;
+    }
+
+    conversation.plan_pool.completed_tasks.push(obsoleteTask);
+    conversation.plan_pool.current_tasks.splice(taskIndex, 1);
+
+    await AgentConversationOperations.updateConversation(conversation);
+  }
+
+  /**
+   * Remove multiple tasks by criteria
+   */
+  static async removeTasksByCriteria(
+    conversationId: string, 
+    criteria: {
+      tool?: string;
+      status?: string;
+      descriptionContains?: string;
+    },
+    reason?: string
+  ): Promise<number> {
+    const conversation = await AgentConversationOperations.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    const tasksToRemove = conversation.plan_pool.current_tasks.filter(task => {
+      if (criteria.tool && task.tool !== criteria.tool) return false;
+      if (criteria.status && task.status !== criteria.status) return false;
+      if (criteria.descriptionContains && !task.description.toLowerCase().includes(criteria.descriptionContains.toLowerCase())) return false;
+      return true;
+    });
+
+    // Mark tasks as obsolete and move to completed
+    for (const task of tasksToRemove) {
+      const taskIndex = conversation.plan_pool.current_tasks.findIndex(t => t.id === task.id);
+      if (taskIndex !== -1) {
+        task.status = "obsolete" as any;
+        task.completed_at = new Date().toISOString();
+        if (reason) {
+          task.obsolete_reason = reason;
+        }
+        
+        conversation.plan_pool.completed_tasks.push(task);
+        conversation.plan_pool.current_tasks.splice(taskIndex, 1);
+      }
+    }
+
+    await AgentConversationOperations.updateConversation(conversation);
+    return tasksToRemove.length;
+  }
+
+  /**
+   * Clear all pending tasks (useful for complete replan)
+   */
+  static async clearPendingTasks(conversationId: string, reason: string = "Complete replan triggered"): Promise<number> {
+    return await this.removeTasksByCriteria(conversationId, { status: "pending" }, reason);
+  }
+
+  /**
+   * Remove goal from goal tree
+   */
+  static async removeGoal(conversationId: string, goalId: string): Promise<void> {
+    const conversation = await AgentConversationOperations.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    const goalIndex = conversation.plan_pool.goal_tree.findIndex(g => g.id === goalId);
+    if (goalIndex === -1) {
+      throw new Error(`Goal not found: ${goalId}`);
+    }
+
+    conversation.plan_pool.goal_tree.splice(goalIndex, 1);
+    await AgentConversationOperations.updateConversation(conversation);
+  }
+
+  /**
+   * Get current task summary for analysis
+   */
+  static async getTaskSummary(conversationId: string): Promise<{
+    pending: number;
+    executing: number;
+    total_current: number;
+    by_tool: Record<string, number>;
+  }> {
+    const conversation = await AgentConversationOperations.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    const tasks = conversation.plan_pool.current_tasks;
+    const byTool: Record<string, number> = {};
+
+    for (const task of tasks) {
+      byTool[task.tool] = (byTool[task.tool] || 0) + 1;
+    }
+
+    return {
+      pending: tasks.filter(t => t.status === "pending").length,
+      executing: tasks.filter(t => t.status === "executing").length,
+      total_current: tasks.length,
+      by_tool: byTool,
+    };
+  }
+
+  /**
+   * Get current plan (plan pool with all tasks and goals)
+   */
+  static async getCurrentPlan(conversationId: string): Promise<PlanPool> {
+    const conversation = await AgentConversationOperations.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    return conversation.plan_pool;
+  }
 } 
  
