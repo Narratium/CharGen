@@ -1,51 +1,48 @@
-import { 
-  readData, 
-  writeData, 
-  AGENT_CONVERSATIONS_FILE, 
-} from "../local-storage";
-import { 
-  AgentConversation,
-  AgentStatus,
-  PlanPool,
-  ThoughtBuffer,
-  AgentResult,
-  ConversationMessage,
-} from "../../models/agent-model";
+import { AgentConversation, AgentStatus, ConversationMessage, TaskProgress, PlanningContext } from "../../models/agent-model";
+import { readData, writeData, AGENT_CONVERSATIONS_FILE } from "../local-storage";
 import { v4 as uuidv4 } from "uuid";
 
 /**
- * Agent Conversation Operations - New simplified architecture
+ * Agent Conversation Operations - Redesigned
+ * Handles conversation data with clear separation of concerns
  */
 export class AgentConversationOperations {
+
+
   /**
-   * Create a new agent conversation
+   * Create a new agent conversation with clean initial state
    */
   static async createConversation(
     title: string,
-    userRequest: string,
     llmConfig: AgentConversation["llm_config"],
+    initialUserRequest: string
   ): Promise<AgentConversation> {
-    const conversations = await readData(AGENT_CONVERSATIONS_FILE);
     const conversationId = uuidv4();
     const now = new Date().toISOString();
-    
-    // Initialize plan pool
-    const planPool: PlanPool = {
+
+    // Create initial task progress
+    const taskProgress: TaskProgress = {
       id: uuidv4(),
       conversation_id: conversationId,
-      goal_tree: [{
-        id: uuidv4(),
-        description: "Create character and worldbook based on user request",
-        type: "main_goal",
-        children: [],
-        status: "pending",
-        metadata: { user_request: userRequest },
-      }],
+      generation_metadata: {
+        total_iterations: 0,
+        tools_used: [],
+        last_updated: now,
+      },
+      created_at: now,
+      updated_at: now,
+    };
+
+    // Create initial planning context
+    const planningContext: PlanningContext = {
+      id: uuidv4(),
+      conversation_id: conversationId,
+      goals: [],
       current_tasks: [],
       completed_tasks: [],
       context: {
-        user_request: userRequest,
-        current_focus: "Analyzing user request and creating initial plan",
+        user_request: initialUserRequest,
+        current_focus: "Initial setup and planning",
         constraints: [],
         preferences: {},
         failure_history: {
@@ -57,51 +54,24 @@ export class AgentConversationOperations {
       updated_at: now,
     };
 
-    // Initialize thought buffer
-    const thoughtBuffer: ThoughtBuffer = {
+    // Create initial user message
+    const initialMessage: ConversationMessage = {
       id: uuidv4(),
-      conversation_id: conversationId,
-      thoughts: [{
-        id: uuidv4(),
-        type: "observation",
-        content: `User requested: ${userRequest}`,
-        timestamp: now,
-      }],
-      current_reasoning: "Starting analysis of user request",
-      decision_history: [],
-      reflection_notes: [],
-      created_at: now,
-      updated_at: now,
+      role: "user",
+      content: initialUserRequest,
+      message_type: "user_input",
+      timestamp: now,
     };
 
-    // Initialize result
-    const result: AgentResult = {
-      id: uuidv4(),
-      conversation_id: conversationId,
-      generation_metadata: {
-        total_iterations: 0,
-        tools_used: [],
-      },
-      created_at: now,
-      updated_at: now,
-    };
-    
-    const newConversation: AgentConversation = {
+    const conversation: AgentConversation = {
       id: conversationId,
       title,
       status: AgentStatus.IDLE,
-      plan_pool: planPool,
-      thought_buffer: thoughtBuffer,
-      result,
-      messages: [{
-        id: uuidv4(),
-        role: "user",
-        content: userRequest,
-        message_type: "user_input",
-        timestamp: now,
-      }],
+      messages: [initialMessage],
+      task_progress: taskProgress,
+      planning_context: planningContext,
       llm_config: llmConfig,
-      context: {
+      execution_metadata: {
         current_iteration: 0,
         max_iterations: 50,
         start_time: now,
@@ -111,103 +81,224 @@ export class AgentConversationOperations {
       created_at: now,
       updated_at: now,
     };
-    
-    conversations.push(newConversation);
-    await writeData(AGENT_CONVERSATIONS_FILE, conversations);
-    
-    return newConversation;
+
+    await this.saveConversation(conversation);
+    return conversation;
   }
 
   /**
    * Get conversation by ID
    */
-  static async getConversationById(id: string): Promise<AgentConversation | null> {
-    const conversations = await readData(AGENT_CONVERSATIONS_FILE);
-    return conversations.find((conv: AgentConversation) => conv.id === id) || null;
+  static async getConversationById(conversationId: string): Promise<AgentConversation | null> {
+    const conversations = await this.getAllConversations();
+    return conversations.find(c => c.id === conversationId) || null;
   }
 
   /**
    * Get all conversations
    */
   static async getAllConversations(): Promise<AgentConversation[]> {
-    const conversations = await readData(AGENT_CONVERSATIONS_FILE);
-    return conversations.sort((a: AgentConversation, b: AgentConversation) => 
-      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-    );
+    try {
+      const data = await readData(AGENT_CONVERSATIONS_FILE);
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error("Failed to load conversations:", error);
+      return [];
+    }
+  }
+
+  /**
+   * Save conversation to storage
+   */
+  static async saveConversation(conversation: AgentConversation): Promise<void> {
+    const conversations = await this.getAllConversations();
+    const existingIndex = conversations.findIndex(c => c.id === conversation.id);
+    
+    conversation.updated_at = new Date().toISOString();
+    conversation.execution_metadata.last_activity = conversation.updated_at;
+
+    if (existingIndex >= 0) {
+      conversations[existingIndex] = conversation;
+    } else {
+      conversations.push(conversation);
+    }
+
+    await writeData(AGENT_CONVERSATIONS_FILE, conversations);
+  }
+
+  /**
+   * Update conversation with partial data
+   */
+  static async updateConversation(conversation: AgentConversation): Promise<void> {
+    await this.saveConversation(conversation);
   }
 
   /**
    * Update conversation status
    */
   static async updateStatus(conversationId: string, status: AgentStatus): Promise<void> {
-    const conversations = await readData(AGENT_CONVERSATIONS_FILE);
-    const index = conversations.findIndex((conv: AgentConversation) => conv.id === conversationId);
-    
-    if (index === -1) {
+    const conversation = await this.getConversationById(conversationId);
+    if (!conversation) {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
-    
-    conversations[index].status = status;
-    conversations[index].context.last_activity = new Date().toISOString();
-    conversations[index].updated_at = new Date().toISOString();
-    
-    await writeData(AGENT_CONVERSATIONS_FILE, conversations);
-  }
 
-  /**
-   * Update entire conversation
-   */
-  static async updateConversation(conversation: AgentConversation): Promise<void> {
-    const conversations = await readData(AGENT_CONVERSATIONS_FILE);
-    const index = conversations.findIndex((conv: AgentConversation) => conv.id === conversation.id);
-    
-    if (index === -1) {
-      throw new Error(`Conversation not found: ${conversation.id}`);
-    }
-    
-    conversation.updated_at = new Date().toISOString();
-    conversation.context.last_activity = new Date().toISOString();
-    conversations[index] = conversation;
-    
-    await writeData(AGENT_CONVERSATIONS_FILE, conversations);
+    conversation.status = status;
+    await this.saveConversation(conversation);
   }
 
   /**
    * Add message to conversation
    */
   static async addMessage(
-    conversationId: string, 
-    message: Omit<ConversationMessage, "id" | "timestamp">,
-  ): Promise<void> {
-    const conversations = await readData(AGENT_CONVERSATIONS_FILE);
-    const index = conversations.findIndex((conv: AgentConversation) => conv.id === conversationId);
-    
-    if (index === -1) {
+    conversationId: string,
+    messageData: Omit<ConversationMessage, "id" | "timestamp">
+  ): Promise<ConversationMessage> {
+    const conversation = await this.getConversationById(conversationId);
+    if (!conversation) {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
-    
-    const newMessage: ConversationMessage = {
-      ...message,
+
+    const message: ConversationMessage = {
+      ...messageData,
       id: uuidv4(),
       timestamp: new Date().toISOString(),
     };
+
+    conversation.messages.push(message);
+    await this.saveConversation(conversation);
     
-    conversations[index].messages.push(newMessage);
-    conversations[index].updated_at = new Date().toISOString();
+    return message;
+  }
+
+  /**
+   * Update task progress
+   */
+  static async updateTaskProgress(
+    conversationId: string,
+    updates: Partial<Omit<TaskProgress, "id" | "conversation_id" | "created_at">>
+  ): Promise<void> {
+    const conversation = await this.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    // Update task progress
+    Object.assign(conversation.task_progress, updates);
+    conversation.task_progress.updated_at = new Date().toISOString();
+    conversation.task_progress.generation_metadata.last_updated = conversation.task_progress.updated_at;
+
+    await this.saveConversation(conversation);
+  }
+
+  /**
+   * Update planning context
+   */
+  static async updatePlanningContext(
+    conversationId: string,
+    updates: Partial<Omit<PlanningContext, "id" | "conversation_id" | "created_at">>
+  ): Promise<void> {
+    const conversation = await this.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    // Update planning context
+    Object.assign(conversation.planning_context, updates);
+    conversation.planning_context.updated_at = new Date().toISOString();
+
+    await this.saveConversation(conversation);
+  }
+
+  /**
+   * Increment iteration count
+   */
+  static async incrementIteration(conversationId: string): Promise<number> {
+    const conversation = await this.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    conversation.execution_metadata.current_iteration++;
+    conversation.task_progress.generation_metadata.total_iterations = conversation.execution_metadata.current_iteration;
     
-    await writeData(AGENT_CONVERSATIONS_FILE, conversations);
+    await this.saveConversation(conversation);
+    return conversation.execution_metadata.current_iteration;
+  }
+
+  /**
+   * Record tool usage in task progress
+   */
+  static async recordToolUsage(conversationId: string, toolType: string): Promise<void> {
+    const conversation = await this.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    const toolsUsed = conversation.task_progress.generation_metadata.tools_used;
+    if (!toolsUsed.includes(toolType as any)) {
+      toolsUsed.push(toolType as any);
+    }
+
+    await this.saveConversation(conversation);
+  }
+
+  /**
+   * Record error in execution metadata
+   */
+  static async recordError(conversationId: string, error: string): Promise<void> {
+    const conversation = await this.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    conversation.execution_metadata.error_count++;
+    conversation.execution_metadata.last_error = error;
+
+    await this.saveConversation(conversation);
   }
 
   /**
    * Delete conversation
    */
-  static async deleteConversation(id: string): Promise<boolean> {
-    const conversations = await readData(AGENT_CONVERSATIONS_FILE);
-    const filteredConversations = conversations.filter((conv: AgentConversation) => conv.id !== id);
-    
-    if (filteredConversations.length === conversations.length) return false;
-    
+  static async deleteConversation(conversationId: string): Promise<void> {
+    const conversations = await this.getAllConversations();
+    const filteredConversations = conversations.filter(c => c.id !== conversationId);
     await writeData(AGENT_CONVERSATIONS_FILE, filteredConversations);
-    return true;
+  }
+
+  /**
+   * Get conversation summary for display
+   */
+  static async getConversationSummary(conversationId: string): Promise<{
+    title: string;
+    status: AgentStatus;
+    messageCount: number;
+    hasCharacter: boolean;
+    hasWorldbook: boolean;
+    lastActivity: string;
+    completionPercentage: number;
+  } | null> {
+    const conversation = await this.getConversationById(conversationId);
+    if (!conversation) return null;
+
+    const hasCharacter = !!conversation.task_progress.character_data;
+    const hasWorldbook = !!conversation.task_progress.worldbook_data && conversation.task_progress.worldbook_data.length > 0;
+    
+    let completionPercentage = 0;
+    if (hasCharacter && hasWorldbook) {
+      completionPercentage = 100;
+    } else if (hasCharacter || hasWorldbook) {
+      completionPercentage = 50;
+    }
+
+    return {
+      title: conversation.title,
+      status: conversation.status,
+      messageCount: conversation.messages.length,
+      hasCharacter,
+      hasWorldbook,
+      lastActivity: conversation.execution_metadata.last_activity,
+      completionPercentage,
+    };
   }
 } 

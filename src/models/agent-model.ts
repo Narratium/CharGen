@@ -1,6 +1,6 @@
 /**
- * New Agent Model - Plan-based Architecture
- * Based on the simplified workflow design with LLM as the central planner
+ * Redesigned Agent Model - Clear Context Architecture
+ * Separates concerns between different tool types and provides clear context interfaces
  */
 
 // Core tool types available to the agent
@@ -14,190 +14,21 @@ export enum ToolType {
 // Agent execution status
 export enum AgentStatus {
   IDLE = "idle",
-  THINKING = "thinking",           // LLM is planning/thinking
-  EXECUTING = "executing",         // Executing a tool
-  WAITING_USER = "waiting_user",   // Waiting for user input
+  THINKING = "thinking",
+  EXECUTING = "executing",
+  WAITING_USER = "waiting_user",
   COMPLETED = "completed",
   FAILED = "failed"
 }
 
-// Plan task structure
-export interface PlanTask {
-  id: string;
-  description: string;
-  tool: ToolType;
-  parameters: Record<string, any>;
-  dependencies: string[];          // Task IDs this task depends on
-  status: "pending" | "executing" | "completed" | "failed" | "obsolete";
-  result?: any;
-  reasoning?: string;              // Why this task is needed
-  priority: number;                // Execution priority (1-10)
-  created_at: string;
-  completed_at?: string;
-  obsolete_reason?: string;        // Why this task was marked obsolete
-}
+// ============================================================================
+// CONVERSATION CONTEXT - The core context all tools need
+// ============================================================================
 
-// Goal tree structure for hierarchical planning
-export interface GoalNode {
-  id: string;
-  description: string;
-  type: "main_goal" | "sub_goal" | "task";
-  parent_id?: string;
-  children: string[];              // Child goal/task IDs
-  status: "pending" | "in_progress" | "completed" | "failed";
-  checkpoint?: {                   // For tracking progress
-    progress: number;              // 0-100
-    description: string;
-    timestamp: string;
-  };
-  metadata?: Record<string, any>;
-}
-
-// Plan pool - central planning state
-export interface PlanPool {
-  id: string;
-  conversation_id: string;
-  goal_tree: GoalNode[];           // Hierarchical goal structure
-  current_tasks: PlanTask[];       // Current active tasks
-  completed_tasks: PlanTask[];     // Completed task history
-  context: {
-    user_request: string;          // Original user request
-    current_focus: string;         // What the agent is currently focusing on
-    constraints: string[];         // Any constraints or requirements
-    preferences: Record<string, any>; // User preferences
-    failure_history: {             // Track failure patterns to avoid repetition
-      failed_tool_attempts: Record<string, number>; // Tool name -> failure count
-      recent_failures: Array<{     // Recent failure details
-        tool: string;
-        description: string;
-        error: string;
-        timestamp: string;
-        attempt_count: number;
-      }>;
-    };
-  };
-  created_at: string;
-  updated_at: string;
-}
-
-// Thought buffer for agent's internal reasoning
-export interface ThoughtBuffer {
-  id: string;
-  conversation_id: string;
-  thoughts: ThoughtEntry[];
-  current_reasoning: string;       // Current line of thinking
-  decision_history: DecisionEntry[]; // History of decisions made
-  reflection_notes: string[];      // Self-reflection notes
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ThoughtEntry {
-  id: string;
-  type: "observation" | "reasoning" | "decision" | "reflection";
-  content: string;
-  related_task_id?: string;
-  timestamp: string;
-  metadata?: Record<string, any>;
-}
-
-export interface DecisionEntry {
-  id: string;
-  decision: string;
-  reasoning: string;
-  alternatives_considered: string[];
-  confidence: number;              // 0-1 confidence in decision
-  outcome?: "success" | "failure" | "partial";
-  timestamp: string;
-}
-
-// Final result structure
-export interface AgentResult {
-  id: string;
-  conversation_id: string;
-  character_data?: {
-    name: string;
-    description: string;
-    personality: string;
-    scenario: string;
-    first_mes: string;
-    mes_example: string;
-    creator_notes: string;
-    avatar?: string;
-    alternate_greetings?: string[];
-    tags?: string[];
-    [key: string]: any;
-  };
-  worldbook_data?: WorldbookEntry[];
-  integration_notes?: string;
-  quality_metrics?: {
-    completeness: number;          // 0-100
-    consistency: number;           // 0-100
-    creativity: number;            // 0-100
-    user_satisfaction: number;     // 0-100
-  };
-  generation_metadata: {
-    total_iterations: number;
-    tools_used: ToolType[];
-  };
-  created_at: string;
-  updated_at: string;
-}
-
-export interface WorldbookEntry {
-  id: string;
-  uid: string;
-  key: string[];                   // Trigger keywords
-  keysecondary: string[];
-  comment: string;                 // Entry title/description
-  content: string;                 // Entry content
-  constant: boolean;               // Always active
-  selective: boolean;              // Context-dependent
-  order: number;
-  position: number;                // Insertion position
-  disable: boolean;
-  probability: number;             // Activation probability
-  useProbability: boolean;
-}
-
-// Main conversation structure
-export interface AgentConversation {
-  id: string;
-  title: string;
-  status: AgentStatus;
-  
-  // Core state components
-  plan_pool: PlanPool;
-  thought_buffer: ThoughtBuffer;
-  result: AgentResult;
-  
-  // Message history for UI display
-  messages: ConversationMessage[];
-  
-  // LLM configuration
-  llm_config: {
-    model_name: string;
-    api_key: string;
-    base_url?: string;
-    llm_type: "openai" | "ollama";
-    temperature: number;
-    max_tokens?: number;
-  };
-  
-  // Execution context
-  context: {
-    current_iteration: number;
-    max_iterations: number;
-    start_time: string;
-    last_activity: string;
-    error_count: number;
-    last_error?: string;
-  };
-  
-  created_at: string;
-  updated_at: string;
-}
-
+/**
+ * Core conversation message structure
+ * This represents the full dialogue history in role:content format
+ */
 export interface ConversationMessage {
   id: string;
   role: "user" | "agent" | "system";
@@ -212,15 +43,183 @@ export interface ConversationMessage {
   timestamp: string;
 }
 
-// Tool execution interface
-export interface ToolExecutionContext {
+/**
+ * Current task progress state (result of all work so far)
+ * This represents the character card and worldbook generation progress
+ */
+export interface TaskProgress {
+  id: string;
   conversation_id: string;
-  plan_pool: PlanPool;
-  thought_buffer: ThoughtBuffer;
-  current_result: AgentResult;
-  llm_config: AgentConversation["llm_config"];
+  
+  // Character generation progress
+  character_data?: {
+    name: string;
+    description: string;
+    personality: string;
+    scenario: string;
+    first_mes: string;
+    mes_example: string;
+    creator_notes: string;
+    avatar?: string;
+    alternate_greetings?: string[];
+    tags?: string[];
+    [key: string]: any;
+  };
+  
+  // Worldbook generation progress
+  worldbook_data?: WorldbookEntry[];
+  
+  // Additional progress tracking
+  integration_notes?: string;
+  quality_metrics?: {
+    completeness: number;
+    consistency: number;
+    creativity: number;
+    user_satisfaction: number;
+  };
+  
+  generation_metadata: {
+    total_iterations: number;
+    tools_used: ToolType[];
+    last_updated: string;
+  };
+  
+  created_at: string;
+  updated_at: string;
 }
 
+export interface WorldbookEntry {
+  id: string;
+  uid: string;
+  key: string[];
+  keysecondary: string[];
+  comment: string;
+  content: string;
+  constant: boolean;
+  selective: boolean;
+  order: number;
+  position: number;
+  disable: boolean;
+  probability: number;
+  useProbability: boolean;
+}
+
+// ============================================================================
+// PLANNING CONTEXT - Additional context needed only by planning tools
+// ============================================================================
+
+/**
+ * Task structure for planning
+ */
+export interface PlanTask {
+  id: string;
+  description: string;
+  tool: ToolType;
+  parameters: Record<string, any>;
+  dependencies: string[];
+  status: "pending" | "executing" | "completed" | "failed" | "obsolete";
+  result?: any;
+  reasoning?: string;
+  priority: number;
+  created_at: string;
+  completed_at?: string;
+  obsolete_reason?: string;
+}
+
+/**
+ * Goal structure for hierarchical planning
+ */
+export interface Goal {
+  id: string;
+  description: string;
+  type: "main_goal" | "sub_goal" | "task";
+  parent_id?: string;
+  children: string[];
+  status: "pending" | "in_progress" | "completed" | "failed";
+  checkpoint?: {
+    progress: number;
+    description: string;
+    timestamp: string;
+  };
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Planning state - only needed by PLAN tools
+ */
+export interface PlanningContext {
+  id: string;
+  conversation_id: string;
+  
+  // Goal hierarchy
+  goals: Goal[];
+  
+  // Task management
+  current_tasks: PlanTask[];
+  completed_tasks: PlanTask[];
+  
+  // Planning metadata
+  context: {
+    user_request: string;
+    current_focus: string;
+    constraints: string[];
+    preferences: Record<string, any>;
+    failure_history: {
+      failed_tool_attempts: Record<string, number>;
+      recent_failures: Array<{
+        tool: string;
+        description: string;
+        error: string;
+        timestamp: string;
+        attempt_count: number;
+      }>;
+    };
+  };
+  
+  created_at: string;
+  updated_at: string;
+}
+
+// ============================================================================
+// CONTEXT INTERFACES - Clear separation by tool type
+// ============================================================================
+
+/**
+ * Base context that ALL tools receive
+ * Contains only essential conversation and progress information
+ */
+export interface BaseToolContext {
+  conversation_id: string;
+  
+  // Current task progress (character card + worldbook state)
+  task_progress: TaskProgress;
+  
+  // Full conversation history (user inputs + agent responses + system messages)
+  conversation_history: ConversationMessage[];
+  
+  // LLM configuration
+  llm_config: {
+    model_name: string;
+    api_key: string;
+    base_url?: string;
+    llm_type: "openai" | "ollama";
+    temperature: number;
+    max_tokens?: number;
+  };
+}
+
+/**
+ * Extended context for PLAN tools only
+ * Includes planning-specific information in addition to base context
+ */
+export interface PlanToolContext extends BaseToolContext {
+  // Planning state (tasks, goals, etc.)
+  planning_context: PlanningContext;
+}
+
+/**
+ * Generic tool execution result
+ */
 export interface ToolExecutionResult {
   success: boolean;
   result?: any;
@@ -231,4 +230,45 @@ export interface ToolExecutionResult {
   reasoning?: string;
 }
 
-// Note: PlanExecutor interface has been replaced by the unified BaseTool system in lib/tools/
+// ============================================================================
+// MAIN CONVERSATION STRUCTURE - Simplified
+// ============================================================================
+
+/**
+ * Main agent conversation - simplified and focused
+ */
+export interface AgentConversation {
+  id: string;
+  title: string;
+  status: AgentStatus;
+  
+  // Core conversation data
+  messages: ConversationMessage[];
+  task_progress: TaskProgress;
+  
+  // Planning data (separate from core conversation)
+  planning_context: PlanningContext;
+  
+  // LLM configuration
+  llm_config: {
+    model_name: string;
+    api_key: string;
+    base_url?: string;
+    llm_type: "openai" | "ollama";
+    temperature: number;
+    max_tokens?: number;
+  };
+  
+  // Execution metadata
+  execution_metadata: {
+    current_iteration: number;
+    max_iterations: number;
+    start_time: string;
+    last_activity: string;
+    error_count: number;
+    last_error?: string;
+  };
+  
+  created_at: string;
+  updated_at: string;
+}

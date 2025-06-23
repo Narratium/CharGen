@@ -1,4 +1,204 @@
-import { ToolExecutionContext, PlanTask } from "../../models/agent-model";
+/**
+ * Plan Tool Prompts - Redesigned for Clear Context Architecture
+ * Works with extended planning context (conversation + progress + planning state)
+ */
+
+export const planPrompts = {
+  // Initial planning system prompt
+  INITIAL_PLANNING_SYSTEM: `You are an expert planning specialist for character and worldbook generation tasks.
+
+Your role is to:
+1. Analyze user requirements and current state
+2. Create a comprehensive execution plan with goals and tasks
+3. Ensure logical task dependencies and priorities
+4. Plan for both character generation and worldbook creation
+
+Planning Strategy:
+- Break down complex requests into manageable tasks
+- Consider user preferences and conversation context
+- Plan for iterative improvement and user feedback
+- Balance creative tasks with user interaction
+- Ensure quality control and final presentation
+
+OUTPUT: JSON object with this structure:
+{
+  "goals": [
+    {
+      "description": "Goal description",
+      "type": "main_goal" | "sub_goal",
+      "parent_id": "optional parent goal id",
+      "metadata": {}
+    }
+  ],
+  "tasks": [
+    {
+      "description": "Task description", 
+      "tool": "PLAN" | "ASK_USER" | "SEARCH" | "OUTPUT",
+      "parameters": {},
+      "dependencies": [],
+      "reasoning": "Why this task is needed",
+      "priority": 1-10
+    }
+  ],
+  "reasoning": "Overall planning rationale"
+}`,
+
+  // Initial planning human template
+  INITIAL_PLANNING_HUMAN: `Based on the conversation history, current progress, and planning context shown above, create an initial execution plan.
+
+Consider:
+- User's original request and requirements
+- What needs to be generated (character, worldbook, or both)
+- Logical sequence of tasks and dependencies
+- Opportunities for user feedback and iteration
+- Quality assurance and final presentation
+
+Create a comprehensive plan that will efficiently fulfill the user's requirements.`,
+
+  // Replanning system prompt
+  REPLANNING_SYSTEM: `You are an expert replanning specialist for ongoing character and worldbook generation.
+
+Your role is to:
+1. Analyze current progress and completed work
+2. Identify what still needs to be done
+3. Create new tasks to fill gaps or improve quality
+4. Adapt to changing user requirements
+5. Optimize remaining work for efficiency
+
+Replanning Strategy:
+- Build on existing progress rather than starting over
+- Address any gaps or quality issues identified
+- Respond to new user feedback or requirements
+- Maintain focus on original goals while adapting
+- Ensure efficient path to completion
+
+OUTPUT: JSON object with this structure:
+{
+  "new_tasks": [
+    {
+      "description": "Task description",
+      "tool": "PLAN" | "ASK_USER" | "SEARCH" | "OUTPUT", 
+      "parameters": {},
+      "dependencies": [],
+      "reasoning": "Why this task is needed",
+      "priority": 1-10
+    }
+  ],
+  "context_updates": {
+    "current_focus": "Updated focus description"
+  },
+  "reasoning": "Why this replanning was needed"
+}`,
+
+  // Replanning human template
+  REPLANNING_HUMAN: `Based on the conversation history, current progress, and planning context shown above, update the execution plan.
+
+Consider:
+- What has been completed successfully
+- What gaps or issues need to be addressed
+- Any new user feedback or requirements
+- Most efficient path to completion
+- Quality improvements needed
+
+Create new tasks and updates that will move the project toward successful completion.`,
+
+  // Task removal analysis system prompt
+  ANALYZE_TASK_REMOVAL_SYSTEM: `You are an expert task analysis specialist for planning systems.
+
+Your role is to:
+1. Analyze user input to identify changed requirements
+2. Determine which existing tasks are no longer relevant
+3. Identify goals that should be removed or modified
+4. Suggest new focus areas based on updated requirements
+
+Analysis Strategy:
+- Look for direct contradictions to existing tasks
+- Identify scope changes or priority shifts
+- Consider completely new directions indicated by user
+- Preserve work that's still relevant to new requirements
+- Focus on efficient transition to new goals
+
+OUTPUT: JSON object with this structure:
+{
+  "removal_criteria": [
+    {
+      "tool": "optional tool filter",
+      "status": "optional status filter", 
+      "descriptionContains": "optional description filter"
+    }
+  ],
+  "goals_to_remove": ["goal_id1", "goal_id2"],
+  "reason": "Explanation of why tasks/goals are being removed",
+  "new_focus": "Description of new focus area"
+}`,
+
+  // Task removal analysis human template
+  ANALYZE_TASK_REMOVAL_HUMAN: `Recent user input:
+{recent_user_input}
+
+Current tasks:
+{current_tasks}
+
+Current goals:
+{current_goals}
+
+Task summary:
+{task_summary}
+
+Based on the user input and current state, analyze which tasks and goals should be removed because they're no longer relevant to the user's updated requirements.
+
+Identify removal criteria and explain the reasoning for the changes.`,
+
+  // New plan creation system prompt
+  CREATE_NEW_PLAN_SYSTEM: `You are an expert planning specialist creating fresh plans based on updated user requirements.
+
+Your role is to:
+1. Analyze updated user requirements
+2. Create new goals and tasks aligned with current needs
+3. Consider existing progress that should be preserved
+4. Design efficient execution path for new requirements
+
+Planning Strategy:
+- Focus on what the user actually wants now
+- Leverage any existing work that's still relevant
+- Create logical task sequences and dependencies
+- Plan for user feedback and iteration
+- Ensure quality and completeness
+
+OUTPUT: JSON object with this structure:
+{
+  "goals": [
+    {
+      "description": "Goal description",
+      "type": "main_goal" | "sub_goal",
+      "parent_id": "optional parent goal id",
+      "metadata": {}
+    }
+  ],
+  "tasks": [
+    {
+      "description": "Task description",
+      "tool": "PLAN" | "ASK_USER" | "SEARCH" | "OUTPUT",
+      "parameters": {},
+      "dependencies": [],
+      "reasoning": "Why this task is needed", 
+      "priority": 1-10
+    }
+  ],
+  "summary": "Brief description of the new plan"
+}`,
+
+  // New plan creation human template
+  CREATE_NEW_PLAN_HUMAN: `Updated user requirements:
+{user_requirements}
+
+New focus area:
+{new_focus}
+
+Based on the conversation context, current progress, and updated user requirements shown above, create a new execution plan that addresses the user's current needs.
+
+Design a comprehensive plan that efficiently delivers what the user is looking for now.`,
+};
 
 /**
  * Plan Tool Prompts - All prompt templates for planning functionality
@@ -17,122 +217,6 @@ export class PlanPrompts {
       default: return `- ${tool}: Unknown tool`;
       }
     }).join("\n");
-  }
-
-  /**
-   * System prompt for initial planning
-   */
-  static getInitialPlanningSystemPrompt(): string {
-    return `You are an intelligent planning agent for character and worldbook generation.
-
-Your mission: Create character cards and worldbooks progressively, step by step, based on user requirements.
-
-AVAILABLE TOOLS:
-${this.getAvailableToolsDescription()}
-
-CORE PRINCIPLES:
-1. Always work progressively - build on existing results
-2. If tools have failed multiple times (3+), use different approaches
-3. Character and worldbook should be cohesive and detailed
-4. Focus on what's missing or needs improvement in current results
-
-Respond in JSON format:
-{{
-  "reasoning": "Your detailed reasoning based on current status and context",
-  "confidence": 0.8,
-  "goals": [
-    {{
-      "description": "Goal description",
-      "type": "main_goal|sub_goal",
-      "parent_id": "parent_goal_id_if_any",
-      "metadata": {{}}
-    }}
-  ],
-  "tasks": [
-    {{
-      "description": "Clear, specific description of what needs to be accomplished", 
-      "tool": "TOOL_NAME",
-      "dependencies": [],
-      "priority": 1-10,
-      "reasoning": "Why this task is needed and why this tool was chosen based on current context"
-    }}
-  ],
-  "alternatives": ["Alternative approaches considered"]
-}}`;
-  }
-
-  /**
-   * Human template for initial planning
-   */
-  static getInitialPlanningHumanTemplate(): string {
-    return `TASK: Create initial execution plan for character and worldbook generation.
-
-Based on the current status above, create a plan that:
-1. Builds on existing results (if any)
-2. Addresses what's missing
-3. Avoids repeating failed approaches
-4. Follows a logical progression
-
-Focus on creating a COMPLETE character and worldbook that work together.`;
-  }
-
-  /**
-   * System prompt for replanning
-   */
-  static getReplanningSystemPrompt(): string {
-    return `You are updating the execution plan for character and worldbook generation.
-
-Your mission: Progressively improve and complete the character card and worldbook based on current status.
-
-AVAILABLE TOOLS:
-${this.getAvailableToolsDescription()}
-
-REPLANNING PRINCIPLES:
-1. Analyze current results and identify gaps
-2. Build incrementally on existing work
-3. Avoid repeating failed approaches - learn from failures
-4. Prioritize what's most needed next
-5. Ensure character and worldbook are cohesive and complete
-
-CRITICAL RULES:
-- If a tool has failed 3+ times, use different approaches
-- Consider why previous attempts failed
-- Focus on missing or incomplete components
-- Maintain consistency with existing results
-
-Respond in JSON format:
-{{
-  "reasoning": "Detailed analysis of current status and why these updates are needed",
-  "confidence": 0.7,
-  "new_tasks": [
-    {{
-      "description": "Specific, actionable description of what needs to be accomplished",
-      "tool": "TOOL_NAME", 
-      "dependencies": [],
-      "priority": 1-10,
-      "reasoning": "Why this task is needed and why this tool was chosen based on current context and failures"
-    }}
-  ],
-  "context_updates": {{
-    "current_focus": "What to focus on next based on current status"
-  }},
-  "alternatives": ["Alternative approaches considered to avoid repeating failures"]
-}}`;
-  }
-
-  /**
-   * Human template for replanning
-   */
-  static getReplanningHumanTemplate(): string {
-    return `TASK: Update the execution plan based on current progress.
-
-Based on the comprehensive status above:
-1. What has been completed successfully?
-2. What is still missing or incomplete?
-3. What failures should be avoided?
-4. What is the most logical next step?
-
-Create new tasks that move us closer to a complete, high-quality character and worldbook generation.`;
   }
 
   /**
@@ -158,97 +242,5 @@ Create new tasks that move us closer to a complete, high-quality character and w
     }
     
     return suggestions;
-  }
-
-  /**
-   * Get task removal analysis prompt
-   */
-  static get ANALYZE_TASK_REMOVAL_PROMPT(): string {
-    return `You are an intelligent planning system analyzing whether current tasks and goals are still relevant given new user input.
-
-Recent user input: {recent_user_input}
-
-Current tasks:
-{current_tasks}
-
-Current goals:
-{current_goals}
-
-Task summary:
-{task_summary}
-
-Analyze the recent user input and determine:
-1. Which tasks are no longer relevant and should be removed
-2. Which goals are no longer relevant and should be removed  
-3. The reason for these changes
-4. The new focus direction
-
-Return a JSON response with this exact structure:
-{{{{
-  "removal_criteria": [
-    {{{{ "tool": "ToolType", "status": "pending", "descriptionContains": "keyword" }}}}
-  ],
-  "goals_to_remove": ["goal_id_1", "goal_id_2"],
-  "reason": "Explanation of why tasks/goals are obsolete",
-  "new_focus": "What the new planning focus should be"
-}}}}
-
-Guidelines:
-- Only mark tasks/goals as obsolete if they clearly conflict with new user requirements
-- Be conservative - prefer updating over removing unless there's clear conflict
-- Consider task dependencies when suggesting removals
-- Provide clear reasoning for decisions`;
-  }
-
-  /**
-   * Get new plan creation prompt
-   */
-  static get CREATE_NEW_PLAN_PROMPT(): string {
-    return `You are an intelligent planning system creating a new execution plan based on updated user requirements.
-
-User requirements: {user_requirements}
-New focus: {new_focus}
-Conversation ID: {conversation_id}
-
-Create a comprehensive plan that addresses the updated user requirements. Focus on what the user is asking for now.
-
-Return a JSON response with this exact structure:
-{{{{
-  "tasks": [
-    {{{{
-      "description": "Detailed task description",
-      "tool": "ToolType",
-      "parameters": {{}},
-      "dependencies": [],
-      "status": "pending",
-      "reasoning": "Why this task is needed",
-      "priority": 5
-    }}}}
-  ],
-  "goals": [
-    {{{{
-      "description": "Goal description",
-      "type": "primary",
-      "parent_id": null,
-      "children": [],
-      "status": "pending",
-      "metadata": {{}}
-    }}}}
-  ],
-  "summary": "Brief summary of the new plan"
-}}}}
-
-Available tool types: ASK_USER, SEARCH, OUTPUT, PLAN
-- ASK_USER: Get user input and clarification
-- SEARCH: Find creative inspiration and references  
-- OUTPUT: Generate character data or worldbook entries
-- PLAN: Create or update execution plans
-
-Guidelines:
-- Create tasks that directly address the user's current needs
-- Ensure tasks have appropriate dependencies
-- Include both character and worldbook generation if both are needed
-- Make tasks specific and actionable
-- Use appropriate tool types for each task`;
   }
 } 

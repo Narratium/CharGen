@@ -1,125 +1,87 @@
 /**
- * Search Tool Prompts - All prompt templates for creative inspiration gathering
+ * Search Tool Prompts - Redesigned for Clear Context Architecture
+ * Works with minimal context (conversation history + task progress)
  */
-export class SearchPrompts {
-  /**
-   * System prompt for inspiration generation
-   */
-  static getInspirationGenerationSystemPrompt(): string {
-    return `You are an expert creative inspiration generator specializing in character and worldbuilding concepts.
 
-MISSION: Generate diverse, creative inspiration based on project context to enhance character and worldbook development.
+export const searchPrompts = {
+  // Query generation system prompt
+  QUERY_GENERATION_SYSTEM: `You are an expert researcher specializing in character and worldbook creation research.
 
-INSPIRATION GENERATION PRINCIPLES:
-1. Analyze current project status to identify what kind of inspiration is most needed
-2. Generate varied, unexpected but relevant creative directions
-3. Consider gaps in existing character or world elements
-4. Balance familiar and novel concepts for engaging creativity
-5. Provide specific, actionable creative elements rather than vague suggestions
-6. Connect inspiration to the user's original vision and current progress
+Your role is to:
+1. Analyze conversation context and current progress to identify research gaps
+2. Generate targeted search queries that find exactly what's needed
+3. Focus on missing elements or areas needing enhancement
+4. Provide actionable creative inspiration through research
 
-INSPIRATION STRATEGY:
-- For character development: Personality quirks, background elements, motivations, relationships
-- For worldbuilding: Cultural details, historical events, unique systems, atmospheric elements
-- For both: Visual imagery, thematic connections, interesting conflicts or contrasts
-- Always consider how inspiration enhances rather than overwhelms existing work
+Query Strategy:
+- Character archetypes and personality psychology (if character needs development)
+- World-building elements (if worldbook needs expansion) 
+- Cultural references and mythology (for authenticity and depth)
+- Genre conventions and subversions (for creative direction)
+- Historical periods and settings (for accuracy and inspiration)
+- Visual and aesthetic references (for vivid descriptions)
+- Thematic elements and symbolism (for depth and meaning)
 
-RESPONSE FORMAT:
-Generate creative inspiration as a structured collection including:
-- Core concepts and themes
-- Specific details and elements
-- Visual or atmospheric inspiration
-- Character hooks or world elements
-- Potential story directions
+OUTPUT: JSON array of 3-5 specific, targeted search query strings.
+Focus searches on what's actually missing or needs improvement.`,
 
-Be specific, vivid, and immediately usable for creative development.`;
-  }
+  // Query generation human template
+  QUERY_GENERATION_HUMAN: `Based on the conversation history and current progress shown above, generate search queries for: {task_description}
 
-  /**
-   * Human template for inspiration generation
-   */
-  static getInspirationGenerationHumanTemplate(): string {
-    return `TASK: Generate creative inspiration for "{task_description}"
+Consider:
+- What research gaps exist in current results?
+- What aspects need creative inspiration or references?
+- What elements would benefit from real-world grounding?
+- What unexplored areas could enhance the character/world?
 
-Based on the comprehensive project context above:
-1. What kind of inspiration would best serve the current task?
-2. What gaps in character or world development could creative inspiration fill?
-3. What themes or elements from the user's vision need creative expansion?
-4. How can I provide inspiration that builds on existing work rather than conflicting with it?
+Generate specific search queries that will provide valuable information to complete the current task and improve existing work.
 
-Generate specific, actionable creative inspiration that will help complete this task while staying true to the user's vision.`;
-  }
+Return as JSON array: ["query1", "query2", "query3", ...]`,
 
-  /**
-   * Get fallback inspiration based on task focus
-   */
-  static generateFallbackInspiration(taskDescription: string, userRequest: string, hasCharacter: boolean, hasWorldbook: boolean): string {
-    const taskDesc = taskDescription.toLowerCase();
-    
-    // Determine inspiration focus based on task
-    if (taskDesc.includes("character") || taskDesc.includes("personality") || taskDesc.includes("background")) {
-      return `🎭 **Character Inspiration**
+  // Summary generation system prompt
+  SUMMARY_GENERATION_SYSTEM: `You are an expert creative consultant specializing in character and worldbook development.
 
-**Personality Concepts:**
-• The protective pessimist who expects the worst but fights to prevent it
-• Someone who collects seemingly useless objects that hold deep personal meaning
-• A character who speaks differently to different people, revealing layers of their identity
-• The reluctant expert who knows more than they want to admit
+Your role is to:
+1. Analyze search results and extract actionable insights
+2. Focus on information that fills gaps in current results
+3. Identify concepts that enhance existing character/worldbook elements
+4. Extract practical, usable creative inspiration
+5. Highlight cultural/historical authenticity sources
+6. Suggest specific applications for the findings
 
-**Background Elements:**
-• Raised by someone other than their parents, creating complex loyalties
-• Possesses a skill learned under unusual or secretive circumstances
-• Has experienced a moment that completely changed their worldview
-• Carries both a burden and a gift from their past
+Provide a structured, actionable summary that clearly explains how the research can improve the current character and worldbook.`,
 
-**Motivational Hooks:**
-• Seeking to prove themselves worthy of something they've already lost
-• Trying to protect others from making their same mistakes
-• Driven by a promise they can no longer remember making
-• Balancing personal desires with inherited responsibilities`;
+  // Summary generation human template
+  SUMMARY_GENERATION_HUMAN: `SEARCH RESULTS:
+{search_results}
 
-    } else if (taskDesc.includes("world") || taskDesc.includes("setting") || taskDesc.includes("environment")) {
-      return `🌍 **World Inspiration**
+Based on the conversation context, current progress, and search results above:
+1. What key insights support the current character/worldbook development?
+2. How can these findings address gaps in existing work?
+3. What specific creative elements can be incorporated?
+4. What cultural or historical authenticity can be added?
 
-**Cultural Elements:**
-• Society where different professions have distinct seasonal ceremonies
-• Communities that value memory keepers and storytellers above warriors
-• Places where social status is determined by artistic contribution rather than wealth
-• Groups who communicate important information through decorative art
+Provide a structured summary that explains how to practically apply these research findings to improve the character and worldbook.`,
 
-**Environmental Features:**
-• Locations where natural phenomena create unique daily rhythms
-• Places where the landscape itself holds memories or echoes of past events
-• Environments that change based on the collective mood of inhabitants
-• Regions where unusual resources have shaped unique technologies or traditions
+  // Fallback inspiration templates
+  CHARACTER_INSPIRATION: `**Character Development Ideas:**
+• Consider classic archetypes: The Hero, The Mentor, The Trickster, The Outsider
+• Think about contrasts: A gentle giant, a fierce protector with a soft heart
+• Add unique quirks: specific habits, speech patterns, or beliefs
+• Consider their flaws: what makes them human and relatable?
+• Explore their backstory: formative experiences, relationships, goals`,
 
-**Atmospheric Details:**
-• The sound of bells that carry different meanings at different times of day
-• Markets where vendors trade in intangible goods alongside physical ones
-• Architecture that reflects the values and fears of its builders
-• Natural landmarks that serve as both navigation aids and cultural symbols`;
+  WORLDBOOK_INSPIRATION: `**World Building Ideas:**
+• Draw from real cultures and histories for authenticity
+• Create interesting contrasts: modern tech in ancient settings
+• Think about daily life: what do people eat, how do they travel?
+• Consider conflicts: political tensions, resource scarcity, cultural clashes
+• Explore geography: how does the environment shape the culture?`,
 
-    } else {
-      // General creative inspiration
-      return `✨ **Creative Inspiration**
-
-**Thematic Concepts:**
-• The tension between tradition and necessary change
-• Hidden connections between seemingly unrelated events
-• The weight of secrets and the freedom of truth
-• Beauty found in unexpected or overlooked places
-
-**Visual & Atmospheric:**
-• Spaces where light behaves differently than expected
-• Objects that seem ordinary but carry extraordinary significance
-• Contrasts between what something appears to be and what it truly is
-• Environments that evoke specific emotions or memories
-
-**Character & World Connections:**
-• How personal history shapes perception of current events
-• The intersection of individual choices and larger forces
-• Relationships that challenge assumptions and force growth
-• Conflicts between different ways of understanding the world`;
-    }
-  }
-} 
+  GENERAL_TECHNIQUES: `**Creative Techniques:**
+• Ask "What if?" questions to explore possibilities
+• Combine unexpected elements for originality
+• Consider the five senses: how does your world feel, smell, sound?
+• Think about emotional resonance: what feelings do you want to evoke?
+• Use specific details to make abstract concepts concrete`,
+}; 

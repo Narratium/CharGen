@@ -363,7 +363,7 @@ export class CharacterGeneratorCLI {
       Title: conv.title,
       Status: conv.status,
       Created: new Date(conv.created_at).toLocaleDateString(),
-      'Has Result': conv.result.character_data ? '✅' : '❌',
+      'Has Result': conv.task_progress.character_data ? '✅' : '❌',
     })));
   }
 
@@ -381,12 +381,12 @@ export class CharacterGeneratorCLI {
 
     const outputFile = options.output || `export_${id.slice(0, 8)}.${options.format || 'json'}`;
     
-    if (options.format === 'card' && conversation.result.character_data) {
-      await fs.writeJson(outputFile, conversation.result.character_data, { spaces: 2 });
-    } else if (options.format === 'worldbook' && conversation.result.worldbook_data) {
-      await fs.writeJson(outputFile, conversation.result.worldbook_data, { spaces: 2 });
+    if (options.format === 'card' && conversation.task_progress.character_data) {
+      await fs.writeJson(outputFile, conversation.task_progress.character_data, { spaces: 2 });
+    } else if (options.format === 'worldbook' && conversation.task_progress.worldbook_data) {
+      await fs.writeJson(outputFile, conversation.task_progress.worldbook_data, { spaces: 2 });
     } else {
-      await fs.writeJson(outputFile, conversation.result, { spaces: 2 });
+      await fs.writeJson(outputFile, conversation.task_progress, { spaces: 2 });
     }
     
     console.log(chalk.green('✅ Exported to:'), chalk.cyan(outputFile));

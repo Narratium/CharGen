@@ -1,37 +1,44 @@
-import { BaseTool } from "../base-tool";
-import { ToolType, ToolExecutionContext, ToolExecutionResult, PlanTask } from "../../models/agent-model";
-import { SearchPrompts } from "./prompts";
+import { BaseRegularTool } from "../base-tool";
+import { ToolType, BaseToolContext } from "../../models/agent-model";
+import { searchPrompts } from "./prompts";
+import { SearchThinking } from "./think";
+import { ImprovementInstruction } from "../base-think";
 
 /**
- * Search Tool - Generate creative inspiration and references
+ * Search Tool - Enhanced with thinking capabilities
+ * 搜索工具 - 增强思考能力
  */
-export class SearchTool extends BaseTool {
+export class SearchTool extends BaseRegularTool {
   readonly toolType = ToolType.SEARCH;
   readonly name = "Inspiration Seeker";
   readonly description = "Search for inspiration, references, and creative ideas";
 
-  async executeToolLogic(task: PlanTask, context: ToolExecutionContext): Promise<ToolExecutionResult> {
+  private thinking: SearchThinking;
+
+  constructor() {
+    super();
+    this.thinking = new SearchThinking();
+  }
+
+  /**
+   * Core work logic - search and generate inspiration
+   * 核心工作逻辑 - 搜索并生成灵感
+   */
+  async doWork(context: BaseToolContext): Promise<any> {
     try {
       // Generate search queries using LLM
-      const searchQueries = await this.generateSearchQueries(task, context);
+      const searchQueries = await this.generateSearchQueries(context);
       
       // Perform actual searches
       const searchResults = await this.performSearches(searchQueries);
       
       // Process and analyze results
-      const processedResults = await this.processSearchResults(searchResults, task, context);
+      const processedResults = await this.processSearchResults(searchResults, context);
       
-      await this.addThought(
-        context.conversation_id,
-        "observation",
-        `Found ${processedResults.length} relevant search results`,
-        task.id,
-      );
-
       const result = {
         queries: searchQueries,
         results: processedResults,
-        summary: await this.generateSearchSummary(processedResults, context, task),
+        summary: await this.generateSearchSummary(processedResults, context),
       };
 
       // Display results to user
@@ -41,24 +48,13 @@ export class SearchTool extends BaseTool {
         `🔍 **Search Complete**\n\n**Queries:** ${searchQueries.join(', ')}\n**Results:** ${processedResults.length} relevant findings\n\n${result.summary}`,
       );
 
-      return this.createSuccessResult(result, {
-        reasoning: `Successfully searched and found ${processedResults.length} relevant results`
-      });
+      return result;
 
     } catch (error) {
       // If search completely fails, provide fallback inspiration
       console.warn("Search failed, using fallback inspiration:", error);
       
-      const userRequest = context.plan_pool.context.user_request;
-      const hasCharacter = !!context.current_result.character_data;
-      const hasWorldbook = context.current_result.worldbook_data && context.current_result.worldbook_data.length > 0;
-      
-      const fallbackInspiration = SearchPrompts.generateFallbackInspiration(
-        task.description,
-        userRequest,
-        hasCharacter,
-        hasWorldbook || false
-      );
+      const fallbackInspiration = this.generateFallbackInspiration(context);
 
       await this.addMessage(
         context.conversation_id,
@@ -66,82 +62,153 @@ export class SearchTool extends BaseTool {
         `🔍 **Creative Inspiration** (Network issues, using built-in inspiration)\n\n${fallbackInspiration}`,
       );
 
-      return this.createSuccessResult({ inspiration: fallbackInspiration }, {
-        reasoning: "Provided fallback inspiration due to network issues"
-      });
+      return { 
+        inspiration: fallbackInspiration,
+        fallback: true,
+        error: error instanceof Error ? error.message : String(error)
+      };
     }
+  }
+
+  /**
+   * Improvement logic - enhance search results based on feedback
+   * 改进逻辑 - 根据反馈增强搜索结果
+   */
+  async improve(
+    currentResult: any,
+    instruction: ImprovementInstruction,
+    context: BaseToolContext
+  ): Promise<any> {
+    try {
+      console.log(`🔄 [SEARCH] Improving results based on: ${instruction.focus_areas.join(', ')}`);
+      
+      // Generate improved search based on instruction
+      const improvedResult = await this.generateImprovedSearch(
+        currentResult,
+        instruction,
+        context
+      );
+      
+      await this.addMessage(
+        context.conversation_id,
+        "agent",
+        `🔍 **Improved Search Results**\n\n${improvedResult.summary || improvedResult.inspiration}`
+      );
+
+      return {
+        ...improvedResult,
+        improvementApplied: instruction.focus_areas,
+        previousResult: currentResult
+      };
+      
+    } catch (error) {
+      console.warn(`[SEARCH] Improvement failed, using original result:`, error);
+      return currentResult; // Return original if improvement fails
+    }
+  }
+
+  /**
+   * Implement thinking capabilities using public methods
+   */
+  async evaluate(result: any, context: BaseToolContext, attempt: number = 1) {
+    return await this.thinking.evaluateResult(result, context, attempt);
+  }
+
+  async generateImprovement(result: any, evaluation: any, context: BaseToolContext) {
+    return await this.thinking.generateImprovementInstruction(result, evaluation, context);
+  }
+
+  protected buildEvaluationPrompt = () => { throw new Error("Use evaluate() instead"); };
+  protected buildImprovementPrompt = () => { throw new Error("Use generateImprovement() instead"); };
+  protected executeThinkingChain = () => { throw new Error("Use thinking methods directly"); };
+
+  /**
+   * Generate improved search based on feedback
+   */
+  private async generateImprovedSearch(
+    currentResult: any,
+    instruction: ImprovementInstruction,
+    context: BaseToolContext
+  ): Promise<any> {
+    const improvementPrompt = `Improve the search/inspiration based on these instructions:
+
+FOCUS AREAS: ${instruction.focus_areas.join(', ')}
+SPECIFIC REQUESTS: ${instruction.specific_requests.join(', ')}
+TARGET QUALITY: ${instruction.quality_target}/100
+
+CURRENT RESULT:
+${JSON.stringify(currentResult, null, 2)}
+
+Generate improved inspiration content that addresses the feedback above.`;
+
+    const prompt = this.buildContextualPrompt(
+      searchPrompts.SUMMARY_GENERATION_SYSTEM + "\n\nYou are improving existing search results based on feedback.",
+      improvementPrompt,
+      context
+    );
+
+    const improvedContent = await this.executeLLMChain(prompt, {
+      improvement_context: "Improving search results based on feedback"
+    }, context, {
+      errorMessage: "Failed to generate improved search content"
+    });
+
+    return {
+      queries: currentResult.queries || ["improved search"],
+      results: currentResult.results || [],
+      summary: improvedContent,
+      improved: true
+    };
   }
 
   /**
    * Generate intelligent search queries using LLM
    */
-  private async generateSearchQueries(task: PlanTask, context: ToolExecutionContext): Promise<string[]> {
-    const systemPrompt = `You are an expert researcher specializing in character and worldbook creation research.
-
-MISSION: Generate targeted search queries based on comprehensive project status to find exactly what's needed.
-
-RESEARCH STRATEGY:
-1. Analyze current results to identify research gaps
-2. Focus searches on missing elements or areas needing enhancement
-3. Consider user's original vision and current progress
-4. Generate queries that will provide actionable creative inspiration
-5. Avoid redundant searches for already-covered topics
-
-QUERY TYPES TO CONSIDER:
-- Character archetypes and personality psychology (if character needs development)
-- World-building elements (if worldbook needs expansion)
-- Cultural references and mythology (for authenticity and depth)
-- Genre conventions and subversions (for creative direction)
-- Historical periods and settings (for accuracy and inspiration)
-- Visual and aesthetic references (for vivid descriptions)
-- Thematic elements and symbolism (for depth and meaning)
-
-OUTPUT: JSON array of 3-5 specific, targeted search query strings.
-
-CRITICAL: Focus searches on what's actually missing or needs improvement based on current project status.`;
-
-    const prompt = await this.createContextualPrompt(
-      systemPrompt,
-      `TASK: Generate search queries for "${task.description}"
-
-Based on the comprehensive project status above:
-1. What research gaps exist in current results?
-2. What aspects need creative inspiration or references?
-3. What elements would benefit from real-world grounding?
-4. What unexplored areas could enhance the character/world?
-
-Generate specific search queries that will provide valuable information to complete the current task and improve existing work.
-
-Return as JSON array: ["query1", "query2", "query3", ...]`,
-      task,
+  private async generateSearchQueries(context: BaseToolContext): Promise<string[]> {
+    const prompt = this.buildContextualPrompt(
+      searchPrompts.QUERY_GENERATION_SYSTEM,
+      searchPrompts.QUERY_GENERATION_HUMAN,
       context
     );
 
     try {
-      const queries = await this.executeLLMChain(prompt, {}, context, {
+      const queries = await this.executeLLMChain(prompt, {
+        task_description: "Generate relevant search queries"
+      }, context, {
         parseJson: true,
         errorMessage: "Failed to generate search queries"
       });
-      return Array.isArray(queries) ? queries : [task.parameters.query || task.description];
+      return Array.isArray(queries) ? queries : ["character inspiration", "worldbook ideas"];
     } catch (error) {
       // Fallback to context-aware basic queries
-      const hasCharacter = !!context.current_result.character_data;
-      const hasWorldbook = context.current_result.worldbook_data && context.current_result.worldbook_data.length > 0;
-      
-      const fallbackQueries = [task.parameters.query || task.description];
-      
-      if (!hasCharacter) {
-        fallbackQueries.push(`${context.plan_pool.context.user_request} character archetypes`);
-        fallbackQueries.push(`${context.plan_pool.context.user_request} personality types`);
-      }
-      
-      if (!hasWorldbook) {
-        fallbackQueries.push(`${context.plan_pool.context.user_request} world building`);
-        fallbackQueries.push(`${context.plan_pool.context.user_request} setting inspiration`);
-      }
-      
-      return fallbackQueries;
+      return this.generateFallbackQueries(context);
     }
+  }
+
+  /**
+   * Generate fallback queries based on current context
+   */
+  private generateFallbackQueries(context: BaseToolContext): string[] {
+    const hasCharacter = !!context.task_progress.character_data;
+    const hasWorldbook = !!context.task_progress.worldbook_data && context.task_progress.worldbook_data.length > 0;
+    
+    // Extract original user request from conversation history
+    const userMessages = context.conversation_history.filter(msg => msg.role === "user");
+    const originalRequest = userMessages[0]?.content || "character and worldbook generation";
+    
+    const fallbackQueries = ["creative inspiration"];
+    
+    if (!hasCharacter) {
+      fallbackQueries.push(`${originalRequest} character archetypes`);
+      fallbackQueries.push(`${originalRequest} personality types`);
+    }
+    
+    if (!hasWorldbook) {
+      fallbackQueries.push(`${originalRequest} world building`);
+      fallbackQueries.push(`${originalRequest} setting inspiration`);
+    }
+    
+    return fallbackQueries;
   }
 
   /**
@@ -208,7 +275,7 @@ Return as JSON array: ["query1", "query2", "query3", ...]`,
   /**
    * Process and analyze search results
    */
-  private async processSearchResults(searchResults: any[], task: PlanTask, context: ToolExecutionContext): Promise<any[]> {
+  private async processSearchResults(searchResults: any[], context: BaseToolContext): Promise<any[]> {
     const processedResults = [];
     
     for (const searchResult of searchResults) {
@@ -238,67 +305,81 @@ Return as JSON array: ["query1", "query2", "query3", ...]`,
   /**
    * Generate a summary of search results using LLM
    */
-  private async generateSearchSummary(results: any[], context: ToolExecutionContext, task: PlanTask): Promise<string> {
+  private async generateSearchSummary(results: any[], context: BaseToolContext): Promise<string> {
     if (results.length === 0) {
-      // Return fallback inspiration instead
-      const userRequest = context.plan_pool.context.user_request;
-      const hasCharacter = !!context.current_result.character_data;
-      const hasWorldbook = context.current_result.worldbook_data && context.current_result.worldbook_data.length > 0;
-      
-      return SearchPrompts.generateFallbackInspiration(
-        task.description,
-        userRequest,
-        hasCharacter,
-        hasWorldbook || false
-      );
+      return this.generateFallbackInspiration(context);
     }
     
-    const systemPrompt = `You are an expert creative consultant specializing in character and worldbook development.
-
-MISSION: Analyze search results and extract actionable insights that directly support the current project's needs.
-
-ANALYSIS PRINCIPLES:
-1. Focus on information that fills gaps in current results
-2. Identify concepts that enhance existing character/worldbook elements
-3. Extract practical, usable creative inspiration
-4. Highlight cultural/historical authenticity sources
-5. Suggest specific applications for the findings
-6. Connect insights to user's original vision
-
-OUTPUT: Provide a structured, actionable summary that clearly explains how the research can improve the current character and worldbook.`;
-
-    const prompt = await this.createContextualPrompt(
-      systemPrompt,
-      `SEARCH RESULTS:
-${JSON.stringify(results, null, 2)}
-
-Based on the comprehensive project status and search results above:
-1. What key insights support the current character/worldbook development?
-2. How can these findings address gaps in existing work?
-3. What specific creative elements can be incorporated?
-4. What cultural or historical authenticity can be added?
-
-Provide a structured summary that explains how to practically apply these research findings to improve the character and worldbook.`,
-      task,
+    const prompt = this.buildContextualPrompt(
+      searchPrompts.SUMMARY_GENERATION_SYSTEM,
+      searchPrompts.SUMMARY_GENERATION_HUMAN,
       context
     );
 
     try {
-      return await this.executeLLMChain(prompt, {}, context, {
+      return await this.executeLLMChain(prompt, {
+        search_results: JSON.stringify(results, null, 2)
+      }, context, {
         errorMessage: "Failed to generate search summary"
       });
     } catch (error) {
-      // Return fallback inspiration if LLM fails
-      const userRequest = context.plan_pool.context.user_request;
-      const hasCharacter = !!context.current_result.character_data;
-      const hasWorldbook = context.current_result.worldbook_data && context.current_result.worldbook_data.length > 0;
-      
-      return SearchPrompts.generateFallbackInspiration(
-        task.description,
-        userRequest,
-        hasCharacter,
-        hasWorldbook || false
-      );
+      return this.generateFallbackInspiration(context);
     }
+  }
+
+  /**
+   * Generate fallback inspiration when search fails
+   */
+  private generateFallbackInspiration(context: BaseToolContext): string {
+    const hasCharacter = !!context.task_progress.character_data;
+    const hasWorldbook = !!context.task_progress.worldbook_data && context.task_progress.worldbook_data.length > 0;
+    
+    // Extract user preferences from conversation history
+    const userMessages = context.conversation_history.filter(msg => msg.role === "user");
+    const originalRequest = userMessages[0]?.content || "";
+    
+    let inspiration = "**Creative Inspiration & Ideas:**\n\n";
+    
+    // Character inspiration
+    if (!hasCharacter) {
+      inspiration += "**Character Development Ideas:**\n";
+      inspiration += "• Consider classic archetypes: The Hero, The Mentor, The Trickster, The Outsider\n";
+      inspiration += "• Think about contrasts: A gentle giant, a fierce protector with a soft heart\n";
+      inspiration += "• Add unique quirks: specific habits, speech patterns, or beliefs\n";
+      inspiration += "• Consider their flaws: what makes them human and relatable?\n\n";
+    }
+    
+    // Worldbook inspiration  
+    if (!hasWorldbook) {
+      inspiration += "**World Building Ideas:**\n";
+      inspiration += "• Draw from real cultures and histories for authenticity\n";
+      inspiration += "• Create interesting contrasts: modern tech in ancient settings\n";
+      inspiration += "• Think about daily life: what do people eat, how do they travel?\n";
+      inspiration += "• Consider conflicts: political tensions, resource scarcity, cultural clashes\n\n";
+    }
+    
+    // General creative techniques
+    inspiration += "**Creative Techniques:**\n";
+    inspiration += "• Ask 'What if?' questions to explore possibilities\n";
+    inspiration += "• Combine unexpected elements for originality\n";
+    inspiration += "• Consider the five senses: how does your world feel, smell, sound?\n";
+    inspiration += "• Think about emotional resonance: what feelings do you want to evoke?\n\n";
+    
+    // Context-specific suggestions
+    if (originalRequest.toLowerCase().includes("fantasy")) {
+      inspiration += "**Fantasy Elements:**\n";
+      inspiration += "• Magic systems: cost, rules, limitations\n";
+      inspiration += "• Mythical creatures: roles, intelligence, relationships with humans\n";
+      inspiration += "• Ancient mysteries: lost civilizations, forgotten knowledge\n\n";
+    } else if (originalRequest.toLowerCase().includes("sci-fi") || originalRequest.toLowerCase().includes("science fiction")) {
+      inspiration += "**Sci-Fi Elements:**\n";
+      inspiration += "• Technology implications: how does it change society?\n";
+      inspiration += "• Future evolution: where is humanity heading?\n";
+      inspiration += "• Ethical dilemmas: AI rights, genetic modification, space colonization\n\n";
+    }
+    
+    inspiration += "💡 *Remember: The best characters and worlds feel lived-in and real, even in fantastic settings!*";
+    
+    return inspiration;
   }
 } 

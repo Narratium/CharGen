@@ -2,21 +2,20 @@ import {
   AgentStatus,
   PlanTask,
   ToolType,
-  ToolExecutionContext,
+  BaseToolContext,
+  PlanToolContext,
   ToolExecutionResult,
 } from "../models/agent-model";
 import { AgentConversationOperations } from "../data/agent/agent-conversation-operations";
-import { PlanPoolOperations } from "../data/agent/plan-pool-operations";
-import { ResultOperations } from "../data/agent/result-operations";
-import { ThoughtBufferOperations } from "../data/agent/thought-buffer-operations";
+import { PlanningOperations } from "../data/agent/plan-pool-operations";
 import { ToolRegistry } from "../tools/tool-registry";
 
 // Define user input callback type
 type UserInputCallback = (message?: string) => Promise<string>;
 
 /**
- * Main Agent Engine - Plan-based Architecture
- * LLM acts as the central planner that creates and manages tasks
+ * Agent Engine - Redesigned with Clear Context Architecture
+ * Uses the new context system with proper separation of concerns
  */
 export class AgentEngine {
   private conversationId: string;
@@ -63,8 +62,7 @@ export class AgentEngine {
    * Create initial planning task
    */
   private async createInitialPlanningTask(): Promise<void> {
-    // Add the planning task as the first task
-    await PlanPoolOperations.addTask(this.conversationId, {
+    await PlanningOperations.addTask(this.conversationId, {
       description: "Create initial execution plan",
       tool: ToolType.PLAN,
       parameters: { type: "initial" },
@@ -76,7 +74,7 @@ export class AgentEngine {
   }
 
   /**
-   * Main execution loop with user input handled inline
+   * Main execution loop with clean context management
    */
   private async executionLoop(): Promise<{
     success: boolean;
@@ -87,14 +85,14 @@ export class AgentEngine {
     if (!conversation) throw new Error("Conversation not found");
 
     let iteration = 0;
-    const maxIterations = conversation.context.max_iterations;
+    const maxIterations = conversation.execution_metadata.max_iterations;
 
     while (iteration < maxIterations) {
       iteration++;
-      conversation.context.current_iteration = iteration;
+      await AgentConversationOperations.incrementIteration(this.conversationId);
 
       // Get ready tasks
-      const readyTasks = await PlanPoolOperations.getReadyTasks(this.conversationId);
+      const readyTasks = await PlanningOperations.getReadyTasks(this.conversationId);
       
       if (readyTasks.length === 0) {
         // No ready tasks - check if we need to plan more or if we're done
@@ -106,10 +104,9 @@ export class AgentEngine {
         continue;
       }
 
-      // Execute highest priority task
+      // Execute highest priority task (already sorted by priority)
       const task = readyTasks[0];
       const result = await this.executeTask(task);
-
 
       // Handle user input requirement within the same loop
       if (result.user_input_required) {
@@ -128,11 +125,6 @@ export class AgentEngine {
           role: "user",
           content: userInput,
           message_type: "user_input",
-        });
-
-        await ThoughtBufferOperations.addThought(this.conversationId, {
-          type: "observation",
-          content: `User provided: ${userInput}`,
         });
 
         // Analyze if user input requires complete replan
@@ -174,18 +166,18 @@ export class AgentEngine {
   }
 
   /**
-   * Execute a single task using the unified tool system
+   * Execute a single task using the new context system
    */
   private async executeTask(task: PlanTask): Promise<ToolExecutionResult> {
     await AgentConversationOperations.updateStatus(this.conversationId, AgentStatus.EXECUTING);
     
     // Update task status
-    await PlanPoolOperations.updateTask(this.conversationId, task.id, {
+    await PlanningOperations.updateTask(this.conversationId, task.id, {
       status: "executing",
     });
 
     // Record tool usage
-    await ResultOperations.recordToolUsage(this.conversationId, task.tool);
+    await AgentConversationOperations.recordToolUsage(this.conversationId, task.tool);
 
     // Add execution message
     await AgentConversationOperations.addMessage(this.conversationId, {
@@ -203,24 +195,38 @@ export class AgentEngine {
       const conversation = await AgentConversationOperations.getConversationById(this.conversationId);
       if (!conversation) throw new Error("Conversation not found");
 
-      const context: ToolExecutionContext = {
-        conversation_id: this.conversationId,
-        plan_pool: conversation.plan_pool,
-        thought_buffer: conversation.thought_buffer,
-        current_result: conversation.result,
-        llm_config: conversation.llm_config,
-      };
+      // Build appropriate context based on tool type
+      let context: BaseToolContext | PlanToolContext;
 
-      // Use the unified tool registry
+      if (task.tool === ToolType.PLAN) {
+        // PLAN tools get extended context with planning information
+        context = {
+          conversation_id: this.conversationId,
+          task_progress: conversation.task_progress,
+          conversation_history: conversation.messages,
+          llm_config: conversation.llm_config,
+          planning_context: conversation.planning_context,
+        } as PlanToolContext;
+      } else {
+        // Regular tools get minimal context
+        context = {
+          conversation_id: this.conversationId,
+          task_progress: conversation.task_progress,
+          conversation_history: conversation.messages,
+          llm_config: conversation.llm_config,
+        } as BaseToolContext;
+      }
+
+      // Use the tool registry with appropriate context
       const result = await ToolRegistry.executeTask(task, context);
 
       if (result.success) {
-        await PlanPoolOperations.updateTask(this.conversationId, task.id, {
+        await PlanningOperations.updateTask(this.conversationId, task.id, {
           status: "completed",
           result: result.result,
         });
       } else {
-        await PlanPoolOperations.updateTask(this.conversationId, task.id, {
+        await PlanningOperations.updateTask(this.conversationId, task.id, {
           status: "failed",
           result: { error: result.error },
         });
@@ -231,7 +237,7 @@ export class AgentEngine {
     } catch (error) {
       console.error("Task execution failed:", error);
       
-      await PlanPoolOperations.updateTask(this.conversationId, task.id, {
+      await PlanningOperations.updateTask(this.conversationId, task.id, {
         status: "failed",
         result: { error: error instanceof Error ? error.message : "Unknown error" },
       });
@@ -248,7 +254,7 @@ export class AgentEngine {
    * Create a replanning task
    */
   private async createReplanningTask(): Promise<void> {
-    await PlanPoolOperations.addTask(this.conversationId, {
+    await PlanningOperations.addTask(this.conversationId, {
       description: "Evaluate progress and update execution plan",
       tool: ToolType.PLAN,
       parameters: { type: "replan" },
@@ -266,17 +272,17 @@ export class AgentEngine {
     const conversation = await AgentConversationOperations.getConversationById(this.conversationId);
     if (!conversation) return { completed: false };
 
-    const hasCharacterData = !!conversation.result.character_data;
-    const hasWorldbookData = !!conversation.result.worldbook_data && conversation.result.worldbook_data.length > 0;
+    const hasCharacterData = !!conversation.task_progress.character_data;
+    const hasWorldbookData = !!conversation.task_progress.worldbook_data && conversation.task_progress.worldbook_data.length > 0;
 
     if (hasCharacterData && hasWorldbookData) {
       return {
         completed: true,
         data: {
-          character_data: conversation.result.character_data,
-          worldbook_data: conversation.result.worldbook_data,
-          integration_notes: conversation.result.integration_notes,
-          quality_metrics: conversation.result.quality_metrics,
+          character_data: conversation.task_progress.character_data,
+          worldbook_data: conversation.task_progress.worldbook_data,
+          integration_notes: conversation.task_progress.integration_notes,
+          quality_metrics: conversation.task_progress.quality_metrics,
         },
       };
     }
@@ -292,7 +298,7 @@ export class AgentEngine {
     if (!conversation) return false;
 
     // Check if main goal is completed
-    const mainGoal = conversation.plan_pool.goal_tree.find(g => g.type === "main_goal");
+    const mainGoal = conversation.planning_context.goals.find(g => g.type === "main_goal");
     if (mainGoal?.status === "completed") return false;
 
     // Check completion status first
@@ -300,17 +306,17 @@ export class AgentEngine {
     if (completion.completed) return false;
 
     // Check if we have any pending tasks
-    const hasPendingTasks = conversation.plan_pool.current_tasks.some(t => t.status === "pending");
+    const hasPendingTasks = conversation.planning_context.current_tasks.some(t => t.status === "pending");
     if (hasPendingTasks) return true;
 
     // Check failure patterns - if all tools have failed too many times, consider stopping
-    const failureHistory = conversation.plan_pool.context.failure_history;
+    const failureHistory = conversation.planning_context.context.failure_history;
     const criticalFailures = Object.entries(failureHistory.failed_tool_attempts)
       .filter(([tool, count]) => count >= 5); // Tool failed 5+ times
 
     if (criticalFailures.length >= 2) {
       // Still continue but add a warning task
-      await PlanPoolOperations.addTask(this.conversationId, {
+      await PlanningOperations.addTask(this.conversationId, {
         description: "Review and resolve repeated tool failures before continuing",
         tool: ToolType.PLAN,
         parameters: { type: "failure_analysis" },
@@ -360,11 +366,6 @@ export class AgentEngine {
         this.calculateSimilarity(userInput, prevMsg) > 0.6
       );
 
-    await ThoughtBufferOperations.addThought(this.conversationId, {
-      type: "decision",
-      content: `User input analysis: changeIndicator=${hasChangeIndicator}, substantiallyNew=${isSubstantiallyNew}, needsReplan=${hasChangeIndicator || isSubstantiallyNew}`,
-    });
-
     return hasChangeIndicator || isSubstantiallyNew;
   }
 
@@ -372,7 +373,7 @@ export class AgentEngine {
    * Create a complete replan task when user input indicates major changes needed
    */
   private async createCompleteReplanTask(userInput: string): Promise<void> {
-    await PlanPoolOperations.addTask(this.conversationId, {
+    await PlanningOperations.addTask(this.conversationId, {
       description: `Complete replan based on new user requirements: ${userInput.substring(0, 100)}...`,
       tool: ToolType.PLAN,
       parameters: { 
@@ -383,13 +384,6 @@ export class AgentEngine {
       status: "pending",
       priority: 10, // Highest priority - should execute immediately
       reasoning: "User input indicates significant changes to requirements, need to remove obsolete tasks and create new plan",
-    });
-
-    await ThoughtBufferOperations.addDecision(this.conversationId, {
-      decision: "Triggered complete replan",
-      reasoning: `User input indicated major changes: "${userInput.substring(0, 200)}..."`,
-      alternatives_considered: ["Simple replan", "Continue with current plan"],
-      confidence: 0.8,
     });
   }
 

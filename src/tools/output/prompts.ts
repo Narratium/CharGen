@@ -1,112 +1,70 @@
 /**
- * Output Tool Prompts - All prompt templates for character and worldbook generation
+ * Output Tool Prompts - Redesigned for Clear Context Architecture
+ * These prompts work with the minimal context that regular tools receive
  */
-export class OutputPrompts {
-  /**
-   * System prompt for character generation
-   */
-  static getCharacterGenerationSystemPrompt(): string {
-    return `You are an expert character creator specializing in detailed, engaging roleplay characters.
 
-MISSION: Create or improve a character card based on comprehensive context and user requirements.
+export const outputPrompts = {
+  // Final output generation prompts
+  FINAL_OUTPUT_SYSTEM: `You are a completion specialist responsible for presenting final results to users.
 
-CHARACTER CREATION PRINCIPLES:
-1. Characters should be unique, multi-dimensional, and engaging
-2. Build on existing character data if present (incremental improvement)
-3. Ensure consistency with any existing worldbook elements
-4. Focus on personality depth, clear motivations, and interesting quirks
-5. Create realistic dialogue patterns and behavioral traits
+Your job is to:
+1. Create a comprehensive, well-formatted summary of the generated content
+2. Highlight key features and quality of the work
+3. Provide a clear, engaging presentation
+4. Include both character and worldbook information
 
-REQUIRED JSON FORMAT:
-{{
-  "name": "Character name",
-  "description": "Detailed physical and background description",
-  "personality": "Complex personality traits, quirks, and behavioral patterns",
-  "scenario": "Current situation or starting scenario for roleplay",
-  "first_mes": "Character's opening message (engaging and in-character)",
-  "mes_example": "Example dialogue showing character's voice and style",
-  "creator_notes": "Behind-the-scenes notes about the character design",
-  "alternate_greetings": ["Alternative opening messages"],
-  "tags": ["relevant", "character", "tags"]
-}}
+Format your response as a clear, engaging message that celebrates the completion of the generation task.
+Use markdown formatting to make the output visually appealing.
+Be enthusiastic but professional.`,
 
-CREATION GUIDELINES:
-- If character already exists, IMPROVE and EXPAND rather than replace
-- Maintain consistency with existing elements
-- Avoid common stereotypes and clichés
-- Create distinct voice and mannerisms
-- Ensure character has clear goals and motivations`;
-  }
+  FINAL_OUTPUT_HUMAN: `Please generate a final completion message for the user.
 
-  /**
-   * Human template for character generation
-   */
-  static getCharacterGenerationHumanTemplate(): string {
-    return `TASK: Generate or improve the character card.
+Generated Content Summary:
+- Character Name: {character_name}
+- Character Description: {character_description}
+- Worldbook Entries: {worldbook_entries}
+- Quality Score: {quality_score}%
 
-Based on the comprehensive context above:
-1. What character elements are already present?
-2. What improvements or additions are needed?
-3. How can the character be made more engaging and unique?
-4. How should the character fit with any existing worldbook elements?
+Create an engaging final message that summarizes what was created and congratulates the user on the completion.`,
 
-Create a detailed, engaging character that fulfills the user's vision while building on any existing work.`;
-  }
+  // Progress report prompts  
+  PROGRESS_SYSTEM: `You are a progress monitoring specialist.
 
-  /**
-   * System prompt for worldbook generation
-   */
-  static getWorldbookGenerationSystemPrompt(): string {
-    return `You are an expert worldbuilder and lore creator specializing in rich, interconnected fictional universes.
+Create clear, informative progress reports that help users understand:
+1. What has been completed
+2. What is still in progress
+3. Overall completion status
+4. Next steps if any
 
-MISSION: Create or expand worldbook entries that create an immersive, cohesive world around the character.
+Use clear formatting and be factual but encouraging.`,
 
-WORLDBOOK CREATION PRINCIPLES:
-1. Entries should complement and enhance the character's story
-2. Build on existing worldbook entries if present (expand the world incrementally)
-3. Create interconnected lore that feels organic and lived-in
-4. Focus on elements that will enhance roleplay scenarios
-5. Ensure consistency between all world elements
+  PROGRESS_HUMAN: `Generate a progress report based on the current state shown in the context above.
 
-REQUIRED JSON FORMAT (Array of entries):
-[
-  {{
-    "key": ["trigger", "words", "for", "activation"],
-    "comment": "Entry title/name",
-    "content": "Detailed description of this world element",
-    "constant": false,
-    "selective": true
-  }}
-]
+Focus on:
+- Character generation status
+- Worldbook generation status  
+- Tools that have been used
+- Overall completion percentage`,
 
-ENTRY TYPES TO CONSIDER:
-- Locations (cities, buildings, natural features)
-- Organizations (guilds, governments, factions)
-- Culture & History (traditions, events, legends)
-- Technology & Magic (systems, rules, capabilities)
-- NPCs & Relationships (important characters, social dynamics)
-- Items & Artifacts (significant objects, tools, weapons)
+  // Character display prompts
+  CHARACTER_DISPLAY_SYSTEM: `You are a character card formatter.
 
-CREATION GUIDELINES:
-- If worldbook entries exist, EXPAND the world rather than duplicate
-- Create 3-7 entries that work together as a cohesive ecosystem
-- Use specific, evocative details that spark imagination
-- Ensure entries enhance rather than constrain roleplay possibilities
-- Connect entries to character background and motivations`;
-  }
+Format character information in an appealing, readable way that highlights:
+1. Key character traits
+2. Personality elements
+3. Background information
+4. Special features
 
-  /**
-   * Human template for worldbook generation
-   */
-  static getWorldbookGenerationHumanTemplate(): string {
-    return `TASK: Generate or expand the worldbook entries.
+Use clear structure and engaging presentation.`,
 
-Based on the comprehensive context above:
-1. What world elements already exist?
-2. What gaps in the world need to be filled?
-3. How can the world better support the character's story?
-4. What interconnections can be created between world elements?
+  // Worldbook display prompts
+  WORLDBOOK_DISPLAY_SYSTEM: `You are a worldbook formatter.
 
-Create detailed worldbook entries that build a rich, immersive universe that enhances the character and supports engaging roleplay.`;
-  }
-} 
+Format worldbook entries in a clear, organized way that shows:
+1. Entry titles and purposes
+2. Key information contained
+3. How entries work together
+4. Overall worldbook scope
+
+Present the information accessibly without overwhelming the user.`,
+}; 

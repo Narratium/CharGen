@@ -1,13 +1,14 @@
 import { AgentConversationOperations } from "./agent-conversation-operations";
-import { PlanTask, GoalNode, PlanPool } from "../../models/agent-model";
+import { PlanTask, Goal, PlanningContext } from "../../models/agent-model";
 import { v4 as uuidv4 } from "uuid";
 
 /**
- * Plan Pool Operations
+ * Planning Operations - Redesigned
+ * Handles planning-specific data operations with clear interfaces
  */
-export class PlanPoolOperations {
+export class PlanningOperations {
   /**
-   * Add task to plan pool
+   * Add task to planning context
    */
   static async addTask(conversationId: string, task: Omit<PlanTask, "id" | "created_at">): Promise<PlanTask> {
     const conversation = await AgentConversationOperations.getConversationById(conversationId);
@@ -21,7 +22,7 @@ export class PlanPoolOperations {
       created_at: new Date().toISOString(),
     };
 
-    conversation.plan_pool.current_tasks.push(newTask);
+    conversation.planning_context.current_tasks.push(newTask);
     await AgentConversationOperations.updateConversation(conversation);
     
     return newTask;
@@ -40,25 +41,25 @@ export class PlanPoolOperations {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    const taskIndex = conversation.plan_pool.current_tasks.findIndex(t => t.id === taskId);
+    const taskIndex = conversation.planning_context.current_tasks.findIndex(t => t.id === taskId);
     if (taskIndex === -1) {
       throw new Error(`Task not found: ${taskId}`);
     }
 
     // Update the task
-    Object.assign(conversation.plan_pool.current_tasks[taskIndex], updates);
+    Object.assign(conversation.planning_context.current_tasks[taskIndex], updates);
 
     // If task is completed or failed, move it to completed_tasks
     if (updates.status === "completed" || updates.status === "failed") {
-      const completedTask = conversation.plan_pool.current_tasks[taskIndex];
+      const completedTask = conversation.planning_context.current_tasks[taskIndex];
       completedTask.completed_at = new Date().toISOString();
-      conversation.plan_pool.completed_tasks.push(completedTask);
-      conversation.plan_pool.current_tasks.splice(taskIndex, 1);
+      conversation.planning_context.completed_tasks.push(completedTask);
+      conversation.planning_context.current_tasks.splice(taskIndex, 1);
 
       // Record failure history for failed tasks
       if (updates.status === "failed") {
         const toolName = completedTask.tool;
-        const failureHistory = conversation.plan_pool.context.failure_history;
+        const failureHistory = conversation.planning_context.context.failure_history;
         
         // Increment failure count for this tool
         failureHistory.failed_tool_attempts[toolName] = (failureHistory.failed_tool_attempts[toolName] || 0) + 1;
@@ -83,59 +84,50 @@ export class PlanPoolOperations {
   }
 
   /**
-   * Add a new goal to the goal tree
+   * Add a new goal to the goal hierarchy
    */
-  static async addGoal(conversationId: string, goal: Omit<GoalNode, "id">): Promise<GoalNode> {
+  static async addGoal(conversationId: string, goal: Omit<Goal, "id">): Promise<Goal> {
     const conversation = await AgentConversationOperations.getConversationById(conversationId);
     if (!conversation) {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    const newGoal: GoalNode = {
+    const newGoal: Goal = {
       ...goal,
       id: uuidv4(),
     };
 
-    // For simplicity, adding as a root goal. A more complex implementation
-    // would find the correct parent.
-    conversation.plan_pool.goal_tree.push(newGoal);
+    conversation.planning_context.goals.push(newGoal);
     await AgentConversationOperations.updateConversation(conversation);
     
     return newGoal;
   }
 
   /**
-   * Update a goal in the goal tree
+   * Update a goal in the goal hierarchy
    */
   static async updateGoal(
     conversationId: string, 
     goalId: string, 
-    updates: Partial<GoalNode>,
+    updates: Partial<Goal>,
   ): Promise<void> {
     const conversation = await AgentConversationOperations.getConversationById(conversationId);
     if (!conversation) {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    const findAndApplyUpdate = (nodes: GoalNode[]) => {
-      for (let i = 0; i < nodes.length; i++) {
-        if (nodes[i].id === goalId) {
-          Object.assign(nodes[i], updates);
-          return true;
-        }
-      }
-      return false;
-    };
-
-    if (!findAndApplyUpdate(conversation.plan_pool.goal_tree)) {
+    const goalIndex = conversation.planning_context.goals.findIndex(g => g.id === goalId);
+    if (goalIndex === -1) {
       throw new Error(`Goal not found: ${goalId}`);
     }
 
+    Object.assign(conversation.planning_context.goals[goalIndex], updates);
     await AgentConversationOperations.updateConversation(conversation);
   }
 
   /**
    * Get tasks that are ready for execution
+   * Returns tasks with highest priority first
    */
   static async getReadyTasks(conversationId: string): Promise<PlanTask[]> {
     const conversation = await AgentConversationOperations.getConversationById(conversationId);
@@ -143,31 +135,32 @@ export class PlanPoolOperations {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    // Simple logic: return all pending tasks that have no dependencies
-    // or whose dependencies are met.
-    return conversation.plan_pool.current_tasks.filter(task => 
+    // Get pending tasks that have no dependencies or whose dependencies are met
+    const readyTasks = conversation.planning_context.current_tasks.filter(task => 
       task.status === "pending" && 
       (task.dependencies.length === 0 || 
        task.dependencies.every(depId => 
-         conversation.plan_pool.completed_tasks.some(ct => ct.id === depId),
+         conversation.planning_context.completed_tasks.some(ct => ct.id === depId),
        )),
     );
+
+    // Sort by priority (highest first)
+    return readyTasks.sort((a, b) => b.priority - a.priority);
   }
   
   /**
-   * Update plan context
+   * Update planning context metadata
    */
-  static async updatePlanContext(
+  static async updatePlanningContext(
     conversationId: string, 
-    contextUpdates: Partial<PlanPool["context"]>,
+    contextUpdates: Partial<PlanningContext["context"]>,
   ): Promise<void> {
     const conversation = await AgentConversationOperations.getConversationById(conversationId);
     if (!conversation) {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
     
-    Object.assign(conversation.plan_pool.context, contextUpdates);
-    
+    Object.assign(conversation.planning_context.context, contextUpdates);
     await AgentConversationOperations.updateConversation(conversation);
   }
 
@@ -180,21 +173,21 @@ export class PlanPoolOperations {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    const taskIndex = conversation.plan_pool.current_tasks.findIndex(t => t.id === taskId);
+    const taskIndex = conversation.planning_context.current_tasks.findIndex(t => t.id === taskId);
     if (taskIndex === -1) {
       throw new Error(`Task not found: ${taskId}`);
     }
 
     // Move to completed with obsolete status
-    const obsoleteTask = conversation.plan_pool.current_tasks[taskIndex];
+    const obsoleteTask = conversation.planning_context.current_tasks[taskIndex];
     obsoleteTask.status = "obsolete" as any;
     obsoleteTask.completed_at = new Date().toISOString();
     if (reason) {
       obsoleteTask.obsolete_reason = reason;
     }
 
-    conversation.plan_pool.completed_tasks.push(obsoleteTask);
-    conversation.plan_pool.current_tasks.splice(taskIndex, 1);
+    conversation.planning_context.completed_tasks.push(obsoleteTask);
+    conversation.planning_context.current_tasks.splice(taskIndex, 1);
 
     await AgentConversationOperations.updateConversation(conversation);
   }
@@ -216,7 +209,7 @@ export class PlanPoolOperations {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    const tasksToRemove = conversation.plan_pool.current_tasks.filter(task => {
+    const tasksToRemove = conversation.planning_context.current_tasks.filter(task => {
       if (criteria.tool && task.tool !== criteria.tool) return false;
       if (criteria.status && task.status !== criteria.status) return false;
       if (criteria.descriptionContains && !task.description.toLowerCase().includes(criteria.descriptionContains.toLowerCase())) return false;
@@ -225,7 +218,7 @@ export class PlanPoolOperations {
 
     // Mark tasks as obsolete and move to completed
     for (const task of tasksToRemove) {
-      const taskIndex = conversation.plan_pool.current_tasks.findIndex(t => t.id === task.id);
+      const taskIndex = conversation.planning_context.current_tasks.findIndex(t => t.id === task.id);
       if (taskIndex !== -1) {
         task.status = "obsolete" as any;
         task.completed_at = new Date().toISOString();
@@ -233,8 +226,8 @@ export class PlanPoolOperations {
           task.obsolete_reason = reason;
         }
         
-        conversation.plan_pool.completed_tasks.push(task);
-        conversation.plan_pool.current_tasks.splice(taskIndex, 1);
+        conversation.planning_context.completed_tasks.push(task);
+        conversation.planning_context.current_tasks.splice(taskIndex, 1);
       }
     }
 
@@ -250,7 +243,7 @@ export class PlanPoolOperations {
   }
 
   /**
-   * Remove goal from goal tree
+   * Remove goal from goal hierarchy
    */
   static async removeGoal(conversationId: string, goalId: string): Promise<void> {
     const conversation = await AgentConversationOperations.getConversationById(conversationId);
@@ -258,12 +251,12 @@ export class PlanPoolOperations {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    const goalIndex = conversation.plan_pool.goal_tree.findIndex(g => g.id === goalId);
+    const goalIndex = conversation.planning_context.goals.findIndex(g => g.id === goalId);
     if (goalIndex === -1) {
       throw new Error(`Goal not found: ${goalId}`);
     }
 
-    conversation.plan_pool.goal_tree.splice(goalIndex, 1);
+    conversation.planning_context.goals.splice(goalIndex, 1);
     await AgentConversationOperations.updateConversation(conversation);
   }
 
@@ -281,7 +274,7 @@ export class PlanPoolOperations {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    const tasks = conversation.plan_pool.current_tasks;
+    const tasks = conversation.planning_context.current_tasks;
     const byTool: Record<string, number> = {};
 
     for (const task of tasks) {
@@ -297,15 +290,86 @@ export class PlanPoolOperations {
   }
 
   /**
-   * Get current plan (plan pool with all tasks and goals)
+   * Get current planning context
    */
-  static async getCurrentPlan(conversationId: string): Promise<PlanPool> {
+  static async getPlanningContext(conversationId: string): Promise<PlanningContext> {
     const conversation = await AgentConversationOperations.getConversationById(conversationId);
     if (!conversation) {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    return conversation.plan_pool;
+    return conversation.planning_context;
   }
-} 
+
+  /**
+   * Get current goal tree
+   */
+  static async getGoals(conversationId: string): Promise<Goal[]> {
+    const conversation = await AgentConversationOperations.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    return conversation.planning_context.goals;
+  }
+
+  /**
+   * Get planning statistics for monitoring
+   */
+  static async getPlanningStats(conversationId: string): Promise<{
+    totalTasks: number;
+    completedTasks: number;
+    failedTasks: number;
+    obsoleteTasks: number;
+    totalGoals: number;
+    completedGoals: number;
+    mostUsedTool: string | null;
+    failureRate: number;
+  }> {
+    const conversation = await AgentConversationOperations.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    const currentTasks = conversation.planning_context.current_tasks;
+    const completedTasks = conversation.planning_context.completed_tasks;
+    const allTasks = [...currentTasks, ...completedTasks];
+    const goals = conversation.planning_context.goals;
+
+    // Count tasks by status
+    const completedCount = completedTasks.filter(t => t.status === "completed").length;
+    const failedCount = completedTasks.filter(t => t.status === "failed").length;
+    const obsoleteCount = completedTasks.filter(t => t.status === "obsolete").length;
+
+    // Count goals by status
+    const completedGoalsCount = goals.filter(g => g.status === "completed").length;
+
+    // Find most used tool
+    const toolUsage: Record<string, number> = {};
+    for (const task of allTasks) {
+      toolUsage[task.tool] = (toolUsage[task.tool] || 0) + 1;
+    }
+    const mostUsedTool = Object.keys(toolUsage).length > 0 
+      ? Object.entries(toolUsage).sort(([,a], [,b]) => b - a)[0][0] 
+      : null;
+
+    // Calculate failure rate
+    const totalExecutedTasks = completedCount + failedCount;
+    const failureRate = totalExecutedTasks > 0 ? failedCount / totalExecutedTasks : 0;
+
+    return {
+      totalTasks: allTasks.length,
+      completedTasks: completedCount,
+      failedTasks: failedCount,
+      obsoleteTasks: obsoleteCount,
+      totalGoals: goals.length,
+      completedGoals: completedGoalsCount,
+      mostUsedTool,
+      failureRate,
+    };
+  }
+}
+
+// Backward compatibility alias
+export { PlanningOperations as PlanPoolOperations }; 
  

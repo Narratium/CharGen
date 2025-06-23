@@ -4,102 +4,131 @@ import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { 
   ToolType,
-  ToolExecutionContext,
+  BaseToolContext,
+  PlanToolContext,
   ToolExecutionResult,
   PlanTask,
-  AgentConversation,
+  ConversationMessage,
 } from "../models/agent-model";
-import { ThoughtBufferOperations } from "../data/agent/thought-buffer-operations";
-import { AgentConversationOperations } from "../data/agent/agent-conversation-operations";
+import { BaseThinking, EvaluationResult, ImprovementInstruction } from "./base-think";
+
+// ============================================================================
+// SIMPLE TOOL ARCHITECTURE WITH SELF-IMPROVEMENT
+// ============================================================================
 
 /**
- * Base Tool Class - provides common functionality for all tools
+ * Basic tool interface - all tools implement this
  */
-export abstract class BaseTool {
+export interface Tool {
+  readonly name: string;
+  readonly description: string;
+  readonly toolType: ToolType;
+  
+  canHandle(task: PlanTask): boolean;
+  validate(context: BaseToolContext | PlanToolContext): boolean;
+}
+
+/**
+ * Regular tool interface - for simple tools that don't need planning context
+ */
+export interface RegularTool extends Tool {
+  execute(context: BaseToolContext): Promise<any>;
+}
+
+/**
+ * Plan tool interface - for tools that need planning context
+ */
+export interface PlanTool extends Tool {
+  execute(context: PlanToolContext): Promise<any>;
+}
+
+/**
+ * Enhanced Regular Tool with self-improvement
+ * 具备自我改进能力的常规工具
+ */
+export abstract class BaseRegularTool extends BaseThinking implements RegularTool {
   abstract readonly toolType: ToolType;
   abstract readonly name: string;
   abstract readonly description: string;
 
+  constructor() {
+    super("BaseTool");
+  }
+
   /**
-   * Check if this tool can execute the given task
+   * Main execution with self-improvement loop
+   * 主执行方法，包含自我改进循环
    */
-  canExecute(task: PlanTask): boolean {
+  async execute(context: BaseToolContext): Promise<any> {
+    let attempt = 1;
+    let result = await this.doWork(context);
+    
+    // Self-improvement loop
+    while (attempt <= this.maxImprovementAttempts) {
+      const evaluation = await this.evaluate(result, context, attempt);
+      
+      // If good enough, return
+      if (evaluation.is_satisfied || evaluation.next_action === "complete") {
+        if (attempt > 1) {
+          console.log(`✅ [${this.name}] Improved result after ${attempt} attempts. Quality: ${evaluation.quality_score}/100`);
+        }
+      return result;
+      }
+      
+      // Try to improve
+      if (evaluation.next_action === "improve" && attempt < this.maxImprovementAttempts) {
+        console.log(`🔄 [${this.name}] Quality: ${evaluation.quality_score}/100. Improving...`);
+        
+        const instruction = await this.generateImprovement(result, evaluation, context);
+        result = await this.improve(result, instruction, context);
+        attempt++;
+      } else {
+        console.log(`⏹️ [${this.name}] Stopping after ${attempt} attempts. Final quality: ${evaluation.quality_score}/100`);
+        break;
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * Core work logic - implement this in your tool
+   * 核心工作逻辑 - 在你的工具中实现这个
+   */
+  abstract doWork(context: BaseToolContext): Promise<any>;
+
+  /**
+   * Improvement logic - implement this in your tool
+   * 改进逻辑 - 在你的工具中实现这个
+   */
+  abstract improve(
+    currentResult: any,
+    instruction: ImprovementInstruction,
+    context: BaseToolContext
+  ): Promise<any>;
+
+  /**
+   * Default task validation
+   */
+  canHandle(task: PlanTask): boolean {
     return task.tool === this.toolType;
   }
 
   /**
-   * Execute the tool with the given task and context (with automatic logging and error handling)
+   * Default context validation
    */
-  async executeTask(task: PlanTask, context: ToolExecutionContext): Promise<ToolExecutionResult> {
-    // Automatic start logging
-    this.logTaskExecution('start', task);
-    
-    // Automatic thought logging
-    await this.addThought(
-      context.conversation_id,
-      "reasoning",
-      `Executing ${this.name}: ${task.description}`,
-      task.id,
-    );
-
-    try {
-      // Call the actual tool implementation
-      const result = await this.executeToolLogic(task, context);
-      
-      // Automatic success logging
-      this.logTaskExecution('success', task, { 
-        success: result.success,
-        hasResult: !!result.result,
-        userInputRequired: result.user_input_required
-      });
-      
-      return result;
-      
-    } catch (error) {
-      // Automatic error handling and logging
-      this.logTaskExecution('error', task, error);
-      
-      // Add error reflection thought
-      await this.addThought(
-        context.conversation_id,
-        "reflection",
-        `${this.name} execution failed: ${error instanceof Error ? error.message : String(error)}`,
-        task.id,
-      ).catch(err => console.error("Failed to add error thought:", err));
-      
-      return this.handleToolError(error, context, task.id, `${this.name} execution failed`);
-    }
+  validate(context: BaseToolContext): boolean {
+    return !!(context.conversation_id && context.task_progress);
   }
 
-  /**
-   * Abstract method that each tool must implement - contains the actual tool logic
-   */
-  abstract executeToolLogic(task: PlanTask, context: ToolExecutionContext): Promise<ToolExecutionResult>;
-
-  /**
-   * Get tool information for LLM prompt
-   */
-  getToolInfo(): { type: string; name: string; description: string } {
-    return {
-      type: this.toolType,
-      name: this.name,
-      description: this.description,
-    };
-  }
+  // ============================================================================
+  // HELPER METHODS - Common functionality for all tools
+  // ============================================================================
 
   /**
    * Create LLM instance from config
    */
-  protected createLLM(config: AgentConversation["llm_config"]) {
-    console.log(`🔧 [Base Tool] Config: ${JSON.stringify({
-      type: config.llm_type,
-      model: config.model_name,
-      baseUrl: config.base_url,
-      hasApiKey: !!config.api_key,
-      temperature: config.temperature,
-      maxTokens: config.max_tokens
-    })}`);
-
+  protected createLLM(config: BaseToolContext["llm_config"]) {
     if (config.llm_type === "openai") {
       return new ChatOpenAI({
         modelName: config.model_name,
@@ -124,284 +153,32 @@ export abstract class BaseTool {
   }
 
   /**
-   * Add thought to conversation
+   * Build context-aware prompt for regular tools
    */
-  protected async addThought(
-    conversationId: string,
-    type: "observation" | "reasoning" | "decision" | "reflection",
-    content: string,
-    taskId?: string,
-  ): Promise<void> {
-    await ThoughtBufferOperations.addThought(conversationId, {
-      type,
-      content,
-      related_task_id: taskId,
-    });
+  protected buildContextualPrompt(
+    systemPrompt: string,
+    humanTemplate: string,
+    context: BaseToolContext
+  ): ChatPromptTemplate {
+    // Pre-build context that doesn't change per request
+    const conversationSummary = this.buildConversationSummary(context.conversation_history);
+    const progressSummary = this.buildProgressSummary(context.task_progress);
+    const fullContext = `${progressSummary}\n${conversationSummary}`;
+    
+    // Create template that can accept variables
+    return ChatPromptTemplate.fromMessages([
+      ["system", systemPrompt],
+      ["human", fullContext + "\n\n" + humanTemplate],
+    ]);
   }
 
   /**
-   * Add message to conversation
-   */
-  protected async addMessage(
-    conversationId: string,
-    role: "agent" | "system",
-    content: string,
-    messageType: "agent_thinking" | "agent_action" | "agent_output" | "system_info" = "agent_output",
-  ): Promise<void> {
-    await AgentConversationOperations.addMessage(conversationId, {
-      role,
-      content,
-      message_type: messageType,
-    });
-  }
-
-  /**
-   * Build core context for LLM prompts - includes all essential information
-   */
-  protected async buildCoreContext(task: PlanTask, context: ToolExecutionContext): Promise<string> {
-    const { plan_pool, thought_buffer, current_result } = context;
-    
-    // 1. Current Results Status
-    const resultStatus = this.buildResultStatus(current_result);
-    
-    // 2. Current Task Information
-    const taskInfo = this.buildTaskInfo(task, plan_pool);
-    
-    // 3. Context (Conversations + Execution Information) - NOW ASYNC AND COMPREHENSIVE
-    const conversationContext = await this.buildConversationContext(context);
-    
-    // 4. Recent Failures with Task Attribution
-    const failureContext = this.buildFailureContext(plan_pool.context.failure_history, plan_pool.completed_tasks);
-
-    return `
-=== CORE CONTEXT FOR CHARACTER & WORLDBOOK GENERATION ===
-
-${resultStatus}
-
-${taskInfo}
-
-${conversationContext}
-
-${failureContext}
-
-=== END CORE CONTEXT ===
-`.trim();
-  }
-
-  /**
-   * Build current results status section
-   */
-  private buildResultStatus(result: any): string {
-    const hasCharacter = !!result.character_data;
-    const hasWorldbook = !!result.worldbook_data && result.worldbook_data.length > 0;
-    
-    let status = "📊 CURRENT GENERATION STATUS:\n";
-    
-    if (hasCharacter) {
-      status += `✅ Character Card: COMPLETE\n`;
-      status += `   Name: ${result.character_data.name || 'N/A'}\n`;
-      status += `   Description: ${(result.character_data.description || '').substring(0, 100)}${result.character_data.description?.length > 100 ? '...' : ''}\n`;
-      status += `   Personality: ${(result.character_data.personality || '').substring(0, 100)}${result.character_data.personality?.length > 100 ? '...' : ''}\n`;
-    } else {
-      status += `❌ Character Card: NOT GENERATED\n`;
-    }
-    
-    if (hasWorldbook) {
-      status += `✅ Worldbook: COMPLETE (${result.worldbook_data.length} entries)\n`;
-      const recentEntries = result.worldbook_data.slice(0, 3);
-      for (const entry of recentEntries) {
-        status += `   - ${entry.comment}: ${(entry.content || '').substring(0, 60)}${entry.content?.length > 60 ? '...' : ''}\n`;
-      }
-      if (result.worldbook_data.length > 3) {
-        status += `   ... and ${result.worldbook_data.length - 3} more entries\n`;
-      }
-    } else {
-      status += `❌ Worldbook: NOT GENERATED\n`;
-    }
-
-    return status;
-  }
-
-  /**
-   * Build current task information section
-   */
-  private buildTaskInfo(task: PlanTask, planPool: any): string {
-    const pendingTasks = planPool.current_tasks.filter((t: any) => t.status === 'pending');
-    const completedTasks = planPool.completed_tasks.slice(-5); // Last 5 completed
-    
-    let info = "🎯 CURRENT TASK & PLAN STATUS:\n";
-    info += `Current Task: "${task.description}" (Tool: ${task.tool})\n`;
-    info += `Task Priority: ${task.priority}/10\n`;
-    info += `Task Reasoning: ${task.reasoning || 'Not specified'}\n\n`;
-    
-    info += `Plan Focus: ${planPool.context.current_focus}\n`;
-    info += `Pending Tasks: ${pendingTasks.length}\n`;
-    info += `Completed Tasks: ${planPool.completed_tasks.length}\n\n`;
-    
-    if (pendingTasks.length > 0) {
-      info += "Next Pending Tasks:\n";
-      for (const t of pendingTasks.slice(0, 3)) {
-        info += `  - "${t.description}" (${t.tool}, Priority: ${t.priority})\n`;
-      }
-    }
-    
-    if (completedTasks.length > 0) {
-      info += "\nRecently Completed:\n";
-      for (const t of completedTasks) {
-        info += `  - "${t.description}" (${t.tool}) - ${t.status}\n`;
-      }
-    }
-
-    return info;
-  }
-
-  /**
-   * Build conversation context section - core of the context system
-   */
-  private async buildConversationContext(context: ToolExecutionContext): Promise<string> {
-    // Get full conversation to access messages
-    const conversation = await AgentConversationOperations.getConversationById(context.conversation_id);
-    if (!conversation) {
-      return "💭 CONVERSATION CONTEXT: Unable to load conversation history\n";
-    }
-
-    let conversationInfo = "💭 CONVERSATION & EXECUTION HISTORY:\n";
-    conversationInfo += `Original Request: "${context.plan_pool.context.user_request}"\n\n`;
-    
-    // Get recent conversation messages (last 15 messages for context)
-    const recentMessages = conversation.messages.slice(-15);
-    
-    if (recentMessages.length > 0) {
-      conversationInfo += "=== RECENT CONVERSATION FLOW ===\n";
-      
-      for (const message of recentMessages) {
-        const timestamp = new Date(message.timestamp).toLocaleTimeString();
-        const icon = this.getMessageIcon(message.message_type);
-        
-        // Format message based on type
-        switch (message.message_type) {
-          case "user_input":
-            conversationInfo += `${icon} [${timestamp}] USER: "${message.content}"\n`;
-            break;
-          case "agent_thinking":
-            conversationInfo += `${icon} [${timestamp}] AI THINKING: ${this.truncateText(message.content, 100)}\n`;
-            break;
-          case "agent_action":
-            const toolUsed = message.metadata?.tool_used || "Unknown";
-            conversationInfo += `${icon} [${timestamp}] AI ACTION: ${message.content} (${toolUsed})\n`;
-            break;
-          case "agent_output":
-            conversationInfo += `${icon} [${timestamp}] AI OUTPUT: ${this.truncateText(message.content, 100)}\n`;
-            break;
-          case "system_info":
-            conversationInfo += `${icon} [${timestamp}] SYSTEM: ${this.truncateText(message.content, 80)}\n`;
-            break;
-        }
-      }
-      conversationInfo += "\n";
-    }
-    
-    // Extract key user interactions and preferences
-    const userInputs = conversation.messages.filter(m => m.message_type === "user_input");
-    if (userInputs.length > 1) { // More than just the initial request
-      conversationInfo += "=== KEY USER INTERACTIONS ===\n";
-      for (const input of userInputs.slice(-5)) { // Last 5 user inputs
-        conversationInfo += `• "${this.truncateText(input.content, 150)}"\n`;
-      }
-      conversationInfo += "\n";
-    }
-    
-    // Show execution trajectory from completed tasks
-    const recentCompletedTasks = context.plan_pool.completed_tasks.slice(-5);
-    if (recentCompletedTasks.length > 0) {
-      conversationInfo += "=== RECENT EXECUTION TRAJECTORY ===\n";
-      for (const task of recentCompletedTasks) {
-        const status = task.status === "completed" ? "✅" : "❌";
-        conversationInfo += `${status} ${task.tool}: "${this.truncateText(task.description, 80)}" - ${task.status}\n`;
-      }
-      conversationInfo += "\n";
-    }
-    
-    // Current reasoning and focus
-    if (context.thought_buffer.current_reasoning) {
-      conversationInfo += `Current AI Reasoning: ${context.thought_buffer.current_reasoning}\n`;
-    }
-    
-    conversationInfo += `Current Focus: ${context.plan_pool.context.current_focus}\n`;
-
-    return conversationInfo;
-  }
-
-  /**
-   * Get appropriate icon for message type
-   */
-  private getMessageIcon(messageType: string): string {
-    switch (messageType) {
-      case "user_input": return "👤";
-      case "agent_thinking": return "🤔";
-      case "agent_action": return "⚡";
-      case "agent_output": return "🤖";
-      case "system_info": return "ℹ️";
-      default: return "💬";
-    }
-  }
-
-  /**
-   * Truncate text with ellipsis
-   */
-  private truncateText(text: string, maxLength: number): string {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength - 3) + "...";
-  }
-
-  /**
-   * Build failure context with task attribution
-   */
-  private buildFailureContext(failureHistory: any, completedTasks: any[]): string {
-    if (!failureHistory.recent_failures || failureHistory.recent_failures.length === 0) {
-      return "✅ FAILURE STATUS: No recent failures";
-    }
-    
-    let failureInfo = "⚠️  RECENT FAILURES TO AVOID:\n";
-    
-    // Group failures by tool
-    const failuresByTool = failureHistory.recent_failures.reduce((acc: any, failure: any) => {
-      if (!acc[failure.tool]) acc[failure.tool] = [];
-      acc[failure.tool].push(failure);
-      return acc;
-    }, {});
-    
-    for (const [tool, failures] of Object.entries(failuresByTool)) {
-      const toolFailures = failures as any[];
-      const count = failureHistory.failed_tool_attempts[tool] || 0;
-      
-      failureInfo += `\n${tool} Tool (${count} total failures):\n`;
-      
-      for (const failure of toolFailures.slice(-3)) { // Last 3 failures for this tool
-        // Find the original task that failed
-        const failedTask = completedTasks.find(t => t.completed_at === failure.timestamp);
-        const taskContext = failedTask ? ` (Task: "${failedTask.description}")` : '';
-        
-        failureInfo += `  ❌ Attempt #${failure.attempt_count}: "${failure.description}"${taskContext}\n`;
-        failureInfo += `     Error: ${failure.error}\n`;
-        failureInfo += `     Time: ${new Date(failure.timestamp).toLocaleString()}\n`;
-      }
-      
-      if (count >= 3) {
-        failureInfo += `  🚨 WARNING: This tool has failed ${count} times - consider alternatives!\n`;
-      }
-    }
-
-         return failureInfo;
-   }
-
-  /**
-   * Standardized LLM execution with error handling
+   * Execute LLM chain with error handling
    */
   protected async executeLLMChain(
     prompt: ChatPromptTemplate,
     inputData: Record<string, any>,
-    context: ToolExecutionContext,
+    context: BaseToolContext,
     options: {
       parseJson?: boolean;
       fallbackValue?: any;
@@ -419,8 +196,6 @@ ${failureContext}
           return JSON.parse(cleanedResponse);
         } catch (parseError) {
           console.error(`JSON parsing failed for response: "${response.substring(0, 500)}..."`);
-          console.error(`Cleaned response: "${this.extractJsonFromResponse(response).substring(0, 500)}..."`);
-          console.error(`Parse error: ${parseError instanceof Error ? parseError.message : parseError}`);
           throw parseError;
         }
       }
@@ -438,50 +213,11 @@ ${failureContext}
   }
 
   /**
-   * Create standardized prompt with core context
-   */
-  protected async createContextualPrompt(
-    systemPrompt: string,
-    humanTemplate: string,
-    task: PlanTask,
-    context: ToolExecutionContext
-  ): Promise<ChatPromptTemplate> {
-    const coreContext = await this.buildCoreContext(task, context);
-    
-    return ChatPromptTemplate.fromMessages([
-      ["system", systemPrompt],
-      ["human", `${coreContext}\n\n${humanTemplate}`],
-    ]);
-  }
-
-  /**
-   * Create a simple prompt with variable substitution (for analysis tasks)
-   */
-  protected createSimplePrompt(
-    promptTemplate: string,
-    variables: Record<string, any>
-  ): ChatPromptTemplate {
-    let processedPrompt = promptTemplate;
-    
-    // Replace variables in the format {variable_name}
-    for (const [key, value] of Object.entries(variables)) {
-      const placeholder = `{${key}}`;
-      processedPrompt = processedPrompt.replace(new RegExp(placeholder, 'g'), String(value));
-    }
-    
-    return ChatPromptTemplate.fromMessages([
-      ["system", processedPrompt],
-    ]);
-  }
-
-  /**
-   * Extract JSON from response that might contain markdown code blocks
+   * Extract JSON from response
    */
   protected extractJsonFromResponse(response: string): string {
-    // Remove markdown code blocks if present
     let cleaned = response.trim();
     
-    // Remove ```json and ``` if present
     if (cleaned.startsWith('```json')) {
       cleaned = cleaned.substring(7);
     } else if (cleaned.startsWith('```')) {
@@ -492,11 +228,9 @@ ${failureContext}
       cleaned = cleaned.substring(0, cleaned.length - 3);
     }
     
-    // Find JSON object boundaries - try both objects and arrays
     let jsonStart = -1;
     let jsonEnd = -1;
     
-    // Look for first { or [
     for (let i = 0; i < cleaned.length; i++) {
       if (cleaned[i] === '{' || cleaned[i] === '[') {
         jsonStart = i;
@@ -504,53 +238,78 @@ ${failureContext}
       }
     }
     
-    if (jsonStart !== -1) {
-      const startChar = cleaned[jsonStart];
-      const endChar = startChar === '{' ? '}' : ']';
-      let braceCount = 1;
-      
-      // Find matching closing brace/bracket
-      for (let i = jsonStart + 1; i < cleaned.length; i++) {
-        if (cleaned[i] === startChar) {
-          braceCount++;
-        } else if (cleaned[i] === endChar) {
-          braceCount--;
-          if (braceCount === 0) {
+    for (let i = cleaned.length - 1; i >= 0; i--) {
+      if (cleaned[i] === '}' || cleaned[i] === ']') {
             jsonEnd = i + 1;
             break;
           }
         }
-      }
+    
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonStart < jsonEnd) {
+      return cleaned.substring(jsonStart, jsonEnd);
     }
     
-    if (jsonStart !== -1 && jsonEnd > jsonStart) {
-      cleaned = cleaned.substring(jsonStart, jsonEnd);
-    }
-    
-    return cleaned.trim();
+    return cleaned;
   }
 
   /**
-   * Standardized error handling for tool execution
+   * Build conversation summary
    */
-  protected handleToolError(
-    error: unknown,
-    context: ToolExecutionContext,
-    taskId: string,
-    customMessage?: string
-  ): ToolExecutionResult {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const fullMessage = customMessage ? `${customMessage}: ${errorMessage}` : errorMessage;
+  protected buildConversationSummary(messages: ConversationMessage[]): string {
+    if (messages.length === 0) {
+      return "No conversation history available.";
+    }
+
+    let summary = "=== CONVERSATION HISTORY ===\n";
+    const recentMessages = messages.slice(-10);
     
-    return {
-      success: false,
-      error: fullMessage,
-      should_continue: true,
-    };
+    for (const message of recentMessages) {
+      const timestamp = new Date(message.timestamp).toLocaleTimeString();
+      summary += `[${timestamp}] ${message.role.toUpperCase()}: ${message.content.substring(0, 200)}\n`;
+    }
+    
+    return summary + "\n";
   }
 
   /**
-   * Create standard task completion result
+   * Build progress summary
+   */
+  protected buildProgressSummary(taskProgress: any): string {
+    const hasCharacter = !!taskProgress.character_data;
+    const hasWorldbook = !!taskProgress.worldbook_data && taskProgress.worldbook_data.length > 0;
+    
+    let summary = "=== CURRENT PROGRESS ===\n";
+    
+    if (hasCharacter) {
+      summary += `✅ Character Card: COMPLETE\n`;
+      summary += `   Name: ${taskProgress.character_data.name || 'N/A'}\n`;
+    } else {
+      summary += `❌ Character Card: NOT GENERATED\n`;
+    }
+    
+    if (hasWorldbook) {
+      summary += `✅ Worldbook: COMPLETE (${taskProgress.worldbook_data.length} entries)\n`;
+    } else {
+      summary += `❌ Worldbook: NOT GENERATED\n`;
+    }
+
+    return summary + "\n";
+  }
+
+  /**
+   * Add message to conversation (logging for now)
+   */
+  protected async addMessage(
+    conversationId: string,
+    role: "agent" | "system",
+    content: string,
+    messageType: "agent_thinking" | "agent_action" | "agent_output" | "system_info" = "agent_output"
+  ): Promise<void> {
+    console.log(`📝 [${messageType.toUpperCase()}] ${role}: ${content}`);
+  }
+
+  /**
+   * Create success result
    */
   protected createSuccessResult(
     result: any,
@@ -565,58 +324,331 @@ ${failureContext}
       success: true,
       result,
       should_continue: options.shouldContinue ?? true,
-      should_update_plan: options.shouldUpdatePlan,
-      user_input_required: options.userInputRequired,
+      should_update_plan: options.shouldUpdatePlan ?? false,
+      user_input_required: options.userInputRequired ?? false,
       reasoning: options.reasoning,
+    };
+  }
+}
+
+/**
+ * Enhanced Plan Tool with self-improvement
+ * 具备自我改进能力的计划工具
+ */
+export abstract class BasePlanTool extends BaseThinking implements PlanTool {
+  abstract readonly toolType: ToolType;
+  abstract readonly name: string;
+  abstract readonly description: string;
+
+  constructor() {
+    super("BasePlanTool");
+  }
+
+  /**
+   * Main execution with self-improvement loop
+   * 主执行方法，包含自我改进循环
+   */
+  async execute(context: PlanToolContext): Promise<any> {
+    let attempt = 1;
+    let result = await this.doWork(context);
+    
+    // Self-improvement loop
+    while (attempt <= this.maxImprovementAttempts) {
+      const evaluation = await this.evaluate(result, context, attempt);
+      
+      // If good enough, return
+      if (evaluation.is_satisfied || evaluation.next_action === "complete") {
+        if (attempt > 1) {
+          console.log(`✅ [${this.name}] Improved result after ${attempt} attempts. Quality: ${evaluation.quality_score}/100`);
+        }
+        return result;
+      }
+      
+      // Try to improve
+      if (evaluation.next_action === "improve" && attempt < this.maxImprovementAttempts) {
+        console.log(`🔄 [${this.name}] Quality: ${evaluation.quality_score}/100. Improving...`);
+        
+        const instruction = await this.generateImprovement(result, evaluation, context);
+        result = await this.improve(result, instruction, context);
+        attempt++;
+      } else {
+        console.log(`⏹️ [${this.name}] Stopping after ${attempt} attempts. Final quality: ${evaluation.quality_score}/100`);
+        break;
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * Core work logic - implement this in your tool
+   * 核心工作逻辑 - 在你的工具中实现这个
+   */
+  abstract doWork(context: PlanToolContext): Promise<any>;
+
+  /**
+   * Improvement logic - implement this in your tool
+   * 改进逻辑 - 在你的工具中实现这个
+   */
+  abstract improve(
+    currentResult: any,
+    instruction: ImprovementInstruction,
+    context: PlanToolContext
+  ): Promise<any>;
+
+  /**
+   * Default task validation
+   */
+  canHandle(task: PlanTask): boolean {
+    return task.tool === this.toolType;
+  }
+
+  /**
+   * Default context validation
+   */
+  validate(context: PlanToolContext): boolean {
+    return !!(context.conversation_id && context.task_progress && context.planning_context);
+  }
+
+  // ============================================================================
+  // HELPER METHODS - Common functionality for plan tools
+  // ============================================================================
+
+  /**
+   * Create LLM instance from config
+   */
+  protected createLLM(config: PlanToolContext["llm_config"]) {
+    if (config.llm_type === "openai") {
+      return new ChatOpenAI({
+        modelName: config.model_name,
+        openAIApiKey: config.api_key,
+        configuration: {
+          baseURL: config.base_url,
+        },
+        temperature: config.temperature,
+        maxTokens: config.max_tokens,
+        streaming: false,
+      });
+    } else if (config.llm_type === "ollama") {
+      return new ChatOllama({
+        model: config.model_name,
+        baseUrl: config.base_url || "http://localhost:11434",
+        temperature: config.temperature,
+        streaming: false,
+      });
+    }
+
+    throw new Error(`Unsupported LLM type: ${config.llm_type}`);
+  }
+
+  /**
+   * Build planning-aware prompt with full context
+   */
+  protected buildPlanningPrompt(
+    systemPrompt: string,
+    humanTemplate: string,
+    context: PlanToolContext
+  ): ChatPromptTemplate {
+    // Pre-build context that doesn't change per request
+    const conversationSummary = this.buildConversationSummary(context.conversation_history);
+    const progressSummary = this.buildProgressSummary(context.task_progress);
+    const planningSummary = this.buildPlanningContextSummary(context.planning_context);
+    const fullContext = `${progressSummary}\n${planningSummary}\n${conversationSummary}`;
+    
+    // Create template that can accept variables
+    return ChatPromptTemplate.fromMessages([
+      ["system", systemPrompt],
+      ["human", fullContext + "\n\n" + humanTemplate],
+    ]);
+  }
+
+  /**
+   * Execute LLM chain with error handling for planning tools
+   */
+  protected async executeLLMChain(
+    prompt: ChatPromptTemplate,
+    inputData: Record<string, any>,
+    context: PlanToolContext,
+    options: {
+      parseJson?: boolean;
+      fallbackValue?: any;
+      errorMessage?: string;
+    } = {}
+  ): Promise<any> {
+    try {
+      const llm = this.createLLM(context.llm_config);
+      const chain = prompt.pipe(llm).pipe(new StringOutputParser());
+      const response = await chain.invoke(inputData);
+      
+      if (options.parseJson) {
+        try {
+          const cleanedResponse = this.extractJsonFromResponse(response);
+          return JSON.parse(cleanedResponse);
+        } catch (parseError) {
+          console.error(`JSON parsing failed for response: "${response.substring(0, 500)}..."`);
+          throw parseError;
+        }
+      }
+      
+      return response;
+    } catch (error) {
+      console.error(`LLM execution failed: ${error instanceof Error ? error.message : error}`);
+      
+      if (options.fallbackValue !== undefined) {
+        return options.fallbackValue;
+      }
+      
+      throw new Error(options.errorMessage || `LLM execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Extract JSON from response
+   */
+  protected extractJsonFromResponse(response: string): string {
+    let cleaned = response.trim();
+    
+    if (cleaned.startsWith('```json')) {
+      cleaned = cleaned.substring(7);
+    } else if (cleaned.startsWith('```')) {
+      cleaned = cleaned.substring(3);
+    }
+    
+    if (cleaned.endsWith('```')) {
+      cleaned = cleaned.substring(0, cleaned.length - 3);
+    }
+    
+    let jsonStart = -1;
+    let jsonEnd = -1;
+    
+    for (let i = 0; i < cleaned.length; i++) {
+      if (cleaned[i] === '{' || cleaned[i] === '[') {
+        jsonStart = i;
+        break;
+      }
+    }
+    
+    for (let i = cleaned.length - 1; i >= 0; i--) {
+      if (cleaned[i] === '}' || cleaned[i] === ']') {
+        jsonEnd = i + 1;
+        break;
+      }
+    }
+    
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonStart < jsonEnd) {
+      return cleaned.substring(jsonStart, jsonEnd);
+    }
+    
+    return cleaned;
+  }
+
+  /**
+   * Build conversation summary
+   */
+  protected buildConversationSummary(messages: ConversationMessage[]): string {
+    if (messages.length === 0) {
+      return "No conversation history available.";
+    }
+
+    let summary = "=== CONVERSATION HISTORY ===\n";
+    const recentMessages = messages.slice(-10);
+    
+    for (const message of recentMessages) {
+      const timestamp = new Date(message.timestamp).toLocaleTimeString();
+      summary += `[${timestamp}] ${message.role.toUpperCase()}: ${message.content.substring(0, 200)}\n`;
+    }
+    
+    return summary + "\n";
+  }
+
+  /**
+   * Build progress summary
+   */
+  protected buildProgressSummary(taskProgress: any): string {
+    const hasCharacter = !!taskProgress.character_data;
+    const hasWorldbook = !!taskProgress.worldbook_data && taskProgress.worldbook_data.length > 0;
+    
+    let summary = "=== CURRENT PROGRESS ===\n";
+    
+    if (hasCharacter) {
+      summary += `✅ Character Card: COMPLETE\n`;
+      summary += `   Name: ${taskProgress.character_data.name || 'N/A'}\n`;
+    } else {
+      summary += `❌ Character Card: NOT GENERATED\n`;
+    }
+    
+    if (hasWorldbook) {
+      summary += `✅ Worldbook: COMPLETE (${taskProgress.worldbook_data.length} entries)\n`;
+    } else {
+      summary += `❌ Worldbook: NOT GENERATED\n`;
+    }
+
+    return summary + "\n";
+  }
+
+  /**
+   * Build planning context summary
+   */
+  protected buildPlanningContextSummary(planningContext: any): string {
+    const pendingTasks = planningContext.current_tasks.filter((t: any) => t.status === 'pending');
+    const completedTasks = planningContext.completed_tasks.slice(-5);
+    
+    let summary = "=== PLANNING CONTEXT ===\n";
+    summary += `Original Request: "${planningContext.context.user_request}"\n`;
+    summary += `Current Focus: ${planningContext.context.current_focus}\n`;
+    summary += `Pending Tasks: ${pendingTasks.length}\n`;
+    summary += `Completed Tasks: ${planningContext.completed_tasks.length}\n\n`;
+    
+    if (pendingTasks.length > 0) {
+      summary += "Current Pending Tasks:\n";
+      for (const task of pendingTasks.slice(0, 5)) {
+        summary += `  - "${task.description}" (${task.tool}, Priority: ${task.priority})\n`;
+      }
+      summary += "\n";
+    }
+    
+    return summary;
+  }
+}
+
+/**
+ * Context Manager for building appropriate contexts for tools
+ * 上下文管理器，为工具构建适当的上下文
+ */
+export class ContextManager {
+  /**
+   * Build context for regular tools
+   */
+  static buildRegularContext(
+    conversationId: string,
+    taskProgress: any,
+    conversationHistory: ConversationMessage[],
+    llmConfig: any
+  ): BaseToolContext {
+    return {
+      conversation_id: conversationId,
+      task_progress: taskProgress,
+      conversation_history: conversationHistory,
+      llm_config: llmConfig
     };
   }
 
   /**
-   * Validate task parameters with helpful error messages
+   * Build context for plan tools
    */
-  protected validateTaskParameters(
-    task: PlanTask,
-    requiredParams: string[],
-    optionalParams: string[] = []
-  ): { isValid: boolean; error?: string } {
-    const missingParams = requiredParams.filter(param => 
-      !(param in task.parameters) || task.parameters[param] === undefined
-    );
-    
-    if (missingParams.length > 0) {
-      return {
-        isValid: false,
-        error: `Missing required parameters: ${missingParams.join(', ')}. Available: ${Object.keys(task.parameters).join(', ')}`
-      };
-    }
-    
-    return { isValid: true };
-  }
-
-  /**
-   * Log structured task execution information
-   */
-  protected logTaskExecution(
-    phase: 'start' | 'success' | 'error',
-    task: PlanTask,
-    details?: any
-  ): void {
-    const timestamp = new Date().toISOString();
-    const logPrefix = `🔧 [${this.name}]`;
-    
-    switch (phase) {
-      case 'start':
-        console.log(`${logPrefix} Starting: "${task.description}" (${task.tool})`);
-        if (details) console.log(`${logPrefix} Parameters:`, details);
-        break;
-      case 'success':
-        console.log(`${logPrefix} ✅ Completed: "${task.description}"`);
-        if (details) console.log(`${logPrefix} Result:`, details);
-        break;
-      case 'error':
-        console.log(`${logPrefix} ❌ Failed: "${task.description}"`);
-        if (details) console.log(`${logPrefix} Error:`, details);
-        break;
-    }
+  static buildPlanContext(
+    conversationId: string,
+    taskProgress: any,
+    conversationHistory: ConversationMessage[],
+    llmConfig: any,
+    planningContext: any
+  ): PlanToolContext {
+    return {
+      conversation_id: conversationId,
+      task_progress: taskProgress,
+      conversation_history: conversationHistory,
+      llm_config: llmConfig,
+      planning_context: planningContext
+    };
   }
 } 
