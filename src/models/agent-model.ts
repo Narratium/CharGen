@@ -8,8 +8,7 @@ export enum ToolType {
   PLAN = "PLAN",
   ASK_USER = "ASK_USER",
   SEARCH = "SEARCH",
-  OUTPUT = "OUTPUT",
-  UPDATE_PLAN = "UPDATE_PLAN"
+  OUTPUT = "OUTPUT"
 }
 
 // Agent execution status

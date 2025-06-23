@@ -327,7 +327,7 @@ export class AgentEngine {
       // Still continue but add a warning task
       await PlanPoolOperations.addTask(this.conversationId, {
         description: "Review and resolve repeated tool failures before continuing",
-        tool: ToolType.UPDATE_PLAN,
+        tool: ToolType.PLAN,
         parameters: { type: "failure_analysis" },
         dependencies: [],
         status: "pending",
