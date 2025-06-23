@@ -51,22 +51,8 @@ export class SearchTool extends BaseRegularTool {
       return result;
 
     } catch (error) {
-      // If search completely fails, provide fallback inspiration
-      console.warn("Search failed, using fallback inspiration:", error);
-      
-      const fallbackInspiration = this.generateFallbackInspiration(context);
-
-      await this.addMessage(
-        context.conversation_id,
-        "agent",
-        `🔍 **Creative Inspiration** (Network issues, using built-in inspiration)\n\n${fallbackInspiration}`,
-      );
-
-      return { 
-        inspiration: fallbackInspiration,
-        fallback: true,
-        error: error instanceof Error ? error.message : String(error)
-      };
+      // Don't fake success with fallback - let base class handle failure
+      throw new Error(`Search operation failed: ${error instanceof Error ? error.message : error}`);
     }
   }
 
@@ -102,8 +88,8 @@ export class SearchTool extends BaseRegularTool {
       };
       
     } catch (error) {
-      console.warn(`[SEARCH] Improvement failed, using original result:`, error);
-      return currentResult; // Return original if improvement fails
+      // Don't fake success with fallback - let base class handle failure
+      throw new Error(`Search improvement failed: ${error instanceof Error ? error.message : error}`);
     }
   }
 
@@ -178,38 +164,17 @@ Generate improved inspiration content that addresses the feedback above.`;
         parseJson: true,
         errorMessage: "Failed to generate search queries"
       });
-      return Array.isArray(queries) ? queries : ["character inspiration", "worldbook ideas"];
+      if (!Array.isArray(queries)) {
+        throw new Error("LLM returned invalid query format - expected array");
+      }
+      return queries;
     } catch (error) {
-      // Fallback to context-aware basic queries
-      return this.generateFallbackQueries(context);
+      // Don't return fallback values - propagate the error
+      throw new Error(`Failed to generate search queries: ${error instanceof Error ? error.message : error}`);
     }
   }
 
-  /**
-   * Generate fallback queries based on current context
-   */
-  private generateFallbackQueries(context: BaseToolContext): string[] {
-    const hasCharacter = !!context.task_progress.character_data;
-    const hasWorldbook = !!context.task_progress.worldbook_data && context.task_progress.worldbook_data.length > 0;
-    
-    // Extract original user request from conversation history
-    const userMessages = context.conversation_history.filter(msg => msg.role === "user");
-    const originalRequest = userMessages[0]?.content || "character and worldbook generation";
-    
-    const fallbackQueries = ["creative inspiration"];
-    
-    if (!hasCharacter) {
-      fallbackQueries.push(`${originalRequest} character archetypes`);
-      fallbackQueries.push(`${originalRequest} personality types`);
-    }
-    
-    if (!hasWorldbook) {
-      fallbackQueries.push(`${originalRequest} world building`);
-      fallbackQueries.push(`${originalRequest} setting inspiration`);
-    }
-    
-    return fallbackQueries;
-  }
+
 
   /**
    * Perform actual web searches using DuckDuckGo
@@ -307,7 +272,7 @@ Generate improved inspiration content that addresses the feedback above.`;
    */
   private async generateSearchSummary(results: any[], context: BaseToolContext): Promise<string> {
     if (results.length === 0) {
-      return this.generateFallbackInspiration(context);
+      throw new Error("No search results to summarize");
     }
     
     const prompt = this.buildContextualPrompt(
@@ -316,70 +281,10 @@ Generate improved inspiration content that addresses the feedback above.`;
       context
     );
 
-    try {
-      return await this.executeLLMChain(prompt, {
-        search_results: JSON.stringify(results, null, 2)
-      }, context, {
-        errorMessage: "Failed to generate search summary"
-      });
-    } catch (error) {
-      return this.generateFallbackInspiration(context);
-    }
-  }
-
-  /**
-   * Generate fallback inspiration when search fails
-   */
-  private generateFallbackInspiration(context: BaseToolContext): string {
-    const hasCharacter = !!context.task_progress.character_data;
-    const hasWorldbook = !!context.task_progress.worldbook_data && context.task_progress.worldbook_data.length > 0;
-    
-    // Extract user preferences from conversation history
-    const userMessages = context.conversation_history.filter(msg => msg.role === "user");
-    const originalRequest = userMessages[0]?.content || "";
-    
-    let inspiration = "**Creative Inspiration & Ideas:**\n\n";
-    
-    // Character inspiration
-    if (!hasCharacter) {
-      inspiration += "**Character Development Ideas:**\n";
-      inspiration += "• Consider classic archetypes: The Hero, The Mentor, The Trickster, The Outsider\n";
-      inspiration += "• Think about contrasts: A gentle giant, a fierce protector with a soft heart\n";
-      inspiration += "• Add unique quirks: specific habits, speech patterns, or beliefs\n";
-      inspiration += "• Consider their flaws: what makes them human and relatable?\n\n";
-    }
-    
-    // Worldbook inspiration  
-    if (!hasWorldbook) {
-      inspiration += "**World Building Ideas:**\n";
-      inspiration += "• Draw from real cultures and histories for authenticity\n";
-      inspiration += "• Create interesting contrasts: modern tech in ancient settings\n";
-      inspiration += "• Think about daily life: what do people eat, how do they travel?\n";
-      inspiration += "• Consider conflicts: political tensions, resource scarcity, cultural clashes\n\n";
-    }
-    
-    // General creative techniques
-    inspiration += "**Creative Techniques:**\n";
-    inspiration += "• Ask 'What if?' questions to explore possibilities\n";
-    inspiration += "• Combine unexpected elements for originality\n";
-    inspiration += "• Consider the five senses: how does your world feel, smell, sound?\n";
-    inspiration += "• Think about emotional resonance: what feelings do you want to evoke?\n\n";
-    
-    // Context-specific suggestions
-    if (originalRequest.toLowerCase().includes("fantasy")) {
-      inspiration += "**Fantasy Elements:**\n";
-      inspiration += "• Magic systems: cost, rules, limitations\n";
-      inspiration += "• Mythical creatures: roles, intelligence, relationships with humans\n";
-      inspiration += "• Ancient mysteries: lost civilizations, forgotten knowledge\n\n";
-    } else if (originalRequest.toLowerCase().includes("sci-fi") || originalRequest.toLowerCase().includes("science fiction")) {
-      inspiration += "**Sci-Fi Elements:**\n";
-      inspiration += "• Technology implications: how does it change society?\n";
-      inspiration += "• Future evolution: where is humanity heading?\n";
-      inspiration += "• Ethical dilemmas: AI rights, genetic modification, space colonization\n\n";
-    }
-    
-    inspiration += "💡 *Remember: The best characters and worlds feel lived-in and real, even in fantastic settings!*";
-    
-    return inspiration;
+    return await this.executeLLMChain(prompt, {
+      search_results: JSON.stringify(results, null, 2)
+    }, context, {
+      errorMessage: "Failed to generate search summary"
+    });
   }
 } 

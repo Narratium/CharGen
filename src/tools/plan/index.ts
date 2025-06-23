@@ -2,7 +2,6 @@ import { BasePlanTool } from "../base-tool";
 import { ToolType, PlanToolContext } from "../../models/agent-model";
 import { PlanningOperations } from "../../data/agent/plan-pool-operations";
 import { planPrompts } from "./prompts";
-import { AgentConversationOperations } from "../../data/agent/agent-conversation-operations";
 import { PlanThinking } from "./think";
 import { ImprovementInstruction } from "../base-think";
 
@@ -173,13 +172,8 @@ Generate improved planning that addresses the feedback above.`;
       };
 
     } catch (error) {
-      // Create fallback plan
-      await this.createFallbackPlan(context);
-      
-      return {
-        plan_type: "fallback",
-        reasoning: "Used fallback planning due to LLM error"
-      };
+      // Don't fake success with fallback - let base class handle failure
+      throw new Error(`Initial plan creation failed: ${error instanceof Error ? error.message : error}`);
     }
   }
 
@@ -220,99 +214,8 @@ Generate improved planning that addresses the feedback above.`;
       };
 
     } catch (error) {
-      console.warn("Plan update failed, using fallback strategy:", error);
-      
-      // Fallback: create simple tasks based on what's missing
-      const hasCharacter = !!context.task_progress.character_data;
-      const hasWorldbook = !!context.task_progress.worldbook_data && context.task_progress.worldbook_data.length > 0;
-      
-      const fallbackTasks = this.createFallbackTasks(hasCharacter, hasWorldbook);
-      
-      // Add fallback tasks
-      for (const taskData of fallbackTasks) {
-        await PlanningOperations.addTask(context.conversation_id, taskData);
-      }
-      
-      await this.addPlanMessage(
-        context,
-        `🔄 **Plan Updated (Fallback)**\n\n**New Tasks:** ${fallbackTasks.length}\n\nUsing fallback strategy due to planning difficulties.`
-      );
-
-      return {
-        success: true,
-        result: {
-          plan_type: "fallback_update",
-          new_tasks: fallbackTasks.length,
-          reasoning: "Used fallback planning due to LLM error",
-        },
-        should_continue: true,
-      };
-    }
-  }
-
-  /**
-   * Complete replan - removes obsolete tasks and creates new plan based on user input
-   */
-  private async completeReplan(context: PlanToolContext): Promise<any> {
-    try {
-      // Get current task summary for analysis
-      const taskSummary = await PlanningOperations.getTaskSummary(context.conversation_id);
-      
-      // Analyze which tasks should be removed
-      const removalAnalysis = await this.analyzeTaskRemoval(context, taskSummary);
-      
-      // Remove obsolete tasks
-      let removedCount = 0;
-      for (const criteria of removalAnalysis.removal_criteria) {
-        const removed = await PlanningOperations.removeTasksByCriteria(
-          context.conversation_id,
-          criteria,
-          removalAnalysis.reason
-        );
-        removedCount += removed;
-      }
-
-      // Remove obsolete goals if specified
-      for (const goalId of removalAnalysis.goals_to_remove) {
-        await PlanningOperations.removeGoal(context.conversation_id, goalId);
-      }
-
-      // Create new plan based on updated context
-      const newPlanResult = await this.createNewPlanFromContext(context, removalAnalysis.new_focus);
-      
-      await this.addPlanMessage(
-        context,
-        `🔄 **Complete Replan Executed**\n\n**Removed:** ${removedCount} obsolete tasks, ${removalAnalysis.goals_to_remove.length} goals\n**Added:** ${newPlanResult.tasks?.length || 0} new tasks\n\n**Reason:** ${removalAnalysis.reason}\n**New Focus:** ${removalAnalysis.new_focus}`
-      );
-      
-      return {
-        success: true,
-        result: {
-          removed_tasks: removedCount,
-          removed_goals: removalAnalysis.goals_to_remove.length,
-          new_tasks: newPlanResult.tasks?.length || 0,
-          new_goals: newPlanResult.goals?.length || 0,
-          plan_summary: newPlanResult.summary
-        },
-        should_continue: true,
-      };
-    } catch (error) {
-      console.warn("Complete replan failed, using fallback:", error);
-      
-      // Fallback: clear all pending tasks and create simple new ones
-      const removedCount = await PlanningOperations.clearPendingTasks(context.conversation_id, "Complete replan fallback");
-      await this.createFallbackPlan(context);
-      
-      return {
-        success: true,
-        result: {
-          removed_tasks: removedCount,
-          removed_goals: 0,
-          new_tasks: 4, // fallback creates 4 tasks
-          plan_summary: "Fallback replan executed"
-        },
-        should_continue: true,
-      };
+      // Don't fake success with fallback - let base class handle failure
+      throw new Error(`Plan update failed: ${error instanceof Error ? error.message : error}`);
     }
   }
 
@@ -416,172 +319,10 @@ Generate improved planning that addresses the feedback above.`;
     });
   }
 
-  /**
-   * Analyze which tasks and goals should be removed based on new context
-   */
-  private async analyzeTaskRemoval(
-    context: PlanToolContext, 
-    taskSummary: any
-  ): Promise<{
-    removal_criteria: Array<{tool?: string; status?: string; descriptionContains?: string}>;
-    goals_to_remove: string[];
-    reason: string;
-    new_focus: string;
-  }> {
-    const recentUserMessages = context.conversation_history
-      .filter(msg => msg.role === "user")
-      .slice(-3)
-      .map(msg => msg.content)
-      .join("\n");
-
-    const prompt = this.buildPlanningPrompt(
-      planPrompts.ANALYZE_TASK_REMOVAL_SYSTEM,
-      planPrompts.ANALYZE_TASK_REMOVAL_HUMAN,
-      context
-    );
-    
-    const analysisResult = await this.executeLLMChain(prompt, {
-      recent_user_input: recentUserMessages,
-      current_tasks: JSON.stringify(context.planning_context.current_tasks, null, 2),
-      current_goals: JSON.stringify(context.planning_context.goals, null, 2),
-      task_summary: JSON.stringify(taskSummary, null, 2)
-    }, context, {
-      parseJson: true,
-      errorMessage: "Failed to analyze task removal"
-    });
-
-    return analysisResult || {
-      removal_criteria: [{ status: "pending" }],
-      goals_to_remove: [],
-      reason: "User input changed requirements",
-      new_focus: "Adapt to new user requirements"
-    };
-  }
-
-  /**
-   * Create new plan based on current context and focus
-   */
-  private async createNewPlanFromContext(context: PlanToolContext, newFocus: string): Promise<any> {
-    const recentUserMessages = context.conversation_history
-      .filter(msg => msg.role === "user")
-      .slice(-3)
-      .map(msg => msg.content)
-      .join("\n");
-
-    const prompt = this.buildPlanningPrompt(
-      planPrompts.CREATE_NEW_PLAN_SYSTEM,
-      planPrompts.CREATE_NEW_PLAN_HUMAN,
-      context
-    );
-    
-    const newPlan = await this.executeLLMChain(prompt, {
-      user_requirements: recentUserMessages,
-      new_focus: newFocus
-    }, context, {
-      parseJson: true,
-      errorMessage: "Failed to create new plan"
-    });
-
-    if (newPlan?.tasks) {
-      for (const newTask of newPlan.tasks) {
-        await PlanningOperations.addTask(context.conversation_id, newTask);
-      }
-    }
-
-    if (newPlan?.goals) {
-      for (const newGoal of newPlan.goals) {
-        await PlanningOperations.addGoal(context.conversation_id, newGoal);
-      }
-    }
-
-    return newPlan || { tasks: [], goals: [], summary: "Fallback plan created" };
-  }
-
-  /**
-   * Create fallback plan when LLM planning fails
-   */
-  private async createFallbackPlan(context: PlanToolContext): Promise<void> {
-    const hasCharacter = !!context.task_progress.character_data;
-    const hasWorldbook = !!context.task_progress.worldbook_data && context.task_progress.worldbook_data.length > 0;
-    
-    const basicTasks = this.createFallbackTasks(hasCharacter, hasWorldbook);
-    
-    // Add fallback tasks
-    for (const taskData of basicTasks) {
-      await PlanningOperations.addTask(context.conversation_id, taskData);
-    }
-    
-    await this.addPlanMessage(
-      context,
-      `📋 **Fallback Plan Created**\n\n**Tasks:** ${basicTasks.length}\n\nUsing fallback strategy due to planning difficulties.`
-    );
-  }
-
-  /**
-   * Create fallback tasks based on current progress
-   */
-  private createFallbackTasks(hasCharacter: boolean, hasWorldbook: boolean): any[] {
-    const basicTasks = [];
-    
-    if (!hasCharacter && !hasWorldbook) {
-      basicTasks.push({
-        description: "Gather user requirements and preferences for character and worldbook creation",
-        tool: ToolType.ASK_USER,
-        parameters: { type: "requirements" },
-        dependencies: [],
-        status: "pending" as const,
-        reasoning: "Need user input to understand requirements",
-        priority: 9,
-      });
-    }
-    
-    if (!hasCharacter) {
-      basicTasks.push({
-        description: "Generate character data to complete the character creation",
-        tool: ToolType.OUTPUT,
-        parameters: { type: "character" },
-        dependencies: [],
-        status: "pending" as const,
-        reasoning: "Character data is missing and needs to be generated",
-        priority: 8,
-      });
-    }
-    
-    if (!hasWorldbook) {
-      basicTasks.push({
-        description: "Generate worldbook entries to complete the world creation",
-        tool: ToolType.OUTPUT,
-        parameters: { type: "worldbook" },
-        dependencies: [],
-        status: "pending" as const,
-        reasoning: "Worldbook data is missing and needs to be generated",
-        priority: 7,
-      });
-    }
-    
-    basicTasks.push({
-      description: "Present final results to user",
-      tool: ToolType.OUTPUT,
-      parameters: { type: "final" },
-      dependencies: [],
-      status: "pending" as const,
-      reasoning: "Present completed work to user",
-      priority: 6,
-    });
-    
-    return basicTasks;
-  }
 
   /**
    * Add planning message to conversation
    */
-  private async addPlanMessage(context: PlanToolContext, content: string): Promise<void> {
-    await AgentConversationOperations.addMessage(context.conversation_id, {
-      role: "agent",
-      content,
-      message_type: "agent_thinking",
-    });
-  }
 
   /**
    * Identify failure patterns from recent failures

@@ -10,7 +10,8 @@ import {
   PlanTask,
   ConversationMessage,
 } from "../models/agent-model";
-import { BaseThinking, EvaluationResult, ImprovementInstruction } from "./base-think";
+import { BaseThinking, ImprovementInstruction } from "./base-think";
+import { AgentConversationOperations } from "@/data/agent/agent-conversation-operations";
 
 // ============================================================================
 // SIMPLE TOOL ARCHITECTURE WITH SELF-IMPROVEMENT
@@ -60,35 +61,39 @@ export abstract class BaseRegularTool extends BaseThinking implements RegularToo
    * 主执行方法，包含自我改进循环
    */
   async execute(context: BaseToolContext): Promise<any> {
-    let attempt = 1;
-    let result = await this.doWork(context);
-    
-    // Self-improvement loop
-    while (attempt <= this.maxImprovementAttempts) {
-      const evaluation = await this.evaluate(result, context, attempt);
+    try {
+      let attempt = 1;
+      let result = await this.doWork(context);
       
-      // If good enough, return
-      if (evaluation.is_satisfied || evaluation.next_action === "complete") {
-        if (attempt > 1) {
-          console.log(`✅ [${this.name}] Improved result after ${attempt} attempts. Quality: ${evaluation.quality_score}/100`);
-        }
-      return result;
-      }
-      
-      // Try to improve
-      if (evaluation.next_action === "improve" && attempt < this.maxImprovementAttempts) {
-        console.log(`🔄 [${this.name}] Quality: ${evaluation.quality_score}/100. Improving...`);
+      // Self-improvement loop
+      while (attempt <= this.maxImprovementAttempts) {
+        const evaluation = await this.evaluate(result, context, attempt);
         
-        const instruction = await this.generateImprovement(result, evaluation, context);
-        result = await this.improve(result, instruction, context);
-        attempt++;
-      } else {
-        console.log(`⏹️ [${this.name}] Stopping after ${attempt} attempts. Final quality: ${evaluation.quality_score}/100`);
-        break;
+        // If good enough, return
+        if (evaluation.is_satisfied || evaluation.next_action === "complete") {
+          if (attempt > 1) {
+            console.log(`✅ [${this.name}] Improved result after ${attempt} attempts. Quality: ${evaluation.quality_score}/100`);
+          }
+          return result;
+        }
+        
+        // Try to improve
+        if (evaluation.next_action === "improve" && attempt < this.maxImprovementAttempts) {
+          console.log(`🔄 [${this.name}] Quality: ${evaluation.quality_score}/100. Improving...`);
+          
+          const instruction = await this.generateImprovement(result, evaluation, context);
+          result = await this.improve(result, instruction, context);
+          attempt++;
+        } else {
+          console.log(`⏹️ [${this.name}] Stopping after ${attempt} attempts. Final quality: ${evaluation.quality_score}/100`);
+          break;
+        }
       }
+      
+      return result;
+    } catch (error) {
+      return this.createFailureResult(error, context);
     }
-    
-    return result;
   }
 
   /**
@@ -181,7 +186,6 @@ export abstract class BaseRegularTool extends BaseThinking implements RegularToo
     context: BaseToolContext,
     options: {
       parseJson?: boolean;
-      fallbackValue?: any;
       errorMessage?: string;
     } = {}
   ): Promise<any> {
@@ -202,13 +206,8 @@ export abstract class BaseRegularTool extends BaseThinking implements RegularToo
       
       return response;
     } catch (error) {
-      console.error(`LLM execution failed: ${error instanceof Error ? error.message : error}`);
-      
-      if (options.fallbackValue !== undefined) {
-        return options.fallbackValue;
-      }
-      
-      throw new Error(options.errorMessage || `LLM execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMsg = options.errorMessage || `LLM execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      throw new Error(errorMsg);
     }
   }
 
@@ -340,6 +339,42 @@ export abstract class BaseRegularTool extends BaseThinking implements RegularToo
       reasoning: options.reasoning,
     };
   }
+
+  /**
+   * Create unified failure result - all tools use this for fallback
+   * 创建统一的失败结果 - 所有工具的 fallback 都使用这个
+   */
+  protected createFailureResult(
+    error: any,
+    context: BaseToolContext,
+    options: {
+      shouldContinue?: boolean;
+      shouldUpdatePlan?: boolean;
+      customMessage?: string;
+    } = {}
+  ): ToolExecutionResult {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const failureMessage = options.customMessage || `Tool ${this.name} execution failed: ${errorMessage}`;
+    
+    // Log the failure
+    this.addMessage(
+      context.conversation_id, 
+      "system", 
+      failureMessage, 
+      "system_info"
+    );
+    
+    console.error(`❌ [${this.name}] ${failureMessage}`);
+    
+    return {
+      success: false,
+      error: errorMessage,
+      should_continue: options.shouldContinue ?? false,
+      should_update_plan: options.shouldUpdatePlan ?? true,  // Failure usually requires replanning
+      user_input_required: false,
+      reasoning: failureMessage,
+    };
+  }
 }
 
 /**
@@ -360,35 +395,40 @@ export abstract class BasePlanTool extends BaseThinking implements PlanTool {
    * 主执行方法，包含自我改进循环
    */
   async execute(context: PlanToolContext): Promise<any> {
-    let attempt = 1;
-    let result = await this.doWork(context);
-    
-    // Self-improvement loop
-    while (attempt <= this.maxImprovementAttempts) {
-      const evaluation = await this.evaluate(result, context, attempt);
+    try {
+      let attempt = 1;
+      let result = await this.doWork(context);
       
-      // If good enough, return
-      if (evaluation.is_satisfied || evaluation.next_action === "complete") {
-        if (attempt > 1) {
-          console.log(`✅ [${this.name}] Improved result after ${attempt} attempts. Quality: ${evaluation.quality_score}/100`);
-        }
-        return result;
-      }
-      
-      // Try to improve
-      if (evaluation.next_action === "improve" && attempt < this.maxImprovementAttempts) {
-        console.log(`🔄 [${this.name}] Quality: ${evaluation.quality_score}/100. Improving...`);
+      // Self-improvement loop
+      while (attempt <= this.maxImprovementAttempts) {
+        const evaluation = await this.evaluate(result, context, attempt);
         
-        const instruction = await this.generateImprovement(result, evaluation, context);
-        result = await this.improve(result, instruction, context);
-        attempt++;
-      } else {
-        console.log(`⏹️ [${this.name}] Stopping after ${attempt} attempts. Final quality: ${evaluation.quality_score}/100`);
-        break;
+        // If good enough, return
+        if (evaluation.is_satisfied || evaluation.next_action === "complete") {
+          if (attempt > 1) {
+            console.log(`✅ [${this.name}] Improved result after ${attempt} attempts. Quality: ${evaluation.quality_score}/100`);
+          }
+          return result;
+        }
+        
+        // Try to improve
+        if (evaluation.next_action === "improve" && attempt < this.maxImprovementAttempts) {
+          console.log(`🔄 [${this.name}] Quality: ${evaluation.quality_score}/100. Improving...`);
+          
+          const instruction = await this.generateImprovement(result, evaluation, context);
+          result = await this.improve(result, instruction, context);
+          attempt++;
+        } else {
+          console.log(`⏹️ [${this.name}] Stopping after ${attempt} attempts. Final quality: ${evaluation.quality_score}/100`);
+          break;
+        }
       }
+      
+      return result;
+    } catch (error) {
+      // Unified fallback: always return failure result, never fake success
+      return this.createFailureResult(error, context);
     }
-    
-    return result;
   }
 
   /**
@@ -419,6 +459,35 @@ export abstract class BasePlanTool extends BaseThinking implements PlanTool {
    */
   validate(context: PlanToolContext): boolean {
     return !!(context.conversation_id && context.task_progress && context.planning_context);
+  }
+
+  /**
+   * Create unified failure result for plan tools
+   * 为计划工具创建统一的失败结果
+   */
+  protected createFailureResult(
+    error: any,
+    context: PlanToolContext,
+    options: {
+      shouldContinue?: boolean;
+      shouldUpdatePlan?: boolean;
+      customMessage?: string;
+    } = {}
+  ): ToolExecutionResult {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const failureMessage = options.customMessage || `Tool ${this.name} execution failed: ${errorMessage}`;
+    
+    // Log the failure
+    console.error(`❌ [${this.name}] ${failureMessage}`);
+    
+    return {
+      success: false,
+      error: errorMessage,
+      should_continue: options.shouldContinue ?? false,
+      should_update_plan: options.shouldUpdatePlan ?? true,  // Failure usually requires replanning
+      user_input_required: false,
+      reasoning: failureMessage,
+    };
   }
 
   // ============================================================================
@@ -482,7 +551,6 @@ export abstract class BasePlanTool extends BaseThinking implements PlanTool {
     context: PlanToolContext,
     options: {
       parseJson?: boolean;
-      fallbackValue?: any;
       errorMessage?: string;
     } = {}
   ): Promise<any> {
@@ -503,14 +571,17 @@ export abstract class BasePlanTool extends BaseThinking implements PlanTool {
       
       return response;
     } catch (error) {
-      console.error(`LLM execution failed: ${error instanceof Error ? error.message : error}`);
-      
-      if (options.fallbackValue !== undefined) {
-        return options.fallbackValue;
-      }
-      
-      throw new Error(options.errorMessage || `LLM execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMsg = options.errorMessage || `LLM execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      throw new Error(errorMsg);
     }
+  }
+
+  protected async addPlanMessage(context: PlanToolContext, content: string): Promise<void> {
+    await AgentConversationOperations.addMessage(context.conversation_id, {
+      role: "agent",
+      content,
+      message_type: "agent_thinking",
+    });
   }
 
   /**

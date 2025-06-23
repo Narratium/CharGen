@@ -43,16 +43,8 @@ export class AskUserTool extends BaseRegularTool {
       };
       
     } catch (error) {
-      // Fallback to basic questions
-      const fallbackQuestions = this.generateFallbackQuestions(context);
-      
-      await this.addMessage(context.conversation_id, "agent", fallbackQuestions);
-      
-      return {
-        message: fallbackQuestions,
-        questionType: "fallback",
-        error: error instanceof Error ? error.message : String(error)
-      };
+      // Don't fake success with fallback - let base class handle failure
+      throw new Error(`Question generation failed: ${error instanceof Error ? error.message : error}`);
     }
   }
 
@@ -85,8 +77,8 @@ export class AskUserTool extends BaseRegularTool {
       };
       
     } catch (error) {
-      console.warn(`[ASK_USER] Improvement failed, using original result:`, error);
-      return currentResult; // Return original if improvement fails
+      // Don't fake success with fallback - let base class handle failure
+      throw new Error(`Question improvement failed: ${error instanceof Error ? error.message : error}`);
     }
   }
 
@@ -159,66 +151,7 @@ Generate improved questions that address the feedback above.`;
     });
   }
 
-  /**
-   * Generate fallback questions when LLM fails
-   */
-  private generateFallbackQuestions(context: BaseToolContext): string {
-    const hasCharacter = !!context.task_progress.character_data;
-    const hasWorldbook = !!context.task_progress.worldbook_data && context.task_progress.worldbook_data.length > 0;
-    
-    // Extract original user request from conversation history
-    const userMessages = context.conversation_history.filter(msg => msg.role === "user");
-    const originalRequest = userMessages[0]?.content || "character and worldbook generation";
-    
-    return this.buildFallbackQuestions(
-      originalRequest,
-      hasCharacter,
-      hasWorldbook
-    );
-  }
 
-  /**
-   * Build fallback questions based on current state
-   */
-  private buildFallbackQuestions(
-    originalRequest: string,
-    hasCharacter: boolean,
-    hasWorldbook: boolean
-  ): string {
-    let questions = "I need some more information to help you better:\n\n";
-    
-    // Character-related questions
-    if (!hasCharacter) {
-      questions += "**About the Character:**\n";
-      questions += "• What type of character are you looking for? (personality, background, role)\n";
-      questions += "• Are there any specific traits or characteristics you want emphasized?\n";
-      questions += "• What setting or world should this character fit into?\n\n";
-    } else {
-      questions += "**Character Refinement:**\n";
-      questions += "• Are you satisfied with the current character, or would you like any changes?\n";
-      questions += "• Should I adjust any specific aspects of the character?\n\n";
-    }
-    
-    // Worldbook-related questions
-    if (!hasWorldbook) {
-      questions += "**About the World:**\n";
-      questions += "• What aspects of the world should I focus on? (locations, history, culture, etc.)\n";
-      questions += "• Are there specific elements or lore you want included?\n";
-      questions += "• How detailed should the world information be?\n\n";
-    } else {
-      questions += "**Worldbook Enhancement:**\n";
-      questions += "• Do you want me to expand on any particular world elements?\n";
-      questions += "• Are there missing aspects of the world you'd like me to add?\n\n";
-    }
-    
-    // General questions
-    questions += "**General Preferences:**\n";
-    questions += "• Is there anything specific about your original request that I should focus on more?\n";
-    questions += "• Do you have any particular style or tone preferences?\n";
-    questions += "\nPlease provide any additional details that would help me create exactly what you're looking for!";
-    
-    return questions;
-  }
 
   /**
    * Analyze user input patterns for better question generation

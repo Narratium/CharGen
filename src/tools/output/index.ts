@@ -1,6 +1,6 @@
 import { BaseRegularTool } from "../base-tool";
 import { ToolType, BaseToolContext, ToolExecutionResult } from "../../models/agent-model";
-import { AgentConversationOperations } from "../../data/agent/agent-conversation-operations";
+import { AgentConversationOperations } from "@/data/agent/agent-conversation-operations";
 import { outputPrompts } from "./prompts";
 import { OutputThinking } from "./think";
 import { ImprovementInstruction } from "../base-think";
@@ -67,8 +67,8 @@ export class OutputTool extends BaseRegularTool {
       };
       
     } catch (error) {
-      console.warn(`[OUTPUT] Improvement failed, using original result:`, error);
-      return currentResult;
+      // Don't fake success with fallback - let base class handle failure
+      throw new Error(`Output improvement failed: ${error instanceof Error ? error.message : error}`);
     }
   }
 
@@ -171,11 +171,12 @@ Generate improved content that addresses the feedback above.`;
       );
 
       // Add the final output message to conversation
-      await AgentConversationOperations.addMessage(context.conversation_id, {
-        role: "agent",
-        content: finalOutput,
-        message_type: "agent_output",
-    });
+      await this.addMessage(
+        context.conversation_id,
+        "agent",
+        finalOutput,
+        "agent_output"
+      );
     
       // Update quality metrics
       await AgentConversationOperations.updateTaskProgress(context.conversation_id, {
@@ -201,12 +202,8 @@ Generate improved content that addresses the feedback above.`;
       );
 
     } catch (error) {
-      return {
-        success: false,
-        error: `Failed to generate final output: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        should_continue: true,
-        reasoning: "Final output generation failed, may need to retry or get user input"
-      };
+      // Don't fake success with fallback - let base class handle failure
+      throw new Error(`Final output generation failed: ${error instanceof Error ? error.message : error}`);
     }
   }
 
@@ -247,11 +244,12 @@ Generate improved content that addresses the feedback above.`;
     progressReport += `📈 **Iterations**: ${task_progress.generation_metadata.total_iterations}\n`;
 
     // Add progress report to conversation
-    await AgentConversationOperations.addMessage(context.conversation_id, {
-      role: "agent", 
-      content: progressReport,
-      message_type: "agent_output",
-    });
+    await this.addMessage(
+      context.conversation_id, 
+      "agent", 
+      progressReport,
+      "agent_output"
+    );
     
     return this.createSuccessResult(
       {
@@ -284,11 +282,12 @@ Generate improved content that addresses the feedback above.`;
 
     const characterOutput = this.formatCharacterCard(task_progress.character_data);
 
-    await AgentConversationOperations.addMessage(context.conversation_id, {
-      role: "agent",
-      content: `🎭 **Character Card Generated**\n\n${characterOutput}`,
-      message_type: "agent_output",
-    });
+    await this.addMessage(
+      context.conversation_id, 
+      "agent", 
+      `🎭 **Character Card Generated**\n\n${characterOutput}`,
+      "agent_output"
+    );
 
     return this.createSuccessResult(
       {
@@ -319,11 +318,12 @@ Generate improved content that addresses the feedback above.`;
 
     const worldbookOutput = this.formatWorldbookEntries(task_progress.worldbook_data);
 
-    await AgentConversationOperations.addMessage(context.conversation_id, {
-      role: "agent",
-      content: `📚 **Worldbook Generated** (${task_progress.worldbook_data.length} entries)\n\n${worldbookOutput}`,
-      message_type: "agent_output",
-    });
+    await this.addMessage(
+      context.conversation_id, 
+      "agent", 
+      `📚 **Worldbook Generated** (${task_progress.worldbook_data.length} entries)\n\n${worldbookOutput}`,
+      "agent_output"
+    );
 
     return this.createSuccessResult(
       {
