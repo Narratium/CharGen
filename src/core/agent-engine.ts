@@ -41,19 +41,15 @@ export class AgentEngine {
         this.userInputCallback = userInputCallback;
       }
 
-      console.log("🚀 [Agent Engine] Starting agent execution...");
       await AgentConversationOperations.updateStatus(this.conversationId, AgentStatus.THINKING);
       
       // Create initial planning task
-      console.log("📋 [Agent Engine] Creating initial planning task...");
       await this.createInitialPlanningTask();
       
       // Main execution loop
-      console.log("🔄 [Agent Engine] Entering main execution loop...");
       return await this.executionLoop();
       
-    } catch (error) {
-      console.error("❌ [Agent Engine] Agent execution failed:", error);
+    } catch (error) { 
       await AgentConversationOperations.updateStatus(this.conversationId, AgentStatus.FAILED);
       
       return {
@@ -92,47 +88,37 @@ export class AgentEngine {
 
     let iteration = 0;
     const maxIterations = conversation.context.max_iterations;
-    console.log(`🔄 [Execution Loop] Max iterations: ${maxIterations}`);
 
     while (iteration < maxIterations) {
       iteration++;
       conversation.context.current_iteration = iteration;
-      console.log(`\n📍 [Execution Loop] Iteration ${iteration}/${maxIterations}`);
 
       // Get ready tasks
       const readyTasks = await PlanPoolOperations.getReadyTasks(this.conversationId);
-      console.log(`📝 [Execution Loop] Found ${readyTasks.length} ready tasks`);
       
       if (readyTasks.length === 0) {
-        console.log("⚠️  [Execution Loop] No ready tasks available");
         // No ready tasks - check if we need to plan more or if we're done
         const shouldContinue = await this.evaluateCompletion();
-        console.log(`🤔 [Execution Loop] Should continue: ${shouldContinue}`);
         if (!shouldContinue) break;
         
         // Create a replanning task
-        console.log("🔄 [Execution Loop] Creating replanning task...");
         await this.createReplanningTask();
         continue;
       }
 
       // Execute highest priority task
       const task = readyTasks[0];
-      console.log(`⚡ [Execution Loop] Executing task: ${task.description} (Tool: ${task.tool})`);
       const result = await this.executeTask(task);
 
-      console.log(`✅ [Execution Loop] Task result: Success=${result.success}, UserInput=${result.user_input_required}, Continue=${result.should_continue}`);
 
       // Handle user input requirement within the same loop
       if (result.user_input_required) {
-        console.log("💬 [Execution Loop] User input required within current iteration");
         
         if (!this.userInputCallback) {
           throw new Error("User input required but no callback provided");
         }
 
         // Get user input using callback - stays in same loop
-        console.log("📞 [Execution Loop] Calling user input callback...");
         await AgentConversationOperations.updateStatus(this.conversationId, AgentStatus.WAITING_USER);
         
         const userInput = await this.userInputCallback(result.result?.message || "I need more information from you.");
@@ -150,20 +136,14 @@ export class AgentEngine {
         });
 
         await AgentConversationOperations.updateStatus(this.conversationId, AgentStatus.THINKING);
-        console.log("▶️  [Execution Loop] User input received, continuing in same iteration...");
-        
-        // Continue with the same iteration - don't increment iteration counter
-        iteration--;
         continue;
       }
 
       if (result.should_update_plan) {
-        console.log("🔄 [Execution Loop] Plan update requested");
         await this.createReplanningTask();
       }
 
       if (!result.should_continue) {
-        console.log("🛑 [Execution Loop] Task indicated to stop execution");
         break;
       }
 
@@ -323,7 +303,6 @@ export class AgentEngine {
       .filter(([tool, count]) => count >= 5); // Tool failed 5+ times
 
     if (criticalFailures.length >= 2) {
-      console.log("⚠️  [Evaluation] Multiple tools have failed repeatedly, may need intervention");
       // Still continue but add a warning task
       await PlanPoolOperations.addTask(this.conversationId, {
         description: "Review and resolve repeated tool failures before continuing",
