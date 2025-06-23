@@ -21,27 +21,27 @@ Planning Strategy:
 - Ensure quality control and final presentation
 
 OUTPUT: JSON object with this structure:
-{
+{{
   "goals": [
-    {
+    {{
       "description": "Goal description",
       "type": "main_goal" | "sub_goal",
       "parent_id": "optional parent goal id",
-      "metadata": {}
-    }
+      "metadata": {{}}
+    }}
   ],
   "tasks": [
-    {
+    {{
       "description": "Task description", 
       "tool": "PLAN" | "ASK_USER" | "SEARCH" | "OUTPUT",
-      "parameters": {},
+      "parameters": {{}},
       "dependencies": [],
       "reasoning": "Why this task is needed",
       "priority": 1-10
-    }
+    }}
   ],
   "reasoning": "Overall planning rationale"
-}`,
+}}`,
 
   // Initial planning human template
   INITIAL_PLANNING_HUMAN: `Based on the conversation history, current progress, and planning context shown above, create an initial execution plan.
@@ -73,22 +73,22 @@ Replanning Strategy:
 - Ensure efficient path to completion
 
 OUTPUT: JSON object with this structure:
-{
+{{
   "new_tasks": [
-    {
+    {{
       "description": "Task description",
       "tool": "PLAN" | "ASK_USER" | "SEARCH" | "OUTPUT", 
-      "parameters": {},
+      "parameters": {{}},
       "dependencies": [],
       "reasoning": "Why this task is needed",
       "priority": 1-10
-    }
+    }}
   ],
-  "context_updates": {
+  "context_updates": {{
     "current_focus": "Updated focus description"
-  },
+  }},
   "reasoning": "Why this replanning was needed"
-}`,
+}}`,
 
   // Replanning human template
   REPLANNING_HUMAN: `Based on the conversation history, current progress, and planning context shown above, update the execution plan.
@@ -119,18 +119,18 @@ Analysis Strategy:
 - Focus on efficient transition to new goals
 
 OUTPUT: JSON object with this structure:
-{
+{{
   "removal_criteria": [
-    {
+    {{
       "tool": "optional tool filter",
       "status": "optional status filter", 
       "descriptionContains": "optional description filter"
-    }
+    }}
   ],
   "goals_to_remove": ["goal_id1", "goal_id2"],
   "reason": "Explanation of why tasks/goals are being removed",
   "new_focus": "Description of new focus area"
-}`,
+}}`,
 
   // Task removal analysis human template
   ANALYZE_TASK_REMOVAL_HUMAN: `Recent user input:
@@ -166,7 +166,7 @@ Planning Strategy:
 - Ensure quality and completeness
 
 OUTPUT: JSON object with this structure:
-{
+{{
   "goals": [
     {
       "description": "Goal description",
@@ -181,12 +181,12 @@ OUTPUT: JSON object with this structure:
       "tool": "PLAN" | "ASK_USER" | "SEARCH" | "OUTPUT",
       "parameters": {},
       "dependencies": [],
-      "reasoning": "Why this task is needed", 
+      "reasoning": "Why this task is needed",
       "priority": 1-10
     }
   ],
   "summary": "Brief description of the new plan"
-}`,
+}}`,
 
   // New plan creation human template
   CREATE_NEW_PLAN_HUMAN: `Updated user requirements:
@@ -198,6 +198,45 @@ New focus area:
 Based on the conversation context, current progress, and updated user requirements shown above, create a new execution plan that addresses the user's current needs.
 
 Design a comprehensive plan that efficiently delivers what the user is looking for now.`,
+
+  // Evaluation prompts for plan thinking
+  PLAN_EVALUATION_SYSTEM: `You are evaluating the quality of planning decisions made by the PLAN tool.
+The tool should create logical, efficient, and comprehensive plans to achieve user goals.
+
+Evaluation criteria:
+- Are the planned tasks logical and well-sequenced?
+- Do the tasks efficiently work toward the goal?
+- Is the plan comprehensive and complete?
+- Are priorities set appropriately?
+- Does it avoid unnecessary or redundant tasks?
+
+Respond in JSON format:
+{{
+  "is_satisfied": boolean,
+  "quality_score": number (0-100),
+  "reasoning": "detailed explanation",
+  "improvement_needed": ["specific areas to improve"],
+  "next_action": "continue" | "improve" | "complete"
+}}`,
+
+  // Plan improvement prompts  
+  PLAN_IMPROVEMENT_SYSTEM: `You are providing improvement instructions for the PLAN tool.
+The tool needs to create better plans based on the evaluation feedback.
+
+Focus on:
+- Improving task logic and sequencing
+- Increasing efficiency toward goals
+- Making plans more comprehensive
+- Better priority setting
+- Removing unnecessary tasks
+
+Respond in JSON format:
+{{
+  "focus_areas": ["areas to focus on"],
+  "specific_requests": ["specific improvement requests"],
+  "quality_target": number (target score),
+  "max_attempts": number
+}}`,
 };
 
 /**

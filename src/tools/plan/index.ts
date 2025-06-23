@@ -11,7 +11,7 @@ import { ImprovementInstruction } from "../base-think";
  * 计划工具 - 增强思考能力
  */
 export class PlanTool extends BasePlanTool {
-  readonly toolType = ToolType.PLAN;
+  readonly toolType = ToolType.PLAN; 
   readonly name = "Plan Manager";
   readonly description = "Create initial plans and update execution strategy based on current progress";
 
@@ -410,9 +410,7 @@ Generate improved planning that addresses the feedback above.`;
           context
         );
     
-    return await this.executeLLMChain(prompt, {
-      plan_type: type
-    }, context, {
+    return await this.executeLLMChain(prompt, {}, context, {
       parseJson: true,
       errorMessage: `Failed to generate ${type} plan`
     });

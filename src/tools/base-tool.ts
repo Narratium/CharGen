@@ -255,19 +255,30 @@ export abstract class BaseRegularTool extends BaseThinking implements RegularToo
   /**
    * Build conversation summary
    */
+  /**
+   * Build conversation summary including message_type
+   * @param messages - Array of conversation messages
+   * @returns Formatted conversation summary string
+   */
   protected buildConversationSummary(messages: ConversationMessage[]): string {
+    // If there are no messages, return a default message
     if (messages.length === 0) {
       return "No conversation history available.";
     }
 
     let summary = "=== CONVERSATION HISTORY ===\n";
+    // Only include the last 10 messages for brevity
     const recentMessages = messages.slice(-10);
-    
+
     for (const message of recentMessages) {
+      // Format timestamp to local time string
       const timestamp = new Date(message.timestamp).toLocaleTimeString();
-      summary += `[${timestamp}] ${message.role.toUpperCase()}: ${message.content.substring(0, 200)}\n`;
+      // Include message_type if available, otherwise use 'N/A'
+      const messageType = (message as any).message_type ? (message as any).message_type : 'N/A';
+      // Add message details to the summary, including message_type
+      summary += `[${timestamp}] ${message.role.toUpperCase()} (${messageType}): ${message.content.substring(0, 200)}\n`;
     }
-    
+
     return summary + "\n";
   }
 
@@ -546,18 +557,24 @@ export abstract class BasePlanTool extends BaseThinking implements PlanTool {
    * Build conversation summary
    */
   protected buildConversationSummary(messages: ConversationMessage[]): string {
+    // If there are no messages, return a default message
     if (messages.length === 0) {
       return "No conversation history available.";
     }
 
     let summary = "=== CONVERSATION HISTORY ===\n";
+    // Only include the last 10 messages for brevity
     const recentMessages = messages.slice(-10);
-    
+
     for (const message of recentMessages) {
+      // Format timestamp to local time string
       const timestamp = new Date(message.timestamp).toLocaleTimeString();
-      summary += `[${timestamp}] ${message.role.toUpperCase()}: ${message.content.substring(0, 200)}\n`;
+      // Include message_type if available, otherwise use 'N/A'
+      const messageType = (message as any).message_type ? (message as any).message_type : 'N/A';
+      // Add message details to the summary, including message_type
+      summary += `[${timestamp}] ${message.role.toUpperCase()} (${messageType}): ${message.content.substring(0, 200)}\n`;
     }
-    
+
     return summary + "\n";
   }
 

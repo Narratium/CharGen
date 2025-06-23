@@ -4,6 +4,8 @@ import { BaseThinking, EvaluationResult, ImprovementInstruction } from "../base-
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatOllama } from "@langchain/ollama";
+import { planPrompts } from "./prompts";
+import { HumanMessage } from "@langchain/core/messages";
 
 /**
  * PLAN Tool Thinking Module
@@ -23,35 +25,26 @@ export class PlanThinking extends BaseThinking {
     context: PlanToolContext,
     attempt: number
   ): ChatPromptTemplate {
-    return ChatPromptTemplate.fromMessages([
-      ["system", `You are evaluating the quality of planning decisions made by the PLAN tool.
-The tool should create logical, efficient, and comprehensive plans to achieve user goals.
-
-Evaluation criteria:
-- Are the planned tasks logical and well-sequenced?
-- Do the tasks efficiently work toward the goal?
-- Is the plan comprehensive and complete?
-- Are priorities set appropriately?
-- Does it avoid unnecessary or redundant tasks?
-
-Respond in JSON format:
-{
-  "is_satisfied": boolean,
-  "quality_score": number (0-100),
-  "reasoning": "detailed explanation",
-  "improvement_needed": ["specific areas to improve"],
-  "next_action": "continue" | "improve" | "complete"
-}`],
-      ["human", `Current attempt: ${attempt}
+    // Pre-build the human message content to avoid template conflicts
+    const hasCharacter = context.task_progress.character_data ? 'Character exists' : 'No character';
+    const worldbookCount = context.task_progress.worldbook_data?.length || 0;
+    const currentTasksCount = context.planning_context.current_tasks.length;
+    const completedTasksCount = context.planning_context.completed_tasks.length;
+    
+    const humanContent = `Current attempt: ${attempt}
 
 Planning result:
 ${JSON.stringify(result, null, 2)}
 
 Context: The user is working on character/worldbook generation.
-Current progress: ${context.task_progress.character_data ? 'Character exists' : 'No character'}, ${context.task_progress.worldbook_data?.length || 0} worldbook entries.
-Current tasks: ${context.planning_context.current_tasks.length} pending, ${context.planning_context.completed_tasks.length} completed.
+Current progress: ${hasCharacter}, ${worldbookCount} worldbook entries.
+Current tasks: ${currentTasksCount} pending, ${completedTasksCount} completed.
 
-Evaluate the quality of this planning decision:`]
+Evaluate the quality of this planning decision:`;
+    
+    return ChatPromptTemplate.fromMessages([
+      ["system", planPrompts.PLAN_EVALUATION_SYSTEM],
+      new HumanMessage(humanContent)
     ]);
   }
 
@@ -64,37 +57,28 @@ Evaluate the quality of this planning decision:`]
     evaluation: EvaluationResult,
     context: PlanToolContext
   ): ChatPromptTemplate {
-    return ChatPromptTemplate.fromMessages([
-      ["system", `You are providing improvement instructions for the PLAN tool.
-The tool needs to create better plans based on the evaluation feedback.
-
-Focus on:
-- Improving task logic and sequencing
-- Increasing efficiency toward goals
-- Making plans more comprehensive
-- Better priority setting
-- Removing unnecessary tasks
-
-Respond in JSON format:
-{
-  "focus_areas": ["areas to focus on"],
-  "specific_requests": ["specific improvement requests"],
-  "quality_target": number (target score),
-  "max_attempts": number
-}`],
-      ["human", `Original planning result:
+    // Pre-build the human message content to avoid template conflicts
+    const pendingTasksCount = context.planning_context.current_tasks.length;
+    const userRequest = context.planning_context.context.user_request;
+    const issuesFound = evaluation.improvement_needed.join(', ');
+    
+    const humanContent = `Original planning result:
 ${JSON.stringify(originalResult, null, 2)}
 
 Evaluation feedback:
 - Quality score: ${evaluation.quality_score}/100
 - Reasoning: ${evaluation.reasoning}
-- Issues found: ${evaluation.improvement_needed.join(', ')}
+- Issues found: ${issuesFound}
 
 Current context:
-- Pending tasks: ${context.planning_context.current_tasks.length}
-- User request: ${context.planning_context.context.user_request}
+- Pending tasks: ${pendingTasksCount}
+- User request: ${userRequest}
 
-Provide specific improvement instructions for better planning:`]
+Provide specific improvement instructions for better planning:`;
+    
+    return ChatPromptTemplate.fromMessages([
+      ["system", planPrompts.PLAN_IMPROVEMENT_SYSTEM],
+      new HumanMessage(humanContent)
     ]);
   }
 

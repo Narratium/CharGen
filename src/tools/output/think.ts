@@ -4,6 +4,8 @@ import { BaseThinking, EvaluationResult, ImprovementInstruction } from "../base-
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { ChatOpenAI } from "@langchain/openai";
 import { ChatOllama } from "@langchain/ollama";
+import { outputPrompts } from "./prompts";
+import { HumanMessage } from "@langchain/core/messages";
 
 /**
  * OUTPUT Tool Thinking Module
@@ -23,34 +25,23 @@ export class OutputThinking extends BaseThinking {
     context: BaseToolContext,
     attempt: number
   ): ChatPromptTemplate {
-    return ChatPromptTemplate.fromMessages([
-      ["system", `You are evaluating the quality of generated content (characters/worldbooks) by the OUTPUT tool.
-The tool should create detailed, engaging, and coherent characters and world elements.
-
-Evaluation criteria:
-- Is the content detailed and well-developed?
-- Does it show creativity and originality?
-- Is it consistent and coherent?
-- Does it meet the user's requirements?
-- Is it engaging and interesting?
-
-Respond in JSON format:
-{
-  "is_satisfied": boolean,
-  "quality_score": number (0-100),
-  "reasoning": "detailed explanation",
-  "improvement_needed": ["specific areas to improve"],
-  "next_action": "continue" | "improve" | "complete"
-}`],
-      ["human", `Current attempt: ${attempt}
+    // Pre-build the human message content to avoid template conflicts
+    const hasCharacter = context.task_progress.character_data ? 'Character exists' : 'No character';
+    const worldbookCount = context.task_progress.worldbook_data?.length || 0;
+    
+    const humanContent = `Current attempt: ${attempt}
 
 Generated content:
 ${JSON.stringify(result, null, 2)}
 
 Context: The user is working on character/worldbook generation.
-Current progress: ${context.task_progress.character_data ? 'Character exists' : 'No character'}, ${context.task_progress.worldbook_data?.length || 0} worldbook entries.
+Current progress: ${hasCharacter}, ${worldbookCount} worldbook entries.
 
-Evaluate the quality of this generated content:`]
+Evaluate the quality of this generated content:`;
+    
+    return ChatPromptTemplate.fromMessages([
+      ["system", outputPrompts.OUTPUT_EVALUATION_SYSTEM],
+      new HumanMessage(humanContent)
     ]);
   }
 
@@ -63,34 +54,23 @@ Evaluate the quality of this generated content:`]
     evaluation: EvaluationResult,
     context: BaseToolContext
   ): ChatPromptTemplate {
-    return ChatPromptTemplate.fromMessages([
-      ["system", `You are providing improvement instructions for the OUTPUT tool.
-The tool needs to generate better character/worldbook content based on the evaluation feedback.
-
-Focus on:
-- Adding more detail and depth
-- Improving creativity and originality
-- Ensuring consistency and coherence
-- Better meeting user requirements
-- Making content more engaging
-
-Respond in JSON format:
-{
-  "focus_areas": ["areas to focus on"],
-  "specific_requests": ["specific improvement requests"],
-  "quality_target": number (target score),
-  "max_attempts": number
-}`],
-      ["human", `Original generated content:
+    // Pre-build the human message content to avoid template conflicts
+    const issuesFound = evaluation.improvement_needed.join(', ');
+    
+    const humanContent = `Original generated content:
 ${JSON.stringify(originalResult, null, 2)}
 
 Evaluation feedback:
 - Quality score: ${evaluation.quality_score}/100
 - Reasoning: ${evaluation.reasoning}
-- Issues found: ${evaluation.improvement_needed.join(', ')}
+- Issues found: ${issuesFound}
 
-Provide specific improvement instructions for better content generation:`]
-    ]);
+Provide specific improvement instructions for better content generation:`;
+    
+    return ChatPromptTemplate.fromMessages([
+      ["system", outputPrompts.OUTPUT_IMPROVEMENT_SYSTEM],
+      new HumanMessage(humanContent)]
+    );
   }
 
   /**

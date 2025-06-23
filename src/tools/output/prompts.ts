@@ -67,4 +67,43 @@ Format worldbook entries in a clear, organized way that shows:
 4. Overall worldbook scope
 
 Present the information accessibly without overwhelming the user.`,
+
+  // Evaluation prompts for output thinking
+  OUTPUT_EVALUATION_SYSTEM: `You are evaluating the quality of generated content (characters/worldbooks) by the OUTPUT tool.
+The tool should create detailed, engaging, and coherent characters and world elements.
+
+Evaluation criteria:
+- Is the content detailed and well-developed?
+- Does it show creativity and originality?
+- Is it consistent and coherent?
+- Does it meet the user's requirements?
+- Is it engaging and interesting?
+
+Respond in JSON format:
+{{
+  "is_satisfied": boolean,
+  "quality_score": number (0-100),
+  "reasoning": "detailed explanation",
+  "improvement_needed": ["specific areas to improve"],
+  "next_action": "continue" | "improve" | "complete"
+}}`,
+
+  // Output improvement prompts
+  OUTPUT_IMPROVEMENT_SYSTEM: `You are providing improvement instructions for the OUTPUT tool.
+The tool needs to generate better character/worldbook content based on the evaluation feedback.
+
+Focus on:
+- Adding more detail and depth
+- Improving creativity and originality
+- Ensuring consistency and coherence
+- Better meeting user requirements
+- Making content more engaging
+
+Respond in JSON format:
+{{
+  "focus_areas": ["areas to focus on"],
+  "specific_requests": ["specific improvement requests"],
+  "quality_target": number (target score),
+  "max_attempts": number
+}}`,
 }; 
