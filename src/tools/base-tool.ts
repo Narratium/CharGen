@@ -414,8 +414,15 @@ ${failureContext}
       const response = await chain.invoke(inputData);
       
       if (options.parseJson) {
-        const cleanedResponse = this.extractJsonFromResponse(response);
-        return JSON.parse(cleanedResponse);
+        try {
+          const cleanedResponse = this.extractJsonFromResponse(response);
+          return JSON.parse(cleanedResponse);
+        } catch (parseError) {
+          console.error(`JSON parsing failed for response: "${response.substring(0, 500)}..."`);
+          console.error(`Cleaned response: "${this.extractJsonFromResponse(response).substring(0, 500)}..."`);
+          console.error(`Parse error: ${parseError instanceof Error ? parseError.message : parseError}`);
+          throw parseError;
+        }
       }
       
       return response;
@@ -465,9 +472,36 @@ ${failureContext}
       cleaned = cleaned.substring(0, cleaned.length - 3);
     }
     
-    // Find JSON object boundaries
-    const jsonStart = Math.max(cleaned.indexOf('{'), cleaned.indexOf('['));
-    const jsonEnd = Math.max(cleaned.lastIndexOf('}'), cleaned.lastIndexOf(']')) + 1;
+    // Find JSON object boundaries - try both objects and arrays
+    let jsonStart = -1;
+    let jsonEnd = -1;
+    
+    // Look for first { or [
+    for (let i = 0; i < cleaned.length; i++) {
+      if (cleaned[i] === '{' || cleaned[i] === '[') {
+        jsonStart = i;
+        break;
+      }
+    }
+    
+    if (jsonStart !== -1) {
+      const startChar = cleaned[jsonStart];
+      const endChar = startChar === '{' ? '}' : ']';
+      let braceCount = 1;
+      
+      // Find matching closing brace/bracket
+      for (let i = jsonStart + 1; i < cleaned.length; i++) {
+        if (cleaned[i] === startChar) {
+          braceCount++;
+        } else if (cleaned[i] === endChar) {
+          braceCount--;
+          if (braceCount === 0) {
+            jsonEnd = i + 1;
+            break;
+          }
+        }
+      }
+    }
     
     if (jsonStart !== -1 && jsonEnd > jsonStart) {
       cleaned = cleaned.substring(jsonStart, jsonEnd);

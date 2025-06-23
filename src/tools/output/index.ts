@@ -13,7 +13,29 @@ export class OutputTool extends BaseTool {
   readonly description = "Generate character data and worldbook entries";
 
   async executeToolLogic(task: PlanTask, context: ToolExecutionContext): Promise<ToolExecutionResult> {
-    const type = task.parameters.type;
+    let type = task.parameters?.type;
+    
+    // If type is not specified, try to infer from task description
+    if (!type) {
+      const taskDesc = task.description.toLowerCase();
+      if (taskDesc.includes("character") && !taskDesc.includes("worldbook")) {
+        type = "character";
+      } else if (taskDesc.includes("worldbook") || taskDesc.includes("world")) {
+        type = "worldbook";
+      } else {
+        // Default fallback based on what's missing
+        const hasCharacter = !!context.current_result.character_data;
+        const hasWorldbook = !!context.current_result.worldbook_data && context.current_result.worldbook_data.length > 0;
+        
+        if (!hasCharacter) {
+          type = "character";
+        } else if (!hasWorldbook) {
+          type = "worldbook";
+        } else {
+          type = "character"; // Default to character
+        }
+      }
+    }
     
     if (type === "character") {
       return await this.generateCharacter(task, context);
@@ -21,7 +43,7 @@ export class OutputTool extends BaseTool {
       return await this.generateWorldbook(task, context);
     }
 
-    throw new Error("Unknown output type - expected 'character' or 'worldbook'");
+    throw new Error(`Unknown output type: ${type} - expected 'character' or 'worldbook'`);
   }
 
   private async generateCharacter(task: PlanTask, context: ToolExecutionContext): Promise<ToolExecutionResult> {

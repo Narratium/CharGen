@@ -11,38 +11,65 @@ export class SearchTool extends BaseTool {
   readonly description = "Search for inspiration, references, and creative ideas";
 
   async executeToolLogic(task: PlanTask, context: ToolExecutionContext): Promise<ToolExecutionResult> {
-    // Generate search queries using LLM
-    const searchQueries = await this.generateSearchQueries(task, context);
-    
-    // Perform actual searches
-    const searchResults = await this.performSearches(searchQueries);
-    
-    // Process and analyze results
-    const processedResults = await this.processSearchResults(searchResults, task, context);
-    
-    await this.addThought(
-      context.conversation_id,
-      "observation",
-      `Found ${processedResults.length} relevant search results`,
-      task.id,
-    );
+    try {
+      // Generate search queries using LLM
+      const searchQueries = await this.generateSearchQueries(task, context);
+      
+      // Perform actual searches
+      const searchResults = await this.performSearches(searchQueries);
+      
+      // Process and analyze results
+      const processedResults = await this.processSearchResults(searchResults, task, context);
+      
+      await this.addThought(
+        context.conversation_id,
+        "observation",
+        `Found ${processedResults.length} relevant search results`,
+        task.id,
+      );
 
-    const result = {
-      queries: searchQueries,
-      results: processedResults,
-      summary: await this.generateSearchSummary(processedResults, context, task),
-    };
+      const result = {
+        queries: searchQueries,
+        results: processedResults,
+        summary: await this.generateSearchSummary(processedResults, context, task),
+      };
 
-    // Display results to user
-    await this.addMessage(
-      context.conversation_id,
-      "agent",
-      `🔍 **Search Complete**\n\n**Queries:** ${searchQueries.join(', ')}\n**Results:** ${processedResults.length} relevant findings\n\n${result.summary}`,
-    );
+      // Display results to user
+      await this.addMessage(
+        context.conversation_id,
+        "agent",
+        `🔍 **Search Complete**\n\n**Queries:** ${searchQueries.join(', ')}\n**Results:** ${processedResults.length} relevant findings\n\n${result.summary}`,
+      );
 
-    return this.createSuccessResult(result, {
-      reasoning: `Successfully searched and found ${processedResults.length} relevant results`
-    });
+      return this.createSuccessResult(result, {
+        reasoning: `Successfully searched and found ${processedResults.length} relevant results`
+      });
+
+    } catch (error) {
+      // If search completely fails, provide fallback inspiration
+      console.warn("Search failed, using fallback inspiration:", error);
+      
+      const userRequest = context.plan_pool.context.user_request;
+      const hasCharacter = !!context.current_result.character_data;
+      const hasWorldbook = context.current_result.worldbook_data && context.current_result.worldbook_data.length > 0;
+      
+      const fallbackInspiration = SearchPrompts.generateFallbackInspiration(
+        task.description,
+        userRequest,
+        hasCharacter,
+        hasWorldbook || false
+      );
+
+      await this.addMessage(
+        context.conversation_id,
+        "agent",
+        `🔍 **Creative Inspiration** (Network issues, using built-in inspiration)\n\n${fallbackInspiration}`,
+      );
+
+      return this.createSuccessResult({ inspiration: fallbackInspiration }, {
+        reasoning: "Provided fallback inspiration due to network issues"
+      });
+    }
   }
 
   /**
@@ -126,15 +153,18 @@ Return as JSON array: ["query1", "query2", "query3", ...]`,
     for (const query of queries.slice(0, 3)) { // Limit to 3 queries to avoid rate limiting
       try {
         const searchResult = await this.searchDuckDuckGo(query);
-        results.push({
-          query,
-          results: searchResult,
-        });
+        if (searchResult) {
+          results.push({
+            query,
+            results: searchResult,
+          });
+        }
         
         // Add delay between searches
         await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
-        console.error(`Search failed for query "${query}":`, error);
+        console.warn(`Search failed for query "${query}":`, error);
+        // Continue with other queries instead of stopping
       }
     }
     

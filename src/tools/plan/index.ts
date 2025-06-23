@@ -150,9 +150,57 @@ export class PlanTool extends BaseTool {
       };
 
     } catch (error) {
+      console.warn("Plan update failed, using fallback strategy:", error);
+      
+      // Fallback: create simple tasks based on what's missing
+      const hasCharacter = !!context.current_result.character_data;
+      const hasWorldbook = !!context.current_result.worldbook_data && context.current_result.worldbook_data.length > 0;
+      
+      const fallbackTasks = [];
+      
+      if (!hasCharacter) {
+        fallbackTasks.push({
+          description: "Generate character data to complete the character creation",
+          tool: ToolType.OUTPUT,
+          parameters: { type: "character" },
+          dependencies: [],
+          status: "pending" as const,
+          reasoning: "Character data is missing and needs to be generated",
+          priority: 8,
+        });
+      }
+      
+      if (!hasWorldbook) {
+        fallbackTasks.push({
+          description: "Generate worldbook entries to complete the world creation",
+          tool: ToolType.OUTPUT,
+          parameters: { type: "worldbook" },
+          dependencies: [],
+          status: "pending" as const,
+          reasoning: "Worldbook data is missing and needs to be generated",
+          priority: 7,
+        });
+      }
+      
+      // Add fallback tasks
+      for (const taskData of fallbackTasks) {
+        await PlanPoolOperations.addTask(context.conversation_id, taskData);
+      }
+      
+      await this.addMessage(
+        context.conversation_id,
+        "agent",
+        `🔄 **Plan Updated (Fallback)**\n\n**New Tasks:** ${fallbackTasks.length}\n\nUsing fallback strategy due to planning difficulties.`,
+        "agent_thinking",
+      );
+
       return {
-        success: false,
-        error: error instanceof Error ? error.message : "Plan update failed",
+        success: true,
+        result: {
+          plan_type: "fallback_update",
+          new_tasks: fallbackTasks.length,
+          reasoning: "Used fallback planning due to LLM error",
+        },
         should_continue: true,
       };
     }
@@ -184,10 +232,26 @@ export class PlanTool extends BaseTool {
       "agent_thinking",
     );
 
+    // If work is complete, stop execution
+    if (evaluationResult.is_complete) {
+      await this.addMessage(
+        context.conversation_id,
+        "agent",
+        `🎉 **Generation Complete!**\n\nBoth character and worldbook have been successfully generated.`,
+        "agent_thinking",
+      );
+      
+      return {
+        success: true,
+        result: evaluationResult,
+        should_continue: false, // Stop execution
+      };
+    }
+
     return {
       success: true,
       result: evaluationResult,
-      should_continue: !evaluationResult.is_complete,
+      should_continue: true,
     };
   }
 
@@ -290,7 +354,7 @@ export class PlanTool extends BaseTool {
       {
         description: "Generate character data based on user requirements and inspiration",
         tool: ToolType.OUTPUT,
-        parameters: {},
+        parameters: { type: "character" },
         dependencies: [],
         status: "pending" as const,
         priority: 6,
@@ -299,7 +363,7 @@ export class PlanTool extends BaseTool {
       {
         description: "Generate worldbook entries that complement the character and setting",
         tool: ToolType.OUTPUT,
-        parameters: {},
+        parameters: { type: "worldbook" },
         dependencies: [],
         status: "pending" as const,
         priority: 5,

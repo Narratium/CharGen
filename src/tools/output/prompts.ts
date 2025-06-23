@@ -18,7 +18,7 @@ CHARACTER CREATION PRINCIPLES:
 5. Create realistic dialogue patterns and behavioral traits
 
 REQUIRED JSON FORMAT:
-{
+{{
   "name": "Character name",
   "description": "Detailed physical and background description",
   "personality": "Complex personality traits, quirks, and behavioral patterns",
@@ -28,7 +28,7 @@ REQUIRED JSON FORMAT:
   "creator_notes": "Behind-the-scenes notes about the character design",
   "alternate_greetings": ["Alternative opening messages"],
   "tags": ["relevant", "character", "tags"]
-}
+}}
 
 CREATION GUIDELINES:
 - If character already exists, IMPROVE and EXPAND rather than replace
@@ -70,13 +70,13 @@ WORLDBOOK CREATION PRINCIPLES:
 
 REQUIRED JSON FORMAT (Array of entries):
 [
-  {
+  {{
     "key": ["trigger", "words", "for", "activation"],
     "comment": "Entry title/name",
     "content": "Detailed description of this world element",
     "constant": false,
     "selective": true
-  }
+  }}
 ]
 
 ENTRY TYPES TO CONSIDER:

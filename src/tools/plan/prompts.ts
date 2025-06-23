@@ -37,28 +37,28 @@ CORE PRINCIPLES:
 4. Focus on what's missing or needs improvement in current results
 
 Respond in JSON format:
-{
+{{
   "reasoning": "Your detailed reasoning based on current status and context",
   "confidence": 0.8,
   "goals": [
-    {
+    {{
       "description": "Goal description",
       "type": "main_goal|sub_goal",
       "parent_id": "parent_goal_id_if_any",
-      "metadata": {}
-    }
+      "metadata": {{}}
+    }}
   ],
   "tasks": [
-    {
+    {{
       "description": "Clear, specific description of what needs to be accomplished", 
       "tool": "TOOL_NAME",
       "dependencies": [],
       "priority": 1-10,
       "reasoning": "Why this task is needed and why this tool was chosen based on current context"
-    }
+    }}
   ],
   "alternatives": ["Alternative approaches considered"]
-}`;
+}}`;
   }
 
   /**
@@ -101,23 +101,23 @@ CRITICAL RULES:
 - Maintain consistency with existing results
 
 Respond in JSON format:
-{
+{{
   "reasoning": "Detailed analysis of current status and why these updates are needed",
   "confidence": 0.7,
   "new_tasks": [
-    {
+    {{
       "description": "Specific, actionable description of what needs to be accomplished",
       "tool": "TOOL_NAME", 
       "dependencies": [],
       "priority": 1-10,
       "reasoning": "Why this task is needed and why this tool was chosen based on current context and failures"
-    }
+    }}
   ],
-  "context_updates": {
+  "context_updates": {{
     "current_focus": "What to focus on next based on current status"
-  },
+  }},
   "alternatives": ["Alternative approaches considered to avoid repeating failures"]
-}`;
+}}`;
   }
 
   /**
