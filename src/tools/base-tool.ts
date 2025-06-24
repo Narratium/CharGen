@@ -322,7 +322,12 @@ export abstract class BaseRegularTool implements RegularTool {
     content: string,
     messageType: "agent_thinking" | "agent_action" | "agent_output" | "system_info" = "agent_output"
   ): Promise<void> {
-    console.log(`📝 [${messageType.toUpperCase()}] ${role}: ${content}`);
+    await AgentConversationOperations.addMessage(
+      conversationId, {
+      role,
+      content,
+      message_type: messageType,
+    });
   }
 
   /**

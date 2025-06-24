@@ -1,49 +1,35 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import * as os from 'os';
 
 // CLI storage configuration
-const APP_DATA_DIR = path.join(os.homedir(), '.character-generator');
-const CHARACTERS_RECORD_FILE = 'characters_record.json';
-const CHARACTER_DIALOGUES_FILE = 'character_dialogues.json';
-const CHARACTER_IMAGES_FILE = 'character_images.json';
-const WORLD_BOOK_FILE = 'world_book.json';
-const REGEX_SCRIPTS_FILE = 'regex_scripts.json';
-const PRESET_FILE = 'preset_data.json';
+const APP_DATA_DIR = path.join(process.cwd(), '.storage');
 const AGENT_CONVERSATIONS_FILE = 'agent_conversations.json';
 
-export {
-  CHARACTERS_RECORD_FILE,
-  CHARACTER_DIALOGUES_FILE,
-  CHARACTER_IMAGES_FILE,
-  WORLD_BOOK_FILE,
-  REGEX_SCRIPTS_FILE,
-  PRESET_FILE,
-  AGENT_CONVERSATIONS_FILE
-};
+// Export constants
+export { AGENT_CONVERSATIONS_FILE };
 
 /**
  * Initialize storage directory and files
  */
 async function initializeStorage(): Promise<void> {
+  // Ensure storage directory exists
   await fs.ensureDir(APP_DATA_DIR);
   
-  const files = [
-    CHARACTERS_RECORD_FILE,
-    CHARACTER_DIALOGUES_FILE,
-    CHARACTER_IMAGES_FILE,
-    WORLD_BOOK_FILE,
-    REGEX_SCRIPTS_FILE,
-    PRESET_FILE,
-    AGENT_CONVERSATIONS_FILE
-  ];
+  // Define initial data structures for each file
+  const initialData = {
+    [AGENT_CONVERSATIONS_FILE]: []
+  };
 
-  for (const fileName of files) {
+  // Create or ensure all files exist with proper initial data
+  for (const [fileName, initialValue] of Object.entries(initialData)) {
     const filePath = path.join(APP_DATA_DIR, fileName);
     if (!(await fs.pathExists(filePath))) {
-      await fs.writeJson(filePath, []);
+      await fs.writeJson(filePath, initialValue, { spaces: 2 });
+      console.log(`Created storage file: ${fileName}`);
     }
   }
+
+  console.log('Storage initialized in project directory:', APP_DATA_DIR);
 }
 
 /**
@@ -62,13 +48,14 @@ export async function readData(storeName: string): Promise<any[]> {
 }
 
 /**
- * Write data to storage file
+ * Write data to storage file with immediate persistence
  */
 export async function writeData(storeName: string, data: any[]): Promise<void> {
   await initializeStorage();
   const filePath = path.join(APP_DATA_DIR, storeName);
   
   try {
+    // Ensure atomic write by using writeJson
     await fs.writeJson(filePath, data, { spaces: 2 });
   } catch (error) {
     console.error(`Failed to write to ${storeName}:`, error);
@@ -77,71 +64,10 @@ export async function writeData(storeName: string, data: any[]): Promise<void> {
 }
 
 /**
- * Initialize data files (legacy compatibility)
+ * Initialize data files
  */
 export async function initializeDataFiles(): Promise<void> {
   await initializeStorage();
-}
-
-/**
- * Store blob data (for CLI, we'll use base64 encoding)
- */
-export async function setBlob(key: string, blob: Buffer | string): Promise<void> {
-  await initializeStorage();
-  const filePath = path.join(APP_DATA_DIR, CHARACTER_IMAGES_FILE);
-  
-  try {
-    const existingData = await fs.readJson(filePath);
-    const base64Data = Buffer.isBuffer(blob) ? blob.toString('base64') : blob;
-    
-    // Store as key-value pairs
-    const updatedData = existingData.filter((item: any) => item.key !== key);
-    updatedData.push({ key, data: base64Data });
-    
-    await fs.writeJson(filePath, updatedData, { spaces: 2 });
-  } catch (error) {
-    console.error(`Failed to store blob ${key}:`, error);
-    throw error;
-  }
-}
-
-/**
- * Get blob data
- */
-export async function getBlob(key: string): Promise<Buffer | null> {
-  await initializeStorage();
-  const filePath = path.join(APP_DATA_DIR, CHARACTER_IMAGES_FILE);
-  
-  try {
-    const data = await fs.readJson(filePath);
-    const item = data.find((item: any) => item.key === key);
-    
-    if (item && item.data) {
-      return Buffer.from(item.data, 'base64');
-    }
-    
-    return null;
-  } catch (error) {
-    console.warn(`Failed to get blob ${key}:`, error);
-    return null;
-  }
-}
-
-/**
- * Delete blob data
- */
-export async function deleteBlob(key: string): Promise<void> {
-  await initializeStorage();
-  const filePath = path.join(APP_DATA_DIR, CHARACTER_IMAGES_FILE);
-  
-  try {
-    const data = await fs.readJson(filePath);
-    const updatedData = data.filter((item: any) => item.key !== key);
-    await fs.writeJson(filePath, updatedData, { spaces: 2 });
-  } catch (error) {
-    console.error(`Failed to delete blob ${key}:`, error);
-    throw error;
-  }
 }
 
 /**
@@ -152,12 +78,7 @@ export async function exportAllData(): Promise<Record<string, any>> {
   const exportData: Record<string, any> = {};
   
   const files = [
-    CHARACTERS_RECORD_FILE,
-    CHARACTER_DIALOGUES_FILE,
-    WORLD_BOOK_FILE,
-    REGEX_SCRIPTS_FILE,
     AGENT_CONVERSATIONS_FILE,
-    CHARACTER_IMAGES_FILE
   ];
 
   for (const fileName of files) {

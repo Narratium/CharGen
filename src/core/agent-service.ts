@@ -13,6 +13,23 @@ type UserInputCallback = (message?: string) => Promise<string>;
 export class AgentService {
   private engines: Map<string, AgentEngine> = new Map();
 
+  constructor() {
+    // Initialize storage on construction
+    this.initialize();
+  }
+
+  /**
+   * Initialize service with storage
+   */
+  private async initialize(): Promise<void> {
+    try {
+      const { initializeDataFiles } = await import('../data/local-storage');
+      await initializeDataFiles();
+    } catch (error) {
+      console.error('Failed to initialize AgentService:', error);
+    }
+  }
+
   /**
    * Start a new character generation conversation with user input callback
    */

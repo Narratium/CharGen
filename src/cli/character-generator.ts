@@ -30,7 +30,30 @@ export class CharacterGeneratorCLI {
 
   constructor() {
     this.agentService = new AgentService();
-    this.loadConfig();
+    // Initialize storage and load config
+    this.initialize();
+  }
+
+  /**
+   * Initialize CLI with storage and configuration
+   */
+  private async initialize(): Promise<void> {
+    try {
+      // Initialize storage first
+      await this.initializeStorage();
+      // Then load config
+      await this.loadConfig();
+    } catch (error) {
+      console.error('Failed to initialize CLI:', error);
+    }
+  }
+
+  /**
+   * Initialize storage directory and files
+   */
+  private async initializeStorage(): Promise<void> {
+    const { initializeDataFiles } = await import('../data/local-storage');
+    await initializeDataFiles();
   }
 
   /**
