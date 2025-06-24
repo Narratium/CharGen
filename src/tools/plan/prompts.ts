@@ -34,8 +34,6 @@ OUTPUT: JSON object with this structure:
     {{
       "description": "Task description", 
       "tool": "PLAN" | "ASK_USER" | "SEARCH" | "OUTPUT",
-      "parameters": {{}},
-      "dependencies": [],
       "reasoning": "Why this task is needed",
       "priority": 1-10
     }}
@@ -78,8 +76,6 @@ OUTPUT: JSON object with this structure:
     {{
       "description": "Task description",
       "tool": "PLAN" | "ASK_USER" | "SEARCH" | "OUTPUT", 
-      "parameters": {{}},
-      "dependencies": [],
       "reasoning": "Why this task is needed",
       "priority": 1-10
     }}
@@ -179,8 +175,6 @@ OUTPUT: JSON object with this structure:
     {
       "description": "Task description",
       "tool": "PLAN" | "ASK_USER" | "SEARCH" | "OUTPUT",
-      "parameters": {},
-      "dependencies": [],
       "reasoning": "Why this task is needed",
       "priority": 1-10
     }
@@ -198,6 +192,38 @@ New focus area:
 Based on the conversation context, current progress, and updated user requirements shown above, create a new execution plan that addresses the user's current needs.
 
 Design a comprehensive plan that efficiently delivers what the user is looking for now.`,
+
+  // Sub-tool routing system prompt
+  SUBTOOL_ROUTING_SYSTEM: `You are an intelligent planning agent that selects the most appropriate sub-tool based on current context.
+
+Available sub-tools:
+{available_sub_tools}
+
+Selection Rules:
+1. "createInitialPlan" - When no tasks exist and need to start planning
+2. "analyzeFailures" - When there are recent failures that need analysis
+3. "evaluateProgress" - When both character and worldbook exist, evaluate completion
+4. "updatePlan" - For general plan updates and task management
+5. "removeTasks" - When tasks are no longer relevant to the user's requirements
+6. "createNewPlan" - When user requirements have changed significantly
+
+Respond in JSON format:
+{{
+  "selected_sub_tool": "tool_name",
+  "reasoning": "explanation of why this tool was selected",
+  "confidence": 85
+}}`,
+
+  // Sub-tool routing human template
+  SUBTOOL_ROUTING_HUMAN: `Current Context:
+- Current tasks: {current_tasks_count}
+- Completed tasks: {completed_tasks_count}  
+- Has character: {has_character}
+- Has worldbook: {has_worldbook}
+- Has recent failures: {has_failures}
+- User request: {user_request}
+
+Based on this context, which sub-tool should be used?`,
 
   // Evaluation prompts for plan thinking
   PLAN_EVALUATION_SYSTEM: `You are evaluating the quality of planning decisions made by the PLAN tool.

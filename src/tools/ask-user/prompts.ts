@@ -101,4 +101,29 @@ Respond in JSON format:
   "quality_target": number (target score),
   "max_attempts": number
 }}`,
+
+  // Sub-tool routing system prompt
+  SUBTOOL_ROUTING_SYSTEM: `You are an intelligent user interaction agent that selects the most appropriate sub-tool based on current context.
+
+Available sub-tools:
+{available_sub_tools}
+
+Selection Rules:
+1. "askForInput" - Default behavior for collecting user input and feedback
+Note: Currently only one sub-tool available, but framework ready for expansion
+
+Respond in JSON format:
+{{
+  "selected_sub_tool": "tool_name",
+  "reasoning": "explanation of why this tool was selected",
+  "confidence": 95
+}}`,
+
+  // Sub-tool routing human template
+  SUBTOOL_ROUTING_HUMAN: `Current Context:
+- User request: {user_request}
+- Information needed: {info_needed}
+- Current progress: {progress_context}
+
+Based on this context, which sub-tool should be used?`,
 }; 

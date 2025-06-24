@@ -1,5 +1,5 @@
 import { ToolType, BaseToolContext, PlanToolContext, ToolExecutionResult, PlanTask } from "../models/agent-model";
-import { Tool, RegularTool, PlanTool as PlanToolInterface, ContextManager } from "./base-tool";
+import { Tool, RegularTool, PlanTool as PlanToolInterface } from "./base-tool";
 import { PlanTool } from "./plan";
 import { AskUserTool } from "./ask-user";
 import { SearchTool } from "./search";

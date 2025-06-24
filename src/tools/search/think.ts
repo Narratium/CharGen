@@ -1,21 +1,63 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseToolContext } from "../../models/agent-model";
 import { BaseThinking, EvaluationResult } from "../base-think";
-import { StringOutputParser } from "@langchain/core/output_parsers";
-import { ChatOpenAI } from "@langchain/openai";
-import { ChatOllama } from "@langchain/ollama";
 import { searchPrompts } from "./prompts";
 import { HumanMessage } from "@langchain/core/messages";
+import { SystemMessage } from "@langchain/core/messages";
 
 /**
- * SEARCH Tool Thinking Module
- * 搜索工具的思考模块
+ * SEARCH Tool Thinking Module - Enhanced with routing capability
+ * 搜索工具的思考模块 - 增强路由功能
  */
 export class SearchThinking extends BaseThinking {
   constructor() {
     super("SEARCH");
   }
 
+  /**
+   * Build routing prompt for search sub-tools (currently single tool, but prepared for future)
+   * 为搜索子工具构建路由提示（目前是单一工具，但为未来做准备）
+   */
+  protected async buildRoutingPrompt(
+    context: BaseToolContext,
+    availableSubTools: string[]
+  ): Promise<ChatPromptTemplate> {
+    const userRequest = context.conversation_history
+      .filter(msg => msg.role === "user")
+      .slice(-1)[0]?.content || "General research";
+    const taskType = "Character/Worldbook generation";
+    const researchContext = `Character exists: ${!!context.task_progress.character_data}, 
+      Worldbook entries: ${context.task_progress.worldbook_data?.length || 0}`;
+
+    // Build available sub-tools description
+    const availableSubToolsDescription = availableSubTools.map(tool => 
+      `- ${tool}: ${this.getSubToolDescription(tool)}`
+    ).join('\n');
+
+    // Use unified message format: front_message + system_prompt + human_prompt
+    const systemPrompt = searchPrompts.SUBTOOL_ROUTING_SYSTEM.replace('{available_sub_tools}', availableSubToolsDescription);
+    const humanPrompt = searchPrompts.SUBTOOL_ROUTING_HUMAN
+      .replace('{user_request}', userRequest)
+      .replace('{task_type}', taskType)
+      .replace('{research_context}', researchContext);
+
+    return ChatPromptTemplate.fromMessages([
+      new SystemMessage(systemPrompt),
+      new HumanMessage(humanPrompt)
+    ]);
+  }
+
+  /**
+   * Get description for each sub-tool
+   * 获取每个子工具的描述
+   */
+  private getSubToolDescription(toolName: string): string {
+    const descriptions: Record<string, string> = {
+      "searchAndInspire": "Search for inspiration and creative references"
+    };
+    return descriptions[toolName] || "Unknown search tool";
+  }
+  
   /**
    * Build evaluation prompt for SEARCH results
    * 为SEARCH结果构建评估提示
@@ -28,19 +70,22 @@ export class SearchThinking extends BaseThinking {
     // Pre-build the human message content to avoid template conflicts
     const hasCharacter = context.task_progress.character_data ? 'Character exists' : 'No character';
     const worldbookCount = context.task_progress.worldbook_data?.length || 0;
+    const queriesUsed = result.queries?.length || 0;
+    const resultsFound = result.results?.length || 0;
     
     const humanContent = `Current attempt: ${attempt}
 
-Search result:
+Search results:
 ${JSON.stringify(result, null, 2)}
 
 Context: The user is working on character/worldbook generation.
 Current progress: ${hasCharacter}, ${worldbookCount} worldbook entries.
+Search stats: ${queriesUsed} queries, ${resultsFound} results found.
 
-Evaluate the quality and relevance of this search/inspiration result:`;
+Evaluate the quality and relevance of these search results:`;
     
     return ChatPromptTemplate.fromMessages([
-      ["system", searchPrompts.SEARCH_EVALUATION_SYSTEM],
+      new SystemMessage(searchPrompts.SEARCH_EVALUATION_SYSTEM),
       new HumanMessage(humanContent)
     ]);
   }
@@ -57,7 +102,7 @@ Evaluate the quality and relevance of this search/inspiration result:`;
     // Pre-build the human message content to avoid template conflicts
     const issuesFound = evaluation.improvement_needed.join(', ');
     
-    const humanContent = `Original search result:
+    const humanContent = `Original search results:
 ${JSON.stringify(originalResult, null, 2)}
 
 Evaluation feedback:
@@ -65,30 +110,12 @@ Evaluation feedback:
 - Reasoning: ${evaluation.reasoning}
 - Issues found: ${issuesFound}
 
-Provide specific improvement instructions for better search/inspiration content:`;
+Provide specific improvement instructions for better search results:`;
     
     return ChatPromptTemplate.fromMessages([
-      ["system", searchPrompts.SEARCH_IMPROVEMENT_SYSTEM],
+      new SystemMessage(searchPrompts.SEARCH_IMPROVEMENT_SYSTEM),
       new HumanMessage(humanContent)
     ]);
-  }
-
-  /**
-   * Execute thinking chain with LLM
-   * 使用LLM执行思考链
-   */
-  protected async executeThinkingChain(
-    prompt: ChatPromptTemplate,
-    context: BaseToolContext
-  ): Promise<string> {
-    try {
-      const llm = this.createLLM(context.llm_config);
-      const chain = prompt.pipe(llm).pipe(new StringOutputParser());
-      return await chain.invoke({});
-    } catch (error) {
-      console.warn(`[SEARCH] Thinking chain failed:`, error);
-      return "Unable to process thinking at this time.";
-    }
   }
 
   /**
@@ -103,29 +130,9 @@ Provide specific improvement instructions for better search/inspiration content:
   }
 
   /**
-   * Create LLM instance from config
+   * Public method to route to sub-tool
    */
-  private createLLM(config: BaseToolContext["llm_config"]) {
-    if (config.llm_type === "openai") {
-      return new ChatOpenAI({
-        modelName: config.model_name,
-        openAIApiKey: config.api_key,
-        configuration: {
-          baseURL: config.base_url,
-        },
-        temperature: config.temperature,
-        maxTokens: config.max_tokens,
-        streaming: false,
-      });
-    } else if (config.llm_type === "ollama") {
-      return new ChatOllama({
-        model: config.model_name,
-        baseUrl: config.base_url || "http://localhost:11434",
-        temperature: config.temperature,
-        streaming: false,
-      });
-    }
-
-    throw new Error(`Unsupported LLM type: ${config.llm_type}`);
+  async routeToSubTool(context: BaseToolContext, availableSubTools: string[]) {
+    return await super.routeToSubTool(context, availableSubTools);
   }
 } 

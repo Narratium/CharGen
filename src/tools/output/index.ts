@@ -1,6 +1,6 @@
 import { BaseRegularTool } from "../base-tool";
 import { ToolType, BaseToolContext, ToolExecutionResult } from "../../models/agent-model";
-import { AgentConversationOperations } from "@/data/agent/agent-conversation-operations";
+import { AgentConversationOperations } from "../../data/agent/agent-conversation-operations";
 import { outputPrompts } from "./prompts";
 import { OutputThinking } from "./think";
 import { ImprovementInstruction } from "../base-think";
@@ -14,7 +14,7 @@ export class OutputTool extends BaseRegularTool {
   readonly name = "Output Generator";
   readonly description = "Generate final output and present results to user";
 
-  private thinking: OutputThinking;
+  protected thinking: OutputThinking;
 
   constructor() {
     super();
@@ -22,22 +22,46 @@ export class OutputTool extends BaseRegularTool {
   }
 
   /**
-   * Core work logic - generate output based on current progress
-   * 核心工作逻辑 - 根据当前进度生成输出
+   * Core work logic - generate output using intelligent routing
+   * 核心工作逻辑 - 使用智能路由生成输出
    */
   async doWork(context: BaseToolContext): Promise<any> {
-    // Determine what type of output to generate based on current progress
-    const hasCharacter = !!context.task_progress.character_data;
-    const hasWorldbook = !!context.task_progress.worldbook_data && context.task_progress.worldbook_data.length > 0;
+    // Define available sub-tools
+    const availableSubTools = [
+      "generateFinalOutput",
+      "generateCharacterOutput",
+      "generateWorldbookOutput", 
+      "generateProgressReport"
+    ];
 
-    if (hasCharacter && hasWorldbook) {
-      return await this.generateFinalOutput(context);
-    } else if (hasCharacter) {
-      return await this.generateCharacterOutput(context);
-    } else if (hasWorldbook) {
-      return await this.generateWorldbookOutput(context);
-    } else {
-      return await this.generateProgressReport(context);
+    try {
+      // Use intelligent routing to select the best sub-tool
+      console.log(`🧠 [OUTPUT] Using intelligent routing to select sub-tool...`);
+      const routingDecision = await this.thinking.routeToSubTool(context, availableSubTools);
+      
+      
+      console.log(`🎯 [OUTPUT] Selected sub-tool: ${routingDecision.selected_sub_tool} (confidence: ${routingDecision.confidence}%)`);
+      console.log(`📝 [OUTPUT] Reasoning: ${routingDecision.reasoning}`);
+
+      // Route to the selected sub-tool
+      switch (routingDecision.selected_sub_tool) {
+        case "generateFinalOutput":
+          return await this.generateFinalOutput(context);
+        case "generateCharacterOutput":
+          return await this.generateCharacterOutput(context);
+        case "generateWorldbookOutput":
+          return await this.generateWorldbookOutput(context);
+        case "generateProgressReport":
+          return await this.generateProgressReport(context);
+        default:
+          // Log unknown sub-tool and throw error instead of fallback
+          console.error(`[OUTPUT] Unknown sub-tool: ${routingDecision.selected_sub_tool}`);
+          throw new Error(`Unknown sub-tool selected: ${routingDecision.selected_sub_tool}`);
+      }
+    } catch (error) {
+      // Log failure and propagate error instead of fallback
+      console.error(`[OUTPUT] Tool execution failed:`, error);
+      throw error; // Re-throw to let base class handle
     }
   }
 
@@ -67,25 +91,11 @@ export class OutputTool extends BaseRegularTool {
       };
       
     } catch (error) {
-      // Don't fake success with fallback - let base class handle failure
+      // Log improvement failure and throw error instead of fallback
+      console.error(`[OUTPUT] Output improvement failed:`, error);
       throw new Error(`Output improvement failed: ${error instanceof Error ? error.message : error}`);
     }
   }
-
-  /**
-   * Implement thinking capabilities using public methods
-   */
-  async evaluate(result: any, context: BaseToolContext, attempt: number = 1) {
-    return await this.thinking.evaluateResult(result, context, attempt);
-  }
-
-  async generateImprovement(result: any, evaluation: any, context: BaseToolContext) {
-    return await this.thinking.generateImprovementInstruction(result, evaluation, context);
-  }
-
-  protected buildEvaluationPrompt = () => { throw new Error("Use evaluate() instead"); };
-  protected buildImprovementPrompt = () => { throw new Error("Use generateImprovement() instead"); };
-  protected executeThinkingChain = () => { throw new Error("Use thinking methods directly"); };
 
   /**
    * Generate improved output based on feedback
@@ -133,21 +143,13 @@ Generate improved content that addresses the feedback above.`;
 
     // Check if we have both character and worldbook data
     if (!task_progress.character_data) {
-      return {
-        success: false,
-        error: "Cannot generate final output: Character data is missing",
-        should_continue: true,
-        reasoning: "Need character data before generating final output"
-      };
+      console.error(`[OUTPUT] Cannot generate final output: Character data is missing`);
+      throw new Error("Cannot generate final output: Character data is missing");
     }
 
     if (!task_progress.worldbook_data || task_progress.worldbook_data.length === 0) {
-      return {
-        success: false,
-        error: "Cannot generate final output: Worldbook data is missing",
-        should_continue: true,
-        reasoning: "Need worldbook data before generating final output"
-      };
+      console.error(`[OUTPUT] Cannot generate final output: Worldbook data is missing`);
+      throw new Error("Cannot generate final output: Worldbook data is missing");
     }
 
     // Build the final output prompt using the context manager
@@ -202,7 +204,8 @@ Generate improved content that addresses the feedback above.`;
       );
 
     } catch (error) {
-      // Don't fake success with fallback - let base class handle failure
+      // Log specific failure and throw error instead of fallback
+      console.error(`[OUTPUT] Final output generation failed:`, error);
       throw new Error(`Final output generation failed: ${error instanceof Error ? error.message : error}`);
     }
   }

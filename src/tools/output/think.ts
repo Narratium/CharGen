@@ -1,19 +1,72 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseToolContext } from "../../models/agent-model";
-import { BaseThinking, EvaluationResult, ImprovementInstruction } from "../base-think";
+import { BaseThinking, EvaluationResult } from "../base-think";
 import { StringOutputParser } from "@langchain/core/output_parsers";
-import { ChatOpenAI } from "@langchain/openai";
-import { ChatOllama } from "@langchain/ollama";
 import { outputPrompts } from "./prompts";
 import { HumanMessage } from "@langchain/core/messages";
+import { SystemMessage } from "@langchain/core/messages";
 
 /**
- * OUTPUT Tool Thinking Module
- * 输出工具的思考模块
+ * OUTPUT Tool Thinking Module - Enhanced with intelligent sub-tool routing
+ * 输出工具的思考模块 - 增强智能子工具路由
  */
 export class OutputThinking extends BaseThinking {
   constructor() {
     super("OUTPUT");
+  }
+
+  /**
+   * NEW: Build routing prompt to intelligently select output sub-tool
+   * 新增：构建路由提示以智能选择输出子工具
+   */
+  protected async buildRoutingPrompt(
+    context: BaseToolContext,
+    availableSubTools: string[]
+  ): Promise<ChatPromptTemplate> {
+    const hasCharacter = !!context.task_progress.character_data;
+    const hasWorldbook = !!context.task_progress.worldbook_data && context.task_progress.worldbook_data.length > 0;
+    const characterQuality = 0;
+    const worldbookQuality = 0;
+    const userRequest = context.conversation_history
+      .filter(msg => msg.role === "user")
+      .slice(-1)[0]?.content || "Generate content";
+    const outputContext = context.conversation_history.length > 0 
+      ? `Conversation with ${context.conversation_history.length} messages`
+      : "No context available";
+
+    // Build available sub-tools description
+    const availableSubToolsDescription = availableSubTools.map(tool => 
+      `- ${tool}: ${this.getSubToolDescription(tool)}`
+    ).join('\n');
+
+    // Use unified message format: front_message + system_prompt + human_prompt
+    const systemPrompt = outputPrompts.SUBTOOL_ROUTING_SYSTEM.replace('{available_sub_tools}', availableSubToolsDescription);
+    const humanPrompt = outputPrompts.SUBTOOL_ROUTING_HUMAN
+      .replace('{has_character}', hasCharacter.toString())
+      .replace('{has_worldbook}', hasWorldbook.toString())
+      .replace('{character_quality}', characterQuality.toString())
+      .replace('{worldbook_quality}', worldbookQuality.toString())
+      .replace('{user_request}', userRequest)
+      .replace('{output_context}', outputContext);
+
+    return ChatPromptTemplate.fromMessages([
+      new SystemMessage(systemPrompt),
+      new HumanMessage(humanPrompt)
+    ]);
+  }
+
+  /**
+   * Get description for each sub-tool
+   * 获取每个子工具的描述
+   */
+  private getSubToolDescription(toolName: string): string {
+    const descriptions: Record<string, string> = {
+      "generateFinalOutput": "Generate complete final output with both character and worldbook",
+      "generateCharacterOutput": "Generate character-only output and display",
+      "generateWorldbookOutput": "Generate worldbook-only output and display", 
+      "generateProgressReport": "Generate progress report when content is incomplete"
+    };
+    return descriptions[toolName] || "Unknown tool";
   }
 
   /**
@@ -40,7 +93,7 @@ Current progress: ${hasCharacter}, ${worldbookCount} worldbook entries.
 Evaluate the quality of this generated content:`;
     
     return ChatPromptTemplate.fromMessages([
-      ["system", outputPrompts.OUTPUT_EVALUATION_SYSTEM],
+      new SystemMessage(outputPrompts.OUTPUT_EVALUATION_SYSTEM),
       new HumanMessage(humanContent)
     ]);
   }
@@ -68,9 +121,9 @@ Evaluation feedback:
 Provide specific improvement instructions for better content generation:`;
     
     return ChatPromptTemplate.fromMessages([
-      ["system", outputPrompts.OUTPUT_IMPROVEMENT_SYSTEM],
-      new HumanMessage(humanContent)]
-    );
+      new SystemMessage(outputPrompts.OUTPUT_IMPROVEMENT_SYSTEM),
+      new HumanMessage(humanContent)
+    ]);
   }
 
   /**
@@ -103,29 +156,10 @@ Provide specific improvement instructions for better content generation:`;
   }
 
   /**
-   * Create LLM instance from config
+   * NEW: Public method to route to sub-tool
+   * 新增：路由到子工具的公共方法
    */
-  private createLLM(config: BaseToolContext["llm_config"]) {
-    if (config.llm_type === "openai") {
-      return new ChatOpenAI({
-        modelName: config.model_name,
-        openAIApiKey: config.api_key,
-        configuration: {
-          baseURL: config.base_url,
-        },
-        temperature: config.temperature,
-        maxTokens: config.max_tokens,
-        streaming: false,
-      });
-    } else if (config.llm_type === "ollama") {
-      return new ChatOllama({
-        model: config.model_name,
-        baseUrl: config.base_url || "http://localhost:11434",
-        temperature: config.temperature,
-        streaming: false,
-      });
-    }
-
-    throw new Error(`Unsupported LLM type: ${config.llm_type}`);
+  async routeToSubTool(context: BaseToolContext, availableSubTools: string[]) {
+    return await super.routeToSubTool(context, availableSubTools);
   }
 } 

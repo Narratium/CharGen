@@ -13,7 +13,7 @@ export class AskUserTool extends BaseRegularTool {
   readonly name = "User Interaction";
   readonly description = "Ask user for additional information or clarification";
 
-  private thinking: AskUserThinking;
+  protected thinking: AskUserThinking;
 
   constructor() {
     super();
@@ -21,10 +21,44 @@ export class AskUserTool extends BaseRegularTool {
   }
 
   /**
-   * Core work logic - generate questions for user
-   * 核心工作逻辑 - 为用户生成问题
+   * Core work logic - generate questions for user using intelligent routing
+   * 核心工作逻辑 - 使用智能路由为用户生成问题
    */
   async doWork(context: BaseToolContext): Promise<any> {
+    // Define available sub-tools (currently single, but prepared for future expansion)
+    const availableSubTools = [
+      "askContextualQuestions"
+    ];
+
+    try {
+      // Use intelligent routing to select the best sub-tool
+      console.log(`🧠 [ASK_USER] Using intelligent routing to select sub-tool...`);
+      const routingDecision = await this.thinking.routeToSubTool(context, availableSubTools);
+      
+      console.log(`🎯 [ASK_USER] Selected sub-tool: ${routingDecision.selected_sub_tool} (confidence: ${routingDecision.confidence}%)`);
+      console.log(`📝 [ASK_USER] Reasoning: ${routingDecision.reasoning}`);
+
+      // Route to the selected sub-tool
+      switch (routingDecision.selected_sub_tool) {
+        case "askContextualQuestions":
+          return await this.performAskContextualQuestions(context);
+        default:
+          // Log unknown sub-tool and throw error instead of fallback
+          console.error(`[ASK_USER] Unknown sub-tool: ${routingDecision.selected_sub_tool}`);
+          throw new Error(`Unknown sub-tool selected: ${routingDecision.selected_sub_tool}`);
+      }
+    } catch (error) {
+      // Log failure and propagate error instead of fallback
+      console.error(`[ASK_USER] Tool execution failed:`, error);
+      throw error; // Re-throw to let base class handle
+    }
+  }
+
+  /**
+   * Main contextual questions functionality
+   * 主要的上下文问题功能
+   */
+  private async performAskContextualQuestions(context: BaseToolContext): Promise<any> {
     try {
       // Generate contextual questions using LLM
       const questions = await this.generateContextualQuestions(context);
@@ -43,7 +77,8 @@ export class AskUserTool extends BaseRegularTool {
       };
       
     } catch (error) {
-      // Don't fake success with fallback - let base class handle failure
+      // Log specific failure and throw error instead of fallback
+      console.error(`[ASK_USER] Question generation failed:`, error);
       throw new Error(`Question generation failed: ${error instanceof Error ? error.message : error}`);
     }
   }
@@ -77,25 +112,11 @@ export class AskUserTool extends BaseRegularTool {
       };
       
     } catch (error) {
-      // Don't fake success with fallback - let base class handle failure
+      // Log improvement failure and throw error instead of fallback
+      console.error(`[ASK_USER] Question improvement failed:`, error);
       throw new Error(`Question improvement failed: ${error instanceof Error ? error.message : error}`);
     }
   }
-
-  /**
-   * Implement thinking capabilities using public methods
-   */
-  async evaluate(result: any, context: BaseToolContext, attempt: number = 1) {
-    return await this.thinking.evaluateResult(result, context, attempt);
-  }
-
-  async generateImprovement(result: any, evaluation: any, context: BaseToolContext) {
-    return await this.thinking.generateImprovementInstruction(result, evaluation, context);
-  }
-
-  protected buildEvaluationPrompt = () => { throw new Error("Use evaluate() instead"); };
-  protected buildImprovementPrompt = () => { throw new Error("Use generateImprovement() instead"); };
-  protected executeThinkingChain = () => { throw new Error("Use thinking.executeThinking() instead"); };
 
   /**
    * Generate intelligent, contextual questions using LLM
@@ -150,8 +171,6 @@ Generate improved questions that address the feedback above.`;
       errorMessage: "Failed to generate improved questions"
     });
   }
-
-
 
   /**
    * Analyze user input patterns for better question generation

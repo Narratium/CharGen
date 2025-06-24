@@ -137,11 +137,7 @@ export class PlanningOperations {
 
     // Get pending tasks that have no dependencies or whose dependencies are met
     const readyTasks = conversation.planning_context.current_tasks.filter(task => 
-      task.status === "pending" && 
-      (task.dependencies.length === 0 || 
-       task.dependencies.every(depId => 
-         conversation.planning_context.completed_tasks.some(ct => ct.id === depId),
-       )),
+      task.status === "pending"
     );
 
     // Sort by priority (highest first)

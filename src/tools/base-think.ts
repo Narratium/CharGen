@@ -1,4 +1,9 @@
+import { ChatOpenAI } from "@langchain/openai";
+import { ChatOllama } from "@langchain/ollama";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { StringOutputParser } from "@langchain/core/output_parsers";
+import { HumanMessage } from "@langchain/core/messages";
+import { SystemMessage } from "@langchain/core/messages";
 import { BaseToolContext, PlanToolContext } from "../models/agent-model";
 
 // ============================================================================
@@ -27,7 +32,18 @@ export interface ImprovementInstruction {
 }
 
 /**
+ * NEW: Sub-tool routing decision interface
+ * 新增：子工具路由决策接口
+ */
+export interface SubToolRoutingDecision {
+  selected_sub_tool: string;       // 选择的子工具名称
+  reasoning: string;               // 选择理由
+  confidence: number;              // 决策confidence (0-100)
+}
+
+/**
  * Simple thinking capability - just evaluate and improve
+ * Enhanced with intelligent sub-tool routing
  */
 export abstract class BaseThinking {
   protected toolName: string;
@@ -35,6 +51,27 @@ export abstract class BaseThinking {
 
   constructor(toolName: string) {
     this.toolName = toolName;
+  }
+
+  /**
+   * NEW: Intelligent sub-tool routing - decide which sub-tool to use
+   * 新增：智能子工具路由 - 决定使用哪个子工具
+   */
+  async routeToSubTool(
+    context: BaseToolContext | PlanToolContext,
+    availableSubTools: string[]
+  ): Promise<SubToolRoutingDecision> {
+    try {
+      const prompt = await this.buildRoutingPrompt(context, availableSubTools);
+      const response = await this.executeThinkingChain(prompt, context);
+      console.log("response",response)
+      
+      return this.parseRoutingResponse(response, availableSubTools);
+    } catch (error) {
+      // Log failure instead of creating fallback
+      console.error(`[${this.toolName}] Sub-tool routing failed:`, error);
+      throw new Error(`Sub-tool routing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   /**
@@ -49,11 +86,11 @@ export abstract class BaseThinking {
     try {
       const prompt = this.buildEvaluationPrompt(result, context, attempt);
       const response = await this.executeThinkingChain(prompt, context);
-      
       return this.parseEvaluationResponse(response);
     } catch (error) {
-      console.warn(`[${this.toolName}] Evaluation failed:`, error);
-      return this.createFallbackEvaluation();
+      // Log failure instead of creating fallback
+      console.error(`[${this.toolName}] Evaluation failed:`, error);
+      throw new Error(`Evaluation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -72,8 +109,9 @@ export abstract class BaseThinking {
       
       return this.parseImprovementResponse(response);
     } catch (error) {
-      console.warn(`[${this.toolName}] Improvement generation failed:`, error);
-      return this.createFallbackImprovement(evaluation);
+      // Log failure instead of creating fallback
+      console.error(`[${this.toolName}] Improvement generation failed:`, error);
+      throw new Error(`Improvement generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -93,18 +131,60 @@ export abstract class BaseThinking {
     context: BaseToolContext | PlanToolContext
   ): ChatPromptTemplate;
 
-  protected abstract executeThinkingChain(
-    prompt: ChatPromptTemplate,
-    context: BaseToolContext | PlanToolContext
-  ): Promise<string>;
+  /**
+   * NEW: Abstract method for sub-tool routing prompt
+   * 新增：子工具路由提示的抽象方法
+   */
+  protected abstract buildRoutingPrompt(
+    context: BaseToolContext | PlanToolContext,
+    availableSubTools: string[]
+  ): Promise<ChatPromptTemplate>;
+
+  /**
+   * Parse sub-tool routing response
+   * 解析子工具路由响应
+   */
+  protected parseRoutingResponse(
+    response: string,
+    availableSubTools: string[]
+  ): SubToolRoutingDecision {
+    try {
+      // Extract JSON from response (handle code blocks)
+      const cleanedResponse = this.extractJsonFromResponse(response);
+      const parsed = JSON.parse(cleanedResponse);
+      const selectedTool = parsed.selected_sub_tool || availableSubTools[0];
+      
+      // Validate that selected tool is available
+      if (!availableSubTools.includes(selectedTool)) {
+        console.warn(`Selected sub-tool "${selectedTool}" not available, using first available`);
+        return {
+          selected_sub_tool: availableSubTools[0],
+          reasoning: `Fallback: Original selection "${selectedTool}" not available`,
+          confidence: 50
+        };
+      }
+
+      return {
+        selected_sub_tool: selectedTool,
+        reasoning: parsed.reasoning || `Selected ${selectedTool}`,
+        confidence: Math.min(Math.max(parsed.confidence || 80, 0), 100)
+      };
+    } catch (error) {
+      // Log failure and throw error instead of fallback
+      console.error(`[${this.toolName}] Failed to parse routing response:`, error);
+      console.error(`[${this.toolName}] Original response:`, response);
+      throw new Error(`Failed to parse routing response: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
 
   /**
    * Parse evaluation response into structured result
    */
   protected parseEvaluationResponse(response: string): EvaluationResult {
     try {
-      // Try to parse as JSON first
-      const parsed = JSON.parse(response);
+      // Extract JSON from response (handle code blocks)
+      const cleanedResponse = this.extractJsonFromResponse(response);
+      const parsed = JSON.parse(cleanedResponse);
       return {
         is_satisfied: parsed.is_satisfied || false,
         quality_score: parsed.quality_score || 60,
@@ -113,18 +193,10 @@ export abstract class BaseThinking {
         next_action: parsed.next_action || "continue"
       };
     } catch (error) {
-      // Fallback to text parsing
-      const isSatisfied = response.toLowerCase().includes("satisfied") || 
-                         response.toLowerCase().includes("good enough") ||
-                         response.toLowerCase().includes("完成");
-      
-      return {
-        is_satisfied: isSatisfied,
-        quality_score: isSatisfied ? 85 : 60,
-        reasoning: response,
-        improvement_needed: this.extractImprovements(response),
-        next_action: isSatisfied ? "complete" : "improve"
-      };
+      // Log failure and throw error instead of fallback
+      console.error(`[${this.toolName}] Failed to parse evaluation response:`, error);
+      console.error(`[${this.toolName}] Original response:`, response);
+      throw new Error(`Failed to parse evaluation response: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -133,7 +205,9 @@ export abstract class BaseThinking {
    */
   protected parseImprovementResponse(response: string): ImprovementInstruction {
     try {
-      const parsed = JSON.parse(response);
+      // Extract JSON from response (handle code blocks)
+      const cleanedResponse = this.extractJsonFromResponse(response);
+      const parsed = JSON.parse(cleanedResponse);
       return {
         focus_areas: parsed.focus_areas || [],
         specific_requests: parsed.specific_requests || [],
@@ -141,60 +215,99 @@ export abstract class BaseThinking {
         max_attempts: this.maxImprovementAttempts
       };
     } catch (error) {
-      return {
-        focus_areas: ["整体质量"],
-        specific_requests: [response],
-        quality_target: 80,
-        max_attempts: this.maxImprovementAttempts
-      };
+      // Log failure and throw error instead of fallback
+      console.error(`[${this.toolName}] Failed to parse improvement response:`, error);
+      console.error(`[${this.toolName}] Original response:`, response);
+      throw new Error(`Failed to parse improvement response: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
   /**
-   * Create fallback evaluation when thinking fails
+   * Shared LLM creation method - eliminates duplication across all thinking modules
+   * 共享的LLM创建方法 - 消除所有思考模块中的重复代码
    */
-  protected createFallbackEvaluation(): EvaluationResult {
-    return {
-      is_satisfied: false,
-      quality_score: 50,
-      reasoning: "思考系统暂时不可用，建议人工检查",
-      improvement_needed: ["需要人工验证"],
-      next_action: "continue"
-    };
+  protected createLLM(config: BaseToolContext["llm_config"] | PlanToolContext["llm_config"]) {
+    if (config.llm_type === "openai") {
+      return new ChatOpenAI({
+        modelName: config.model_name,
+        openAIApiKey: config.api_key,
+        configuration: {
+          baseURL: config.base_url,
+        },
+        temperature: config.temperature,
+        maxTokens: config.max_tokens,
+        streaming: false,
+      });
+    } else if (config.llm_type === "ollama") {
+      return new ChatOllama({
+        model: config.model_name,
+        baseUrl: config.base_url || "http://localhost:11434",
+        temperature: config.temperature,
+        streaming: false,
+      });
+    }
+
+    throw new Error(`Unsupported LLM type: ${config.llm_type}`);
   }
 
   /**
-   * Create fallback improvement instruction
+   * Shared thinking chain execution - eliminates duplication across all thinking modules
+   * 共享的思考链执行 - 消除所有思考模块中的重复代码
    */
-  protected createFallbackImprovement(evaluation: EvaluationResult): ImprovementInstruction {
-    return {
-      focus_areas: evaluation.improvement_needed,
-      specific_requests: ["提高整体质量", "增加更多细节"],
-      quality_target: 80,
-      max_attempts: 2
-    };
+  protected async executeThinkingChain(
+    prompt: ChatPromptTemplate,
+    context: BaseToolContext | PlanToolContext
+  ): Promise<string> {
+    try {
+      const llm = this.createLLM(context.llm_config);
+      const chain = prompt.pipe(llm).pipe(new StringOutputParser());
+      return await chain.invoke({});
+    } catch (error) {
+      console.warn(`[${this.toolName}] Thinking chain failed:`, error);
+      return "Unable to process thinking at this time.";
+    }
   }
 
   /**
-   * Extract improvement suggestions from free text
+   * Extract JSON from response - handles code blocks and formatting
+   * 从响应中提取JSON - 处理代码块和格式化
    */
-  protected extractImprovements(text: string): string[] {
-    const improvements = [];
-    const patterns = [
-      /需要(\w+)/g,
-      /应该(\w+)/g,
-      /建议(\w+)/g,
-      /improve\s+(\w+)/gi,
-      /需要改进(\w+)/g
-    ];
+  protected extractJsonFromResponse(response: string): string {
+    let cleaned = response.trim();
     
-    for (const pattern of patterns) {
-      const matches = text.matchAll(pattern);
-      for (const match of matches) {
-        improvements.push(match[1]);
+    // Remove code block markers
+    if (cleaned.startsWith('```json')) {
+      cleaned = cleaned.substring(7);
+    } else if (cleaned.startsWith('```')) {
+      cleaned = cleaned.substring(3);
+    }
+    
+    if (cleaned.endsWith('```')) {
+      cleaned = cleaned.substring(0, cleaned.length - 3);
+    }
+    
+    // Find JSON boundaries
+    let jsonStart = -1;
+    let jsonEnd = -1;
+    
+    for (let i = 0; i < cleaned.length; i++) {
+      if (cleaned[i] === '{' || cleaned[i] === '[') {
+        jsonStart = i;
+        break;
       }
     }
     
-    return improvements.slice(0, 5); // 最多5个改进建议
+    for (let i = cleaned.length - 1; i >= 0; i--) {
+      if (cleaned[i] === '}' || cleaned[i] === ']') {
+        jsonEnd = i + 1;
+        break;
+      }
+    }
+    
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonStart < jsonEnd) {
+      return cleaned.substring(jsonStart, jsonEnd);
+    }
+    
+    return cleaned.trim();
   }
 } 

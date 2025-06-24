@@ -115,8 +115,6 @@ export interface PlanTask {
   id: string;
   description: string;
   tool: ToolType;
-  parameters: Record<string, any>;
-  dependencies: string[];
   status: "pending" | "executing" | "completed" | "failed" | "obsolete";
   result?: any;
   reasoning?: string;

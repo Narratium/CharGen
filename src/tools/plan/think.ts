@@ -1,19 +1,68 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { PlanToolContext } from "../../models/agent-model";
-import { BaseThinking, EvaluationResult, ImprovementInstruction } from "../base-think";
-import { StringOutputParser } from "@langchain/core/output_parsers";
-import { ChatOpenAI } from "@langchain/openai";
-import { ChatOllama } from "@langchain/ollama";
+import { BaseThinking, EvaluationResult } from "../base-think";
+import { StringOutputParser } from "@langchain/core/output_parsers";  
 import { planPrompts } from "./prompts";
 import { HumanMessage } from "@langchain/core/messages";
+import { SystemMessage } from "@langchain/core/messages";
 
 /**
- * PLAN Tool Thinking Module
- * 计划工具的思考模块
+ * PLAN Tool Thinking Module - Enhanced with intelligent sub-tool routing
+ * 计划工具的思考模块 - 增强智能子工具路由
  */
 export class PlanThinking extends BaseThinking {
   constructor() {
     super("PLAN");
+  }
+
+  /**
+   * NEW: Build routing prompt to intelligently select plan sub-tool
+   * 新增：构建路由提示以智能选择计划子工具
+   */
+  protected async buildRoutingPrompt(
+    context: PlanToolContext,
+    availableSubTools: string[]
+  ): Promise<ChatPromptTemplate> {
+    const hasCharacter = !!context.task_progress.character_data;
+    const hasWorldbook = !!context.task_progress.worldbook_data && context.task_progress.worldbook_data.length > 0;
+    const currentTasksCount = context.planning_context.current_tasks.length;
+    const completedTasksCount = context.planning_context.completed_tasks.length;
+    const hasFailures = Object.values(context.planning_context.context.failure_history.failed_tool_attempts).some(count => count > 0);
+    const userRequest = context.planning_context.context.user_request;
+
+    // Build available sub-tools description
+    const availableSubToolsDescription = availableSubTools.map(tool => 
+      `- ${tool}: ${this.getSubToolDescription(tool)}`
+    ).join('\n');
+
+    // Use unified message format: front_message + system_prompt + human_prompt
+    const systemPrompt = planPrompts.SUBTOOL_ROUTING_SYSTEM.replace('{available_sub_tools}', availableSubToolsDescription);
+    const humanPrompt = planPrompts.SUBTOOL_ROUTING_HUMAN
+      .replace('{current_tasks_count}', currentTasksCount.toString())
+      .replace('{completed_tasks_count}', completedTasksCount.toString())
+      .replace('{has_character}', hasCharacter.toString())
+      .replace('{has_worldbook}', hasWorldbook.toString())
+      .replace('{has_failures}', hasFailures.toString())
+      .replace('{user_request}', userRequest);
+
+    return ChatPromptTemplate.fromMessages([
+      new SystemMessage(systemPrompt),
+      new HumanMessage(humanPrompt)
+    ]);
+  }
+
+  /**
+   * Get description for each sub-tool
+   * 获取每个子工具的描述
+   */
+  private getSubToolDescription(toolName: string): string {
+    const descriptions: Record<string, string> = {
+      "createInitialPlan": "Create initial execution plan with goals and tasks",
+      "analyzeFailures": "Analyze recent failures and suggest alternatives", 
+      "evaluateProgress": "Evaluate overall progress and completion status",
+      "updatePlan": "Update existing plan with new tasks and adjustments"
+    };
+    return descriptions[toolName] || "Unknown tool";
   }
 
   /**
@@ -43,7 +92,7 @@ Current tasks: ${currentTasksCount} pending, ${completedTasksCount} completed.
 Evaluate the quality of this planning decision:`;
     
     return ChatPromptTemplate.fromMessages([
-      ["system", planPrompts.PLAN_EVALUATION_SYSTEM],
+      new SystemMessage(planPrompts.PLAN_EVALUATION_SYSTEM),
       new HumanMessage(humanContent)
     ]);
   }
@@ -77,7 +126,7 @@ Current context:
 Provide specific improvement instructions for better planning:`;
     
     return ChatPromptTemplate.fromMessages([
-      ["system", planPrompts.PLAN_IMPROVEMENT_SYSTEM],
+      new SystemMessage(planPrompts.PLAN_IMPROVEMENT_SYSTEM),
       new HumanMessage(humanContent)
     ]);
   }
@@ -112,29 +161,10 @@ Provide specific improvement instructions for better planning:`;
   }
 
   /**
-   * Create LLM instance from config
+   * NEW: Public method to route to sub-tool
+   * 新增：路由到子工具的公共方法
    */
-  private createLLM(config: PlanToolContext["llm_config"]) {
-    if (config.llm_type === "openai") {
-      return new ChatOpenAI({
-        modelName: config.model_name,
-        openAIApiKey: config.api_key,
-        configuration: {
-          baseURL: config.base_url,
-        },
-        temperature: config.temperature,
-        maxTokens: config.max_tokens,
-        streaming: false,
-      });
-    } else if (config.llm_type === "ollama") {
-      return new ChatOllama({
-        model: config.model_name,
-        baseUrl: config.base_url || "http://localhost:11434",
-        temperature: config.temperature,
-        streaming: false,
-      });
-    }
-
-    throw new Error(`Unsupported LLM type: ${config.llm_type}`);
+  async routeToSubTool(context: PlanToolContext, availableSubTools: string[]) {
+    return await super.routeToSubTool(context, availableSubTools);
   }
 } 

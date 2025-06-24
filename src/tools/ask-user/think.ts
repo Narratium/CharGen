@@ -1,19 +1,62 @@
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { BaseToolContext } from "../../models/agent-model";
-import { BaseThinking, EvaluationResult, ImprovementInstruction } from "../base-think";
+import { BaseThinking, EvaluationResult } from "../base-think";
 import { StringOutputParser } from "@langchain/core/output_parsers";
-import { ChatOpenAI } from "@langchain/openai";
-import { ChatOllama } from "@langchain/ollama";
 import { askUserPrompts } from "./prompts";
 import { HumanMessage } from "@langchain/core/messages";
+import { SystemMessage } from "@langchain/core/messages";
 
 /**
- * ASK_USER Tool Thinking Module
- * 询问用户工具的思考模块
+ * ASK_USER Tool Thinking Module - Enhanced with routing capability
+ * 询问用户工具的思考模块 - 增强路由功能
  */
 export class AskUserThinking extends BaseThinking {
   constructor() {
     super("ASK_USER");
+  }
+
+  /**
+   * Build routing prompt for ask-user sub-tools (prepared for future expansion)
+   * 为询问用户子工具构建路由提示（为未来扩展做准备）
+   */
+  protected async buildRoutingPrompt(
+    context: BaseToolContext,
+    availableSubTools: string[]
+  ): Promise<ChatPromptTemplate> {
+    const userRequest = context.conversation_history
+      .filter(msg => msg.role === "user")
+      .slice(-1)[0]?.content || "Generate content";
+    const infoNeeded = "Additional information for character/worldbook generation";
+    const progressContext = `Character exists: ${!!context.task_progress.character_data}, 
+      Worldbook entries: ${context.task_progress.worldbook_data?.length || 0}`;
+
+    // Build available sub-tools description
+    const availableSubToolsDescription = availableSubTools.map(tool => 
+      `- ${tool}: ${this.getSubToolDescription(tool)}`
+    ).join('\n');
+
+    // Use unified message format: front_message + system_prompt + human_prompt
+    const systemPrompt = askUserPrompts.SUBTOOL_ROUTING_SYSTEM.replace('{available_sub_tools}', availableSubToolsDescription);
+    const humanPrompt = askUserPrompts.SUBTOOL_ROUTING_HUMAN
+      .replace('{user_request}', userRequest)
+      .replace('{info_needed}', infoNeeded)
+      .replace('{progress_context}', progressContext);
+
+    return ChatPromptTemplate.fromMessages([
+      new SystemMessage(systemPrompt),
+      new HumanMessage(humanPrompt)
+    ]);
+  }
+
+  /**
+   * Get description for each sub-tool
+   * 获取每个子工具的描述
+   */
+  private getSubToolDescription(toolName: string): string {
+    const descriptions: Record<string, string> = {
+      "askContextualQuestions": "Generate contextual questions based on current progress"
+    };
+    return descriptions[toolName] || "Unknown user interaction tool";
   }
 
   /**
@@ -28,6 +71,7 @@ export class AskUserThinking extends BaseThinking {
     // Pre-build the human message content to avoid template conflicts
     const hasCharacter = context.task_progress.character_data ? 'Character exists' : 'No character';
     const worldbookCount = context.task_progress.worldbook_data?.length || 0;
+    const questionLength = result.message?.length || 0;
     
     const humanContent = `Current attempt: ${attempt}
 
@@ -36,11 +80,12 @@ ${JSON.stringify(result, null, 2)}
 
 Context: The user is working on character/worldbook generation.
 Current progress: ${hasCharacter}, ${worldbookCount} worldbook entries.
+Question length: ${questionLength} characters.
 
-Evaluate the quality of these questions:`;
+Evaluate the quality and relevance of these questions:`;
     
     return ChatPromptTemplate.fromMessages([
-      ["system", askUserPrompts.ASK_USER_EVALUATION_SYSTEM],
+      new SystemMessage(askUserPrompts.ASK_USER_EVALUATION_SYSTEM),
       new HumanMessage(humanContent)
     ]);
   }
@@ -65,10 +110,10 @@ Evaluation feedback:
 - Reasoning: ${evaluation.reasoning}
 - Issues found: ${issuesFound}
 
-Provide specific improvement instructions:`;
+Provide specific improvement instructions for better questions:`;
     
     return ChatPromptTemplate.fromMessages([
-      ["system", askUserPrompts.ASK_USER_IMPROVEMENT_SYSTEM],
+      new SystemMessage(askUserPrompts.ASK_USER_IMPROVEMENT_SYSTEM),
       new HumanMessage(humanContent)
     ]);
   }
@@ -102,34 +147,10 @@ Provide specific improvement instructions:`;
     return await this.generateImprovement(result, evaluation, context);
   }
 
-  async executeThinking(prompt: any, context: BaseToolContext) {
-    return await this.executeThinkingChain(prompt, context);
-  }
-
   /**
-   * Create LLM instance from config
+   * Public method to route to sub-tool
    */
-  private createLLM(config: BaseToolContext["llm_config"]) {
-    if (config.llm_type === "openai") {
-      return new ChatOpenAI({
-        modelName: config.model_name,
-        openAIApiKey: config.api_key,
-        configuration: {
-          baseURL: config.base_url,
-        },
-        temperature: config.temperature,
-        maxTokens: config.max_tokens,
-        streaming: false,
-      });
-    } else if (config.llm_type === "ollama") {
-      return new ChatOllama({
-        model: config.model_name,
-        baseUrl: config.base_url || "http://localhost:11434",
-        temperature: config.temperature,
-        streaming: false,
-      });
-    }
-
-    throw new Error(`Unsupported LLM type: ${config.llm_type}`);
+  async routeToSubTool(context: BaseToolContext, availableSubTools: string[]) {
+    return await super.routeToSubTool(context, availableSubTools);
   }
 } 

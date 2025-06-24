@@ -11,7 +11,9 @@ import {
   ConversationMessage,
 } from "../models/agent-model";
 import { BaseThinking, ImprovementInstruction } from "./base-think";
-import { AgentConversationOperations } from "@/data/agent/agent-conversation-operations";
+import { AgentConversationOperations } from "../data/agent/agent-conversation-operations";
+import { HumanMessage } from "@langchain/core/messages";
+import { SystemMessage } from "@langchain/core/messages";
 
 // ============================================================================
 // SIMPLE TOOL ARCHITECTURE WITH SELF-IMPROVEMENT
@@ -47,13 +49,16 @@ export interface PlanTool extends Tool {
  * Enhanced Regular Tool with self-improvement
  * 具备自我改进能力的常规工具
  */
-export abstract class BaseRegularTool extends BaseThinking implements RegularTool {
+export abstract class BaseRegularTool implements RegularTool {
   abstract readonly toolType: ToolType;
   abstract readonly name: string;
   abstract readonly description: string;
 
+  protected maxImprovementAttempts: number = 3; // 最多改进3次
+  protected abstract thinking: BaseThinking; // 思考模块 - 子类必须实现
+  
   constructor() {
-    super("BaseTool");
+    // Base tool initialization
   }
 
   /**
@@ -67,7 +72,7 @@ export abstract class BaseRegularTool extends BaseThinking implements RegularToo
       
       // Self-improvement loop
       while (attempt <= this.maxImprovementAttempts) {
-        const evaluation = await this.evaluate(result, context, attempt);
+        const evaluation = await this.thinking.evaluate(result, context, attempt);
         
         // If good enough, return
         if (evaluation.is_satisfied || evaluation.next_action === "complete") {
@@ -81,7 +86,7 @@ export abstract class BaseRegularTool extends BaseThinking implements RegularToo
         if (evaluation.next_action === "improve" && attempt < this.maxImprovementAttempts) {
           console.log(`🔄 [${this.name}] Quality: ${evaluation.quality_score}/100. Improving...`);
           
-          const instruction = await this.generateImprovement(result, evaluation, context);
+          const instruction = await this.thinking.generateImprovement(result, evaluation, context);
           result = await this.improve(result, instruction, context);
           attempt++;
         } else {
@@ -125,6 +130,8 @@ export abstract class BaseRegularTool extends BaseThinking implements RegularToo
   validate(context: BaseToolContext): boolean {
     return !!(context.conversation_id && context.task_progress);
   }
+
+
 
   // ============================================================================
   // HELPER METHODS - Common functionality for all tools
@@ -172,8 +179,8 @@ export abstract class BaseRegularTool extends BaseThinking implements RegularToo
     
     // Create template that can accept variables
     return ChatPromptTemplate.fromMessages([
-      ["system", systemPrompt],
-      ["human", fullContext + "\n\n" + humanTemplate],
+      new SystemMessage(systemPrompt),
+      new HumanMessage(fullContext + "\n\n" + humanTemplate),
     ]);
   }
 
@@ -381,13 +388,16 @@ export abstract class BaseRegularTool extends BaseThinking implements RegularToo
  * Enhanced Plan Tool with self-improvement
  * 具备自我改进能力的计划工具
  */
-export abstract class BasePlanTool extends BaseThinking implements PlanTool {
+export abstract class BasePlanTool implements PlanTool {
   abstract readonly toolType: ToolType;
   abstract readonly name: string;
   abstract readonly description: string;
 
+  protected maxImprovementAttempts: number = 3; // 最多改进3次
+  protected abstract thinking: BaseThinking; // 思考模块 - 子类必须实现
+
   constructor() {
-    super("BasePlanTool");
+    // Base plan tool initialization
   }
 
   /**
@@ -401,7 +411,7 @@ export abstract class BasePlanTool extends BaseThinking implements PlanTool {
       
       // Self-improvement loop
       while (attempt <= this.maxImprovementAttempts) {
-        const evaluation = await this.evaluate(result, context, attempt);
+        const evaluation = await this.thinking.evaluate(result, context, attempt);
         
         // If good enough, return
         if (evaluation.is_satisfied || evaluation.next_action === "complete") {
@@ -415,7 +425,7 @@ export abstract class BasePlanTool extends BaseThinking implements PlanTool {
         if (evaluation.next_action === "improve" && attempt < this.maxImprovementAttempts) {
           console.log(`🔄 [${this.name}] Quality: ${evaluation.quality_score}/100. Improving...`);
           
-          const instruction = await this.generateImprovement(result, evaluation, context);
+          const instruction = await this.thinking.generateImprovement(result, evaluation, context);
           result = await this.improve(result, instruction, context);
           attempt++;
         } else {
@@ -460,6 +470,8 @@ export abstract class BasePlanTool extends BaseThinking implements PlanTool {
   validate(context: PlanToolContext): boolean {
     return !!(context.conversation_id && context.task_progress && context.planning_context);
   }
+
+
 
   /**
    * Create unified failure result for plan tools
@@ -537,8 +549,8 @@ export abstract class BasePlanTool extends BaseThinking implements PlanTool {
     
     // Create template that can accept variables
     return ChatPromptTemplate.fromMessages([
-      ["system", systemPrompt],
-      ["human", fullContext + "\n\n" + humanTemplate],
+      new SystemMessage(systemPrompt),
+      new HumanMessage(fullContext + "\n\n" + humanTemplate)
     ]);
   }
 

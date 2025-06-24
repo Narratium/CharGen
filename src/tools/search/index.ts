@@ -12,8 +12,7 @@ export class SearchTool extends BaseRegularTool {
   readonly toolType = ToolType.SEARCH;
   readonly name = "Inspiration Seeker";
   readonly description = "Search for inspiration, references, and creative ideas";
-
-  private thinking: SearchThinking;
+  protected thinking: SearchThinking;
 
   constructor() {
     super();
@@ -21,10 +20,44 @@ export class SearchTool extends BaseRegularTool {
   }
 
   /**
-   * Core work logic - search and generate inspiration
-   * 核心工作逻辑 - 搜索并生成灵感
+   * Core work logic - search and generate inspiration using intelligent routing
+   * 核心工作逻辑 - 使用智能路由搜索并生成灵感
    */
   async doWork(context: BaseToolContext): Promise<any> {
+    // Define available sub-tools (currently single, but prepared for future expansion)
+    const availableSubTools = [
+      "searchAndInspire"
+    ];
+
+    try {
+      // Use intelligent routing to select the best sub-tool
+      console.log(`🧠 [SEARCH] Using intelligent routing to select sub-tool...`);
+      const routingDecision = await this.thinking.routeToSubTool(context, availableSubTools);
+      
+      console.log(`🎯 [SEARCH] Selected sub-tool: ${routingDecision.selected_sub_tool} (confidence: ${routingDecision.confidence}%)`);
+      console.log(`📝 [SEARCH] Reasoning: ${routingDecision.reasoning}`);
+
+      // Route to the selected sub-tool
+      switch (routingDecision.selected_sub_tool) {
+        case "searchAndInspire":
+          return await this.performSearchAndInspire(context);
+        default:
+          // Log unknown sub-tool and throw error instead of fallback
+          console.error(`[SEARCH] Unknown sub-tool: ${routingDecision.selected_sub_tool}`);
+          throw new Error(`Unknown sub-tool selected: ${routingDecision.selected_sub_tool}`);
+      }
+    } catch (error) {
+      // Log failure and propagate error instead of fallback
+      console.error(`[SEARCH] Tool execution failed:`, error);
+      throw error; // Re-throw to let base class handle
+    }
+  }
+
+  /**
+   * Main search and inspiration functionality
+   * 主要搜索和灵感功能
+   */
+  private async performSearchAndInspire(context: BaseToolContext): Promise<any> {
     try {
       // Generate search queries using LLM
       const searchQueries = await this.generateSearchQueries(context);
@@ -51,7 +84,8 @@ export class SearchTool extends BaseRegularTool {
       return result;
 
     } catch (error) {
-      // Don't fake success with fallback - let base class handle failure
+      // Log specific failure and throw error instead of fallback
+      console.error(`[SEARCH] Search operation failed:`, error);
       throw new Error(`Search operation failed: ${error instanceof Error ? error.message : error}`);
     }
   }
@@ -88,25 +122,11 @@ export class SearchTool extends BaseRegularTool {
       };
       
     } catch (error) {
-      // Don't fake success with fallback - let base class handle failure
+      // Log improvement failure and throw error instead of fallback
+      console.error(`[SEARCH] Search improvement failed:`, error);
       throw new Error(`Search improvement failed: ${error instanceof Error ? error.message : error}`);
     }
   }
-
-  /**
-   * Implement thinking capabilities using public methods
-   */
-  async evaluate(result: any, context: BaseToolContext, attempt: number = 1) {
-    return await this.thinking.evaluateResult(result, context, attempt);
-  }
-
-  async generateImprovement(result: any, evaluation: any, context: BaseToolContext) {
-    return await this.thinking.generateImprovementInstruction(result, evaluation, context);
-  }
-
-  protected buildEvaluationPrompt = () => { throw new Error("Use evaluate() instead"); };
-  protected buildImprovementPrompt = () => { throw new Error("Use generateImprovement() instead"); };
-  protected executeThinkingChain = () => { throw new Error("Use thinking methods directly"); };
 
   /**
    * Generate improved search based on feedback
@@ -173,8 +193,6 @@ Generate improved inspiration content that addresses the feedback above.`;
       throw new Error(`Failed to generate search queries: ${error instanceof Error ? error.message : error}`);
     }
   }
-
-
 
   /**
    * Perform actual web searches using DuckDuckGo

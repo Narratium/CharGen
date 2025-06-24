@@ -14,7 +14,7 @@ export class PlanTool extends BasePlanTool {
   readonly name = "Plan Manager";
   readonly description = "Create initial plans and update execution strategy based on current progress";
 
-  private thinking: PlanThinking;
+  protected thinking: PlanThinking;
 
   constructor() {
     super();
@@ -22,24 +22,45 @@ export class PlanTool extends BasePlanTool {
   }
 
   /**
-   * Core work logic - create and manage plans
-   * 核心工作逻辑 - 创建和管理计划
+   * Core work logic - create and manage plans using intelligent routing
+   * 核心工作逻辑 - 使用智能路由创建和管理计划
    */
   async doWork(context: PlanToolContext): Promise<any> {
-    // Determine what type of planning is needed based on current state
-    const needsInitialPlan = context.planning_context.current_tasks.length === 0;
-    const hasFailures = Object.values(context.planning_context.context.failure_history.failed_tool_attempts).some(count => count > 0);
-    const hasCharacter = !!context.task_progress.character_data;
-    const hasWorldbook = !!context.task_progress.worldbook_data && context.task_progress.worldbook_data.length > 0;
+    // Define available sub-tools
+    const availableSubTools = [
+      "createInitialPlan",
+      "analyzeFailures", 
+      "evaluateProgress",
+      "updatePlan"
+    ];
 
-    if (needsInitialPlan) {
-      return await this.createInitialPlan(context);
-    } else if (hasFailures) {
-      return await this.analyzeFailures(context);
-    } else if (hasCharacter && hasWorldbook) {
-      return await this.evaluateProgress(context);
-    } else {
-      return await this.updatePlan(context);
+    try {
+      // Use intelligent routing to select the best sub-tool
+      console.log(`🧠 [PLAN] Using intelligent routing to select sub-tool...`);
+      const routingDecision = await this.thinking.routeToSubTool(context, availableSubTools);
+      
+      console.log(`🎯 [PLAN] Selected sub-tool: ${routingDecision.selected_sub_tool} (confidence: ${routingDecision.confidence}%)`);
+      console.log(`📝 [PLAN] Reasoning: ${routingDecision.reasoning}`);
+
+      // Route to the selected sub-tool
+      switch (routingDecision.selected_sub_tool) {
+        case "createInitialPlan":
+          return await this.createInitialPlan(context);
+        case "analyzeFailures":
+          return await this.analyzeFailures(context);
+        case "evaluateProgress":
+          return await this.evaluateProgress(context);
+        case "updatePlan":
+          return await this.updatePlan(context);
+        default:
+          // Log unknown sub-tool and throw error instead of fallback
+          console.error(`[PLAN] Unknown sub-tool: ${routingDecision.selected_sub_tool}`);
+          throw new Error(`Unknown sub-tool selected: ${routingDecision.selected_sub_tool}`);
+      }
+    } catch (error) {
+      // Log failure and propagate error instead of fallback
+      console.error(`[PLAN] Tool execution failed:`, error);
+      throw error; // Re-throw to let base class handle
     }
   }
 
@@ -69,25 +90,11 @@ export class PlanTool extends BasePlanTool {
       };
       
     } catch (error) {
-      console.warn(`[PLAN] Improvement failed, using original result:`, error);
-      return currentResult;
+      // Log improvement failure and throw error instead of fallback
+      console.error(`[PLAN] Plan improvement failed:`, error);
+      throw new Error(`Plan improvement failed: ${error instanceof Error ? error.message : error}`);
     }
   }
-
-  /**
-   * Implement thinking capabilities using public methods
-   */
-  async evaluate(result: any, context: PlanToolContext, attempt: number = 1) {
-    return await this.thinking.evaluateResult(result, context, attempt);
-  }
-
-  async generateImprovement(result: any, evaluation: any, context: PlanToolContext) {
-    return await this.thinking.generateImprovementInstruction(result, evaluation, context);
-  }
-
-  protected buildEvaluationPrompt = () => { throw new Error("Use evaluate() instead"); };
-  protected buildImprovementPrompt = () => { throw new Error("Use generateImprovement() instead"); };
-  protected executeThinkingChain = () => { throw new Error("Use thinking methods directly"); };
 
   /**
    * Generate improved plan based on feedback
@@ -151,8 +158,6 @@ Generate improved planning that addresses the feedback above.`;
         await PlanningOperations.addTask(context.conversation_id, {
           description: taskData.description,
           tool: taskData.tool,
-          parameters: taskData.parameters || {},
-          dependencies: taskData.dependencies || [],
           status: "pending",
           reasoning: taskData.reasoning,
           priority: taskData.priority || 5,
@@ -189,8 +194,6 @@ Generate improved planning that addresses the feedback above.`;
         await PlanningOperations.addTask(context.conversation_id, {
           description: taskData.description,
           tool: taskData.tool,
-          parameters: taskData.parameters || {},
-          dependencies: taskData.dependencies || [],
           status: "pending",
           reasoning: taskData.reasoning,
           priority: taskData.priority || 5,

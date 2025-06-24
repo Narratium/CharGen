@@ -65,8 +65,6 @@ export class AgentEngine {
     await PlanningOperations.addTask(this.conversationId, {
       description: "Create initial execution plan",
       tool: ToolType.PLAN,
-      parameters: { type: "initial" },
-      dependencies: [],
       status: "pending",
       priority: 10, // Highest priority
       reasoning: "Need to create an execution plan before starting",
@@ -126,13 +124,7 @@ export class AgentEngine {
           content: userInput,
           message_type: "user_input",
         });
-
-        // Analyze if user input requires complete replan
-        const needsCompleteReplan = await this.analyzeUserInputForReplan(userInput);
-        if (needsCompleteReplan) {
-          await this.createCompleteReplanTask(userInput);
-        }
-
+        
         await AgentConversationOperations.updateStatus(this.conversationId, AgentStatus.THINKING);
         continue;
       }
@@ -257,8 +249,6 @@ export class AgentEngine {
     await PlanningOperations.addTask(this.conversationId, {
       description: "Evaluate progress and update execution plan",
       tool: ToolType.PLAN,
-      parameters: { type: "replan" },
-      dependencies: [],
       status: "pending",
       priority: 9, // High priority
       reasoning: "Need to update plan based on current progress",
@@ -319,8 +309,6 @@ export class AgentEngine {
       await PlanningOperations.addTask(this.conversationId, {
         description: "Review and resolve repeated tool failures before continuing",
         tool: ToolType.PLAN,
-        parameters: { type: "failure_analysis" },
-        dependencies: [],
         status: "pending",
         priority: 10,
         reasoning: "Multiple tools have failed repeatedly, need to reassess strategy",
@@ -376,11 +364,6 @@ export class AgentEngine {
     await PlanningOperations.addTask(this.conversationId, {
       description: `Complete replan based on new user requirements: ${userInput.substring(0, 100)}...`,
       tool: ToolType.PLAN,
-      parameters: { 
-        type: "complete_replan",
-        trigger_input: userInput
-      },
-      dependencies: [],
       status: "pending",
       priority: 10, // Highest priority - should execute immediately
       reasoning: "User input indicates significant changes to requirements, need to remove obsolete tasks and create new plan",

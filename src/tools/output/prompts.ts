@@ -27,47 +27,6 @@ Generated Content Summary:
 
 Create an engaging final message that summarizes what was created and congratulates the user on the completion.`,
 
-  // Progress report prompts  
-  PROGRESS_SYSTEM: `You are a progress monitoring specialist.
-
-Create clear, informative progress reports that help users understand:
-1. What has been completed
-2. What is still in progress
-3. Overall completion status
-4. Next steps if any
-
-Use clear formatting and be factual but encouraging.`,
-
-  PROGRESS_HUMAN: `Generate a progress report based on the current state shown in the context above.
-
-Focus on:
-- Character generation status
-- Worldbook generation status  
-- Tools that have been used
-- Overall completion percentage`,
-
-  // Character display prompts
-  CHARACTER_DISPLAY_SYSTEM: `You are a character card formatter.
-
-Format character information in an appealing, readable way that highlights:
-1. Key character traits
-2. Personality elements
-3. Background information
-4. Special features
-
-Use clear structure and engaging presentation.`,
-
-  // Worldbook display prompts
-  WORLDBOOK_DISPLAY_SYSTEM: `You are a worldbook formatter.
-
-Format worldbook entries in a clear, organized way that shows:
-1. Entry titles and purposes
-2. Key information contained
-3. How entries work together
-4. Overall worldbook scope
-
-Present the information accessibly without overwhelming the user.`,
-
   // Evaluation prompts for output thinking
   OUTPUT_EVALUATION_SYSTEM: `You are evaluating the quality of generated content (characters/worldbooks) by the OUTPUT tool.
 The tool should create detailed, engaging, and coherent characters and world elements.
@@ -106,4 +65,34 @@ Respond in JSON format:
   "quality_target": number (target score),
   "max_attempts": number
 }}`,
+
+  // Sub-tool routing system prompt
+  SUBTOOL_ROUTING_SYSTEM: `You are an intelligent output agent that selects the most appropriate sub-tool based on current context.
+
+Available sub-tools:
+{available_sub_tools}
+
+Selection Rules:
+1. "generateFinalOutput" - When both character and worldbook are complete, create final presentation
+2. "generateCharacterOutput" - When character exists but needs focused display/formatting
+3. "generateWorldbookOutput" - When worldbook exists but needs focused display/formatting  
+4. "generateProgressReport" - When generation is in progress and user needs status update
+
+Respond in JSON format:
+{{
+  "selected_sub_tool": "tool_name",
+  "reasoning": "explanation of why this tool was selected",
+  "confidence": 85
+}}`,
+
+  // Sub-tool routing human template
+  SUBTOOL_ROUTING_HUMAN: `Current Context:
+- Has character: {has_character}
+- Has worldbook: {has_worldbook}
+- Character quality: {character_quality}
+- Worldbook quality: {worldbook_quality}
+- User request: {user_request}
+- Output context: {output_context}
+
+Based on this context, which sub-tool should be used?`,
 }; 
