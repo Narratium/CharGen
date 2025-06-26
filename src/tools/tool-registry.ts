@@ -1,17 +1,20 @@
-import { ToolType, BaseToolContext, PlanToolContext, ToolExecutionResult, PlanTask } from "../models/agent-model";
-import { Tool, RegularTool, PlanTool as PlanToolInterface } from "./base-tool";
-import { PlanTool } from "./plan";
-import { AskUserTool } from "./ask-user";
+import { 
+  ToolType, 
+  ExecutionContext, 
+  ExecutionResult, 
+  ToolDecision 
+} from "../models/agent-model";
+import { SimpleTool } from "./base-tool";
 import { SearchTool } from "./search";
+import { AskUserTool } from "./ask-user";
 import { OutputTool } from "./output";
 
 /**
- * Tool Registry - Simplified for new tool architecture
- * 工具注册表 - 为新的工具架构简化
+ * Simplified Tool Registry - Real-time Decision Architecture
+ * No more complex tool planning, just direct tool execution
  */
 export class ToolRegistry {
-  private static regularTools: Map<ToolType, RegularTool> = new Map();
-  private static planTools: Map<ToolType, PlanToolInterface> = new Map();
+  private static tools: Map<ToolType, SimpleTool> = new Map();
   private static initialized = false;
 
   /**
@@ -20,50 +23,68 @@ export class ToolRegistry {
   static initialize(): void {
     if (this.initialized) return;
 
-    // Register regular tools
-    this.regularTools.set(ToolType.ASK_USER, new AskUserTool());
-    this.regularTools.set(ToolType.SEARCH, new SearchTool());
-    this.regularTools.set(ToolType.OUTPUT, new OutputTool());
-
-    // Register plan tools
-    this.planTools.set(ToolType.PLAN, new PlanTool());
+    // Register simplified tools
+    this.tools.set(ToolType.SEARCH, new SearchTool());
+    this.tools.set(ToolType.ASK_USER, new AskUserTool());
+    this.tools.set(ToolType.OUTPUT, new OutputTool());
 
     this.initialized = true;
+    console.log("🔧 Tool Registry initialized with 3 tools");
+  }
+
+  /**
+   * Execute a tool decision - the core method for real-time execution
+   */
+  static async executeToolDecision(
+    decision: ToolDecision, 
+    context: ExecutionContext
+  ): Promise<ExecutionResult> {
+    this.initialize();
+
+    const tool = this.tools.get(decision.tool);
+    if (!tool) {
+      return {
+        success: false,
+        error: `No tool found for type: ${decision.tool}`,
+        should_continue: true,
+      };
+    }
+
+    console.log(`🛠️ [${tool.name}] Executing with parameters:`, decision.parameters);
+    
+    try {
+      const result = await tool.execute(context, decision.parameters);
+      
+      console.log(`✅ [${tool.name}] ${result.success ? 'Success' : 'Failed'}`);
+      if (result.error) {
+        console.log(`❌ Error: ${result.error}`);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error(`❌ [${tool.name}] Execution failed:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        should_continue: true,
+      };
+    }
   }
 
   /**
    * Get tool by type
    */
-  static getTool(toolType: ToolType): Tool | undefined {
+  static getTool(toolType: ToolType): SimpleTool | undefined {
     this.initialize();
-    return this.regularTools.get(toolType) || this.planTools.get(toolType);
-  }
-
-  /**
-   * Get regular tool by type
-   */
-  static getRegularTool(toolType: ToolType): RegularTool | undefined {
-    this.initialize();
-    return this.regularTools.get(toolType);
-  }
-
-  /**
-   * Get plan tool by type
-   */
-  static getPlanTool(toolType: ToolType): PlanToolInterface | undefined {
-    this.initialize();
-    return this.planTools.get(toolType);
+    return this.tools.get(toolType);
   }
 
   /**
    * Get all available tools
    */
-  static getAllTools(): Tool[] {
+  static getAllTools(): SimpleTool[] {
     this.initialize();
-    return [
-      ...Array.from(this.regularTools.values()),
-      ...Array.from(this.planTools.values())
-    ];
+    return Array.from(this.tools.values());
   }
 
   /**
@@ -79,133 +100,20 @@ export class ToolRegistry {
   }
 
   /**
-   * Execute a task with the appropriate tool and context
-   * 使用适当的工具和上下文执行任务
+   * Check if a tool type is available
    */
-  static async executeTask(
-    task: PlanTask, 
-    context: BaseToolContext | PlanToolContext
-  ): Promise<ToolExecutionResult> {
+  static hasToolType(toolType: ToolType): boolean {
     this.initialize();
-
-    try {
-      // Route to appropriate tool type
-      if (task.tool === ToolType.PLAN) {
-        // PLAN tools require PlanToolContext
-        const planTool = this.planTools.get(task.tool);
-        if (!planTool) {
-          return {
-            success: false,
-            error: `No plan tool found for type: ${task.tool}`,
-            should_continue: true,
-          };
-        }
-
-        if (!planTool.canHandle(task)) {
-          return {
-            success: false,
-            error: `Plan tool ${task.tool} cannot handle this task`,
-            should_continue: true,
-          };
-        }
-
-        // Ensure we have PlanToolContext
-        if (!('planning_context' in context)) {
-          return {
-            success: false,
-            error: `Plan tool requires PlanToolContext but received BaseToolContext`,
-            should_continue: true,
-          };
-        }
-
-        console.log(`🎯 [${planTool.name}] Executing: ${task.description}`);
-        const result = await planTool.execute(context as PlanToolContext);
-        
-        return {
-          success: true,
-          result,
-          should_continue: true,
-          reasoning: `${planTool.name} completed successfully`
-        };
-
-      } else {
-        // Regular tools use BaseToolContext
-        const regularTool = this.regularTools.get(task.tool);
-        if (!regularTool) {
-          return {
-            success: false,
-            error: `No regular tool found for type: ${task.tool}`,
-            should_continue: true,
-          };
-        }
-
-        if (!regularTool.canHandle(task)) {
-          return {
-            success: false,
-            error: `Regular tool ${task.tool} cannot handle this task`,
-            should_continue: true,
-          };
-        }
-
-        // Extract BaseToolContext for regular tools
-        const baseContext: BaseToolContext = {
-          conversation_id: context.conversation_id,
-          task_progress: context.task_progress,
-          conversation_history: context.conversation_history,
-          llm_config: context.llm_config,
-        };
-
-        console.log(`🔧 [${regularTool.name}] Executing: ${task.description}`);
-        const result = await regularTool.execute(baseContext);
-
-        return {
-          success: true,
-          result,
-          should_continue: true,
-          reasoning: `${regularTool.name} completed successfully`
-        };
-      }
-    } catch (error) {
-      console.error(`❌ Tool execution failed:`, error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-        should_continue: true,
-        reasoning: `Tool execution failed: ${error instanceof Error ? error.message : String(error)}`
-      };
-    }
+    return this.tools.has(toolType);
   }
 
   /**
-   * Check if a tool type is a plan tool
+   * Register a custom tool
    */
-  static isPlanTool(toolType: ToolType): boolean {
+  static registerTool(tool: SimpleTool): void {
     this.initialize();
-    return this.planTools.has(toolType);
-  }
-
-  /**
-   * Check if a tool type is a regular tool
-   */
-  static isRegularTool(toolType: ToolType): boolean {
-    this.initialize();
-    return this.regularTools.has(toolType);
-  }
-
-  /**
-   * Register a custom regular tool
-   */
-  static registerRegularTool(tool: RegularTool): void {
-    this.initialize();
-    this.regularTools.set(tool.toolType, tool);
-  }
-
-  /**
-   * Register a custom plan tool
-   */
-  static registerPlanTool(tool: PlanToolInterface): void {
-    this.initialize();
-    this.planTools.set(tool.toolType, tool);
+    this.tools.set(tool.toolType, tool);
+    console.log(`🔧 Registered custom tool: ${tool.name}`);
   }
 
   /**
@@ -213,7 +121,11 @@ export class ToolRegistry {
    */
   static unregisterTool(toolType: ToolType): boolean {
     this.initialize();
-    return this.regularTools.delete(toolType) || this.planTools.delete(toolType);
+    const removed = this.tools.delete(toolType);
+    if (removed) {
+      console.log(`🗑️ Unregistered tool: ${toolType}`);
+    }
+    return removed;
   }
 
   /**
@@ -221,20 +133,38 @@ export class ToolRegistry {
    */
   static getStats(): {
     totalTools: number;
-    regularTools: number;
-    planTools: number;
     toolTypes: string[];
   } {
     this.initialize();
     return {
-      totalTools: this.regularTools.size + this.planTools.size,
-      regularTools: this.regularTools.size,
-      planTools: this.planTools.size,
-      toolTypes: [
-        ...Array.from(this.regularTools.keys()),
-        ...Array.from(this.planTools.keys())
-      ],
+      totalTools: this.tools.size,
+      toolTypes: Array.from(this.tools.keys()),
     };
+  }
+
+  /**
+   * Get detailed tool information with parameters for LLM planning
+   */
+  static getDetailedToolsInfo(): Array<{
+    type: string;
+    name: string;
+    description: string;
+    parameters: Array<{
+      name: string;
+      type: string;
+      description: string;
+      required: boolean;
+      default?: any;
+      options?: string[];
+    }>;
+  }> {
+    this.initialize();
+    return this.getAllTools().map(tool => ({
+      type: tool.toolType,
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+    }));
   }
 }
 

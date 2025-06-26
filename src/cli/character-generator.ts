@@ -260,6 +260,9 @@ export class CharacterGeneratorCLI {
         spinner.succeed('Character generation completed!');
         await this.saveResults(status.result, params.outputDir);
         console.log(chalk.green('\n✅ Character and worldbook saved to:'), chalk.cyan(params.outputDir));
+        
+        // Show generation statistics
+        await this.showGenerationStats(result.conversationId);
       } else {
         spinner.fail('Generation completed but no results found');
       }
@@ -267,6 +270,35 @@ export class CharacterGeneratorCLI {
     } catch (error) {
       spinner.fail('Generation failed');
       console.error(chalk.red('Error:'), error instanceof Error ? error.message : error);
+    }
+  }
+
+  /**
+   * Show generation statistics
+   */
+  private async showGenerationStats(conversationId: string): Promise<void> {
+    try {
+      const summary = await this.agentService.getConversationSummary(conversationId);
+      const progress = await this.agentService.getGenerationOutput(conversationId);
+      
+      if (summary && progress) {
+        console.log(chalk.blue('\n📊 Generation Statistics:'));
+        console.log(chalk.gray(`  Messages: ${summary.messageCount}`));
+        console.log(chalk.gray(`  Knowledge Base: ${summary.knowledgeBaseSize} entries`));
+        console.log(chalk.gray(`  Completion: ${summary.completionPercentage}%`));
+        console.log(chalk.gray(`  Search Coverage: ${progress.searchCoverage}%`));
+        console.log(chalk.gray(`  Information Quality: ${progress.informationQuality}%`));
+        console.log(chalk.gray(`  Answer Confidence: ${progress.answerConfidence}%`));
+        
+        if (progress.qualityMetrics) {
+          console.log(chalk.blue('\n🎯 Quality Metrics:'));
+          console.log(chalk.gray(`  Completeness: ${progress.qualityMetrics.completeness}%`));
+          console.log(chalk.gray(`  Consistency: ${progress.qualityMetrics.consistency}%`));
+          console.log(chalk.gray(`  Creativity: ${progress.qualityMetrics.creativity}%`));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to show stats:', error);
     }
   }
 
@@ -290,11 +322,25 @@ export class CharacterGeneratorCLI {
       console.log(chalk.gray('  📚 Worldbook:'), worldbookFile);
     }
     
-    // Save integration notes
-    if (result.integration_notes) {
-      const notesFile = path.join(outputDir, 'integration_notes.md');
-      await fs.writeFile(notesFile, result.integration_notes);
-      console.log(chalk.gray('  📝 Integration notes:'), notesFile);
+    // Save knowledge base (new feature)
+    if (result.knowledge_base && result.knowledge_base.length > 0) {
+      const knowledgeFile = path.join(outputDir, 'knowledge_base.json');
+      await fs.writeJson(knowledgeFile, result.knowledge_base, { spaces: 2 });
+      console.log(chalk.gray('  🧠 Knowledge base:'), knowledgeFile);
+    }
+    
+    // Save quality metrics
+    if (result.quality_metrics) {
+      const metricsFile = path.join(outputDir, 'quality_metrics.json');
+      await fs.writeJson(metricsFile, result.quality_metrics, { spaces: 2 });
+      console.log(chalk.gray('  📈 Quality metrics:'), metricsFile);
+    }
+    
+    // Save completion status
+    if (result.completion_status) {
+      const statusFile = path.join(outputDir, 'completion_status.json');
+      await fs.writeJson(statusFile, result.completion_status, { spaces: 2 });
+      console.log(chalk.gray('  ✅ Completion status:'), statusFile);
     }
     
     // Save complete result
@@ -381,13 +427,28 @@ export class CharacterGeneratorCLI {
       return;
     }
 
+    // Updated to use new data structure
     console.table(conversations.map(conv => ({
       ID: conv.id.slice(0, 8),
       Title: conv.title,
       Status: conv.status,
       Created: new Date(conv.created_at).toLocaleDateString(),
-      'Has Result': conv.task_progress.character_data ? '✅' : '❌',
+      'Has Character': conv.generation_output.character_data ? '✅' : '❌',
+      'Has Worldbook': (conv.generation_output.worldbook_data && conv.generation_output.worldbook_data.length > 0) ? '✅' : '❌',
+      'Knowledge': conv.research_state.knowledge_base.length,
+      'Focus': conv.research_state.current_focus.substring(0, 30) + '...',
     })));
+
+    // Show overall statistics
+    const stats = await this.agentService.getGenerationStats();
+    console.log(chalk.blue('\n📊 Overall Statistics:'));
+    console.log(chalk.gray(`  Total Conversations: ${stats.totalConversations}`));
+    console.log(chalk.gray(`  Completed Generations: ${stats.completedGenerations}`));
+    console.log(chalk.gray(`  Success Rate: ${stats.successRate.toFixed(1)}%`));
+    console.log(chalk.gray(`  Average Iterations: ${stats.averageIterations.toFixed(1)}`));
+    console.log(chalk.gray(`  Average Quality Score: ${stats.averageQualityScore.toFixed(1)}`));
+    console.log(chalk.gray(`  Average Knowledge Base Size: ${stats.averageKnowledgeBaseSize.toFixed(1)}`));
+    console.log(chalk.gray(`  Average Tokens Used: ${stats.averageTokensUsed.toFixed(0)}`));
   }
 
   /**
@@ -404,12 +465,25 @@ export class CharacterGeneratorCLI {
 
     const outputFile = options.output || `export_${id.slice(0, 8)}.${options.format || 'json'}`;
     
-    if (options.format === 'card' && conversation.task_progress.character_data) {
-      await fs.writeJson(outputFile, conversation.task_progress.character_data, { spaces: 2 });
-    } else if (options.format === 'worldbook' && conversation.task_progress.worldbook_data) {
-      await fs.writeJson(outputFile, conversation.task_progress.worldbook_data, { spaces: 2 });
+    // Updated to use new data structure
+    if (options.format === 'card' && conversation.generation_output.character_data) {
+      await fs.writeJson(outputFile, conversation.generation_output.character_data, { spaces: 2 });
+    } else if (options.format === 'worldbook' && conversation.generation_output.worldbook_data) {
+      await fs.writeJson(outputFile, conversation.generation_output.worldbook_data, { spaces: 2 });
     } else {
-      await fs.writeJson(outputFile, conversation.task_progress, { spaces: 2 });
+      // Export both character progress and task state
+      const exportData = {
+        generation_output: conversation.generation_output,
+        research_state: conversation.research_state,
+        conversation_info: {
+          id: conversation.id,
+          title: conversation.title,
+          status: conversation.status,
+          created_at: conversation.created_at,
+          updated_at: conversation.updated_at,
+        },
+      };
+      await fs.writeJson(outputFile, exportData, { spaces: 2 });
     }
     
     console.log(chalk.green('✅ Exported to:'), chalk.cyan(outputFile));

@@ -1,14 +1,13 @@
 import { AgentEngine } from "./agent-engine";
-import { AgentConversationOperations } from "../data/agent/agent-conversation-operations";
-import { PlanningOperations } from "../data/agent/plan-pool-operations";
-import { AgentConversation, AgentStatus } from "../models/agent-model";
+import { ResearchSessionOperations } from "../data/agent/agent-conversation-operations";
+import { ResearchSession, SessionStatus } from "../models/agent-model";
 
 // Define user input callback type
 type UserInputCallback = (message?: string) => Promise<string>;
 
 /**
- * Agent Service - Redesigned for Clear Context Architecture
- * High-level API for character+worldbook generation with clean interfaces
+ * Agent Service - Simplified for Real-time Decision Architecture
+ * High-level API for character+worldbook generation with real-time planning
  */
 export class AgentService {
   private engines: Map<string, AgentEngine> = new Map();
@@ -53,7 +52,7 @@ export class AgentService {
   }> {
     try {
       // Create new conversation with updated interface
-      const conversation = await AgentConversationOperations.createConversation(
+      const conversation = await ResearchSessionOperations.createConversation(
         title,
         {
           model_name: llmConfig.model_name,
@@ -94,53 +93,60 @@ export class AgentService {
    * Get conversation status and progress with new data structure
    */
   async getConversationStatus(conversationId: string): Promise<{
-    conversation: AgentConversation | null;
-    status: AgentStatus;
+    conversation: ResearchSession | null;
+    status: SessionStatus;
     progress: {
-      currentTasks: number;
+      activeTasks: number;
       completedTasks: number;
       totalIterations: number;
       currentFocus: string;
+      knowledgeBaseSize: number;
+      UserInteractions: number;
     };
     hasResult: boolean;
     result?: any;
   }> {
     try {
-      const conversation = await AgentConversationOperations.getConversationById(conversationId);
+      const conversation = await ResearchSessionOperations.getConversationById(conversationId);
       if (!conversation) {
         return {
           conversation: null,
-          status: AgentStatus.FAILED,
+          status: SessionStatus.FAILED,
           progress: {
-            currentTasks: 0,
+            activeTasks: 0,
             completedTasks: 0,
             totalIterations: 0,
             currentFocus: "Conversation not found",
+            knowledgeBaseSize: 0,
+            UserInteractions: 0,
           },
           hasResult: false,
         };
       }
       
-      // Check completion using new task_progress structure
-      const hasCharacterData = !!conversation.task_progress.character_data;
-      const hasWorldbookData = !!conversation.task_progress.worldbook_data && conversation.task_progress.worldbook_data.length > 0;
+      // Check completion using new character_progress structure
+      const hasCharacterData = !!conversation.generation_output.character_data;
+      const hasWorldbookData = !!conversation.generation_output.worldbook_data && conversation.generation_output.worldbook_data.length > 0;
       const hasResult = hasCharacterData && hasWorldbookData;
       
       return {
         conversation,
         status: conversation.status,
         progress: {
-          currentTasks: conversation.planning_context.current_tasks.length,
-          completedTasks: conversation.planning_context.completed_tasks.length,
-          totalIterations: conversation.execution_metadata.current_iteration,
-          currentFocus: conversation.planning_context.context.current_focus,
+          activeTasks: conversation.research_state.active_tasks.length,
+          completedTasks: conversation.research_state.completed_tasks.length,
+          totalIterations: conversation.execution_info.current_iteration,
+          currentFocus: conversation.research_state.current_focus,
+          knowledgeBaseSize: conversation.research_state.knowledge_base.length,
+          UserInteractions: conversation.research_state.user_interactions.length,
         },
         hasResult,
         result: hasResult ? {
-          character_data: conversation.task_progress.character_data,
-          worldbook_data: conversation.task_progress.worldbook_data,
-          integration_notes: conversation.task_progress.integration_notes,
-          quality_metrics: conversation.task_progress.quality_metrics,
+          character_data: conversation.generation_output.character_data,
+          worldbook_data: conversation.generation_output.worldbook_data,
+          quality_metrics: conversation.generation_output.quality_metrics,
+          knowledge_base: conversation.research_state.knowledge_base,
+          completion_status: conversation.research_state.progress,
         } : undefined,
       };
       
@@ -148,12 +154,14 @@ export class AgentService {
       console.error("Failed to get conversation status:", error);
       return {
         conversation: null,
-        status: AgentStatus.FAILED,
+        status: SessionStatus.FAILED,
         progress: {
-          currentTasks: 0,
+          activeTasks: 0,
           completedTasks: 0,
           totalIterations: 0,
           currentFocus: "Error occurred",
+          knowledgeBaseSize: 0,
+          UserInteractions: 0,
         },
         hasResult: false,
       };
@@ -163,9 +171,9 @@ export class AgentService {
   /**
    * List all conversations for a user
    */
-  async listConversations(): Promise<AgentConversation[]> {
+  async listConversations(): Promise<ResearchSession[]> {
     try {
-      return await AgentConversationOperations.getAllConversations();
+      return await ResearchSessionOperations.getAllConversations();
     } catch (error) {
       console.error("Failed to list conversations:", error);
       return [];
@@ -181,7 +189,7 @@ export class AgentService {
       this.engines.delete(conversationId);
       
       // Delete from storage
-      await AgentConversationOperations.deleteConversation(conversationId);
+      await ResearchSessionOperations.deleteConversation(conversationId);
       return true;
     } catch (error) {
       console.error("Failed to delete conversation:", error);
@@ -192,13 +200,13 @@ export class AgentService {
   /**
    * Get conversation messages for UI display
    */
-  async getConversationMessages(conversationId: string): Promise<{
+  async getMessages(conversationId: string): Promise<{
     messages: any[];
     messageCount: number;
     lastActivity: string;
   }> {
     try {
-      const conversation = await AgentConversationOperations.getConversationById(conversationId);
+      const conversation = await ResearchSessionOperations.getConversationById(conversationId);
       if (!conversation) {
         return {
           messages: [],
@@ -210,7 +218,7 @@ export class AgentService {
       return {
         messages: conversation.messages,
         messageCount: conversation.messages.length,
-        lastActivity: conversation.execution_metadata.last_activity,
+        lastActivity: conversation.execution_info.last_activity,
       };
       
     } catch (error) {
@@ -224,108 +232,123 @@ export class AgentService {
   }
 
   /**
-   * Get planning status for debugging
+   * Get task state for debugging (replaces planning status)
    */
-  async getPlanningStatus(conversationId: string): Promise<{
-    goals: any[];
-    currentTasks: any[];
-    completedTasks: any[];
-    context: any;
-    stats: any;
+  async getResearchState(conversationId: string): Promise<{
+    mainObjective: string;
+    currentFocus: string;
+    activeTasks: string[];
+    completedTasks: string[];
+    knowledgeGaps: string[];
+    completionStatus: any;
+    knowledgeBase: any[];
+    UserInteractions: any[];
   }> {
     try {
-      const conversation = await AgentConversationOperations.getConversationById(conversationId);
+      const conversation = await ResearchSessionOperations.getConversationById(conversationId);
       if (!conversation) {
         return {
-          goals: [],
-          currentTasks: [],
+          mainObjective: "",
+          currentFocus: "",
+          activeTasks: [],
           completedTasks: [],
-          context: {},
-          stats: {},
+          knowledgeGaps: [],
+          completionStatus: {},
+          knowledgeBase: [],
+          UserInteractions: [],
         };
       }
       
-      // Get planning statistics
-      const stats = await PlanningOperations.getPlanningStats(conversationId);
-      
       return {
-        goals: conversation.planning_context.goals,
-        currentTasks: conversation.planning_context.current_tasks,
-        completedTasks: conversation.planning_context.completed_tasks,
-        context: conversation.planning_context.context,
-        stats,
+        mainObjective: conversation.research_state.main_objective,
+        currentFocus: conversation.research_state.current_focus,
+        activeTasks: conversation.research_state.active_tasks,
+        completedTasks: conversation.research_state.completed_tasks,
+        knowledgeGaps: conversation.research_state.knowledge_gaps,
+        completionStatus: conversation.research_state.progress,
+        knowledgeBase: conversation.research_state.knowledge_base,
+        UserInteractions: conversation.research_state.user_interactions,
       };
       
     } catch (error) {
-      console.error("Failed to get planning status:", error);
+      console.error("Failed to get task state:", error);
       return {
-        goals: [],
-        currentTasks: [],
+        mainObjective: "",
+        currentFocus: "",
+        activeTasks: [],
         completedTasks: [],
-        context: {},
-        stats: {},
+        knowledgeGaps: [],
+        completionStatus: {},
+        knowledgeBase: [],
+        UserInteractions: [],
       };
     }
   }
 
   /**
-   * Get task progress for UI display
+   * Get character progress for UI display
    */
-  async getTaskProgress(conversationId: string): Promise<{
+  async getGenerationOutput(conversationId: string): Promise<{
     hasCharacter: boolean;
     hasWorldbook: boolean;
     completionPercentage: number;
     characterData?: any;
     worldbookData?: any[];
     qualityMetrics?: any;
-    generationMetadata: any;
+    searchCoverage: number;
+    informationQuality: number;
+    answerConfidence: number;
+    userSatisfaction: number;
   }> {
     try {
-      const conversation = await AgentConversationOperations.getConversationById(conversationId);
+      const conversation = await ResearchSessionOperations.getConversationById(conversationId);
       if (!conversation) {
         return {
           hasCharacter: false,
           hasWorldbook: false,
           completionPercentage: 0,
-          generationMetadata: {
-            total_iterations: 0,
-            tools_used: [],
-            last_updated: "",
-          },
+          searchCoverage: 0,
+          informationQuality: 0,
+          answerConfidence: 0,
+          userSatisfaction: 0,
         };
       }
       
-      const hasCharacter = !!conversation.task_progress.character_data;
-      const hasWorldbook = !!conversation.task_progress.worldbook_data && conversation.task_progress.worldbook_data.length > 0;
+      const hasCharacter = !!conversation.generation_output.character_data;
+      const hasWorldbook = !!conversation.generation_output.worldbook_data && conversation.generation_output.worldbook_data.length > 0;
       
-      let completionPercentage = 0;
-      if (hasCharacter && hasWorldbook) {
-        completionPercentage = 100;
-      } else if (hasCharacter || hasWorldbook) {
-        completionPercentage = 50;
-      }
+      // Calculate completion percentage from completion status
+      const completion = conversation.research_state.progress;
+      const completionPercentage = (
+        completion.search_coverage + 
+        completion.information_quality + 
+        completion.answer_confidence + 
+        completion.user_satisfaction
+      ) / 4;
       
       return {
         hasCharacter,
         hasWorldbook,
-        completionPercentage,
-        characterData: conversation.task_progress.character_data,
-        worldbookData: conversation.task_progress.worldbook_data,
-        qualityMetrics: conversation.task_progress.quality_metrics,
-        generationMetadata: conversation.task_progress.generation_metadata,
+        completionPercentage: Math.round(completionPercentage),
+        characterData: conversation.generation_output.character_data,
+        worldbookData: conversation.generation_output.worldbook_data,
+        qualityMetrics: conversation.generation_output.quality_metrics,
+        searchCoverage: completion.search_coverage,
+        informationQuality: completion.information_quality,
+        answerConfidence: completion.answer_confidence,
+        userSatisfaction: completion.user_satisfaction,
       };
       
     } catch (error) {
-      console.error("Failed to get task progress:", error);
+      console.error("Failed to get character progress:", error);
       return {
         hasCharacter: false,
         hasWorldbook: false,
         completionPercentage: 0,
-        generationMetadata: {
-          total_iterations: 0,
-          tools_used: [],
-          last_updated: "",
-        },
+        searchCoverage: 0,
+        informationQuality: 0,
+        answerConfidence: 0,
+        userSatisfaction: 0,
       };
     }
   }
@@ -339,7 +362,7 @@ export class AgentService {
     error?: string;
   }> {
     try {
-      const conversation = await AgentConversationOperations.getConversationById(conversationId);
+      const conversation = await ResearchSessionOperations.getConversationById(conversationId);
       if (!conversation) {
         return {
           success: false,
@@ -350,8 +373,8 @@ export class AgentService {
       const exportData = {
         conversation,
         exportedAt: new Date().toISOString(),
-        version: "3.0", // Updated architecture version
-        architecture: "clear-context",
+        version: "4.0", // Updated to new simplified architecture
+        architecture: "real-time-decision",
       };
       
       return {
@@ -377,42 +400,45 @@ export class AgentService {
     successRate: number;
     averageIterations: number;
     statusBreakdown: Record<string, number>;
-    toolUsageStats: Record<string, number>;
     averageQualityScore: number;
+    averageKnowledgeBaseSize: number;
+    averageTokensUsed: number;
   }> {
     try {
-      const conversations = await AgentConversationOperations.getAllConversations();
+      const conversations = await ResearchSessionOperations.getAllConversations();
       
       const statusBreakdown: Record<string, number> = {};
-      const toolUsageStats: Record<string, number> = {};
       let totalIterations = 0;
       let completedGenerations = 0;
       let totalQualityScore = 0;
       let qualityScoreCount = 0;
+      let totalKnowledgeBaseSize = 0;
+      let totalTokensUsed = 0;
       
       conversations.forEach(conv => {
         // Count by status
         statusBreakdown[conv.status] = (statusBreakdown[conv.status] || 0) + 1;
         
         // Count iterations
-        totalIterations += conv.execution_metadata.current_iteration;
+        totalIterations += conv.execution_info.current_iteration;
         
-        // Count tool usage
-        conv.task_progress.generation_metadata.tools_used.forEach(tool => {
-          toolUsageStats[tool] = (toolUsageStats[tool] || 0) + 1;
-        });
+        // Count tokens used
+        totalTokensUsed += conv.execution_info.total_tokens_used || 0;
+        
+        // Count knowledge base size
+        totalKnowledgeBaseSize += conv.research_state.knowledge_base.length;
         
         // Count completed generations
-        if (conv.status === AgentStatus.COMPLETED && 
-            conv.task_progress.character_data && 
-            conv.task_progress.worldbook_data && 
-            conv.task_progress.worldbook_data.length > 0) {
+        if (conv.status === SessionStatus.COMPLETED && 
+            conv.generation_output.character_data && 
+            conv.generation_output.worldbook_data && 
+            conv.generation_output.worldbook_data.length > 0) {
           completedGenerations++;
         }
         
         // Quality metrics
-        if (conv.task_progress.quality_metrics?.completeness) {
-          totalQualityScore += conv.task_progress.quality_metrics.completeness;
+        if (conv.generation_output.quality_metrics?.completeness) {
+          totalQualityScore += conv.generation_output.quality_metrics.completeness;
           qualityScoreCount++;
         }
       });
@@ -428,6 +454,14 @@ export class AgentService {
       const averageQualityScore = qualityScoreCount > 0
         ? totalQualityScore / qualityScoreCount
         : 0;
+
+      const averageKnowledgeBaseSize = conversations.length > 0
+        ? totalKnowledgeBaseSize / conversations.length
+        : 0;
+
+      const averageTokensUsed = conversations.length > 0
+        ? totalTokensUsed / conversations.length
+        : 0;
       
       return {
         totalConversations: conversations.length,
@@ -435,8 +469,9 @@ export class AgentService {
         successRate,
         averageIterations,
         statusBreakdown,
-        toolUsageStats,
         averageQualityScore,
+        averageKnowledgeBaseSize,
+        averageTokensUsed,
       };
       
     } catch (error) {
@@ -447,8 +482,9 @@ export class AgentService {
         successRate: 0,
         averageIterations: 0,
         statusBreakdown: {},
-        toolUsageStats: {},
         averageQualityScore: 0,
+        averageKnowledgeBaseSize: 0,
+        averageTokensUsed: 0,
       };
     }
   }
@@ -458,15 +494,17 @@ export class AgentService {
    */
   async getConversationSummary(conversationId: string): Promise<{
     title: string;
-    status: AgentStatus;
+    status: SessionStatus;
     messageCount: number;
     hasCharacter: boolean;
     hasWorldbook: boolean;
     lastActivity: string;
     completionPercentage: number;
+    knowledgeBaseSize: number;
+    currentFocus: string;
   } | null> {
     try {
-      return await AgentConversationOperations.getConversationSummary(conversationId);
+      return await ResearchSessionOperations.getConversationSummary(conversationId);
     } catch (error) {
       console.error("Failed to get conversation summary:", error);
       return null;

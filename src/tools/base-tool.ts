@@ -4,134 +4,76 @@ import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 import { 
   ToolType,
-  BaseToolContext,
-  PlanToolContext,
-  ToolExecutionResult,
-  PlanTask,
-  ConversationMessage,
+  ExecutionContext,
+  ExecutionResult,
+  Message,
+  KnowledgeEntry,
+  UserInteraction,
 } from "../models/agent-model";
-import { BaseThinking, ImprovementInstruction } from "./base-think";
-import { AgentConversationOperations } from "../data/agent/agent-conversation-operations";
-import { HumanMessage } from "@langchain/core/messages";
-import { SystemMessage } from "@langchain/core/messages";
+import { ResearchSessionOperations } from "../data/agent/agent-conversation-operations";
+import { v4 as uuidv4 } from "uuid";
 
 // ============================================================================
-// SIMPLE TOOL ARCHITECTURE WITH SELF-IMPROVEMENT
+// SIMPLIFIED TOOL ARCHITECTURE - Pure Execution Units
 // ============================================================================
 
 /**
- * Basic tool interface - all tools implement this
+ * Tool parameter definition
  */
-export interface Tool {
+export interface ToolParameter {
+  name: string;
+  type: "string" | "number" | "boolean" | "array" | "object";
+  description: string;
+  required: boolean;
+  default?: any;
+  options?: string[]; // For enum-like parameters
+}
+
+/**
+ * Simple tool interface - no thinking, just execution
+ */
+export interface SimpleTool {
   readonly name: string;
   readonly description: string;
   readonly toolType: ToolType;
+  readonly parameters: ToolParameter[]; // Parameter schema for intelligent planning
   
-  canHandle(task: PlanTask): boolean;
-  validate(context: BaseToolContext | PlanToolContext): boolean;
+  execute(context: ExecutionContext, parameters: Record<string, any>): Promise<ExecutionResult>;
 }
 
 /**
- * Regular tool interface - for simple tools that don't need planning context
+ * Base Tool - Simplified for pure execution
+ * No self-improvement, no thinking layers, just direct execution
  */
-export interface RegularTool extends Tool {
-  execute(context: BaseToolContext): Promise<any>;
-}
-
-/**
- * Plan tool interface - for tools that need planning context
- */
-export interface PlanTool extends Tool {
-  execute(context: PlanToolContext): Promise<any>;
-}
-
-/**
- * Enhanced Regular Tool with self-improvement
- * 具备自我改进能力的常规工具
- */
-export abstract class BaseRegularTool implements RegularTool {
+export abstract class BaseSimpleTool implements SimpleTool {
   abstract readonly toolType: ToolType;
   abstract readonly name: string;
   abstract readonly description: string;
-
-  protected maxImprovementAttempts: number = 3; // 最多改进3次
-  protected abstract thinking: BaseThinking; // 思考模块 - 子类必须实现
-  
-  constructor() {
-    // Base tool initialization
-  }
+  abstract readonly parameters: ToolParameter[]; // Parameter schema for intelligent planning
 
   /**
-   * Main execution with self-improvement loop
-   * 主执行方法，包含自我改进循环
+   * Main execution method - pure and simple
    */
-  async execute(context: BaseToolContext): Promise<any> {
+  async execute(context: ExecutionContext, parameters: Record<string, any>): Promise<ExecutionResult> {
     try {
-      let attempt = 1;
-      let result = await this.doWork(context);
+      console.log(`🛠️ [${this.name}] Starting execution`);
       
-      // Self-improvement loop
-      while (attempt <= this.maxImprovementAttempts) {
-        const evaluation = await this.thinking.evaluate(result, context, attempt);
-        
-        // If good enough, return
-        if (evaluation.is_satisfied || evaluation.next_action === "complete") {
-          if (attempt > 1) {
-            console.log(`✅ [${this.name}] Improved result after ${attempt} attempts. Quality: ${evaluation.quality_score}/100`);
-          }
-          return result;
-        }
-        
-        // Try to improve
-        if (evaluation.next_action === "improve" && attempt < this.maxImprovementAttempts) {
-          console.log(`🔄 [${this.name}] Quality: ${evaluation.quality_score}/100. Improving...`);
-          
-          const instruction = await this.thinking.generateImprovement(result, evaluation, context);
-          result = await this.improve(result, instruction, context);
-          attempt++;
-        } else {
-          console.log(`⏹️ [${this.name}] Stopping after ${attempt} attempts. Final quality: ${evaluation.quality_score}/100`);
-          break;
-        }
-      }
+      // Direct execution - no thinking loops
+      const result = await this.doWork(context, parameters);
       
-      return result;
+      console.log(`✅ [${this.name}] Execution completed successfully`);
+      return this.createSuccessResult(result);
+      
     } catch (error) {
-      return this.createFailureResult(error, context);
+      console.error(`❌ [${this.name}] Execution failed:`, error);
+      return this.createFailureResult(error);
     }
   }
 
   /**
    * Core work logic - implement this in your tool
-   * 核心工作逻辑 - 在你的工具中实现这个
    */
-  abstract doWork(context: BaseToolContext): Promise<any>;
-
-  /**
-   * Improvement logic - implement this in your tool
-   * 改进逻辑 - 在你的工具中实现这个
-   */
-  abstract improve(
-    currentResult: any,
-    instruction: ImprovementInstruction,
-    context: BaseToolContext
-  ): Promise<any>;
-
-  /**
-   * Default task validation
-   */
-  canHandle(task: PlanTask): boolean {
-    return task.tool === this.toolType;
-  }
-
-  /**
-   * Default context validation
-   */
-  validate(context: BaseToolContext): boolean {
-    return !!(context.conversation_id && context.task_progress);
-  }
-
-
+  protected abstract doWork(context: ExecutionContext, parameters: Record<string, any>): Promise<any>;
 
   // ============================================================================
   // HELPER METHODS - Common functionality for all tools
@@ -140,7 +82,7 @@ export abstract class BaseRegularTool implements RegularTool {
   /**
    * Create LLM instance from config
    */
-  protected createLLM(config: BaseToolContext["llm_config"]) {
+  protected createLLM(config: ExecutionContext["llm_config"]) {
     if (config.llm_type === "openai") {
       return new ChatOpenAI({
         modelName: config.model_name,
@@ -165,32 +107,12 @@ export abstract class BaseRegularTool implements RegularTool {
   }
 
   /**
-   * Build context-aware prompt for regular tools
-   */
-  protected buildContextualPrompt(
-    systemPrompt: string,
-    humanTemplate: string,
-    context: BaseToolContext
-  ): ChatPromptTemplate {
-    // Pre-build context that doesn't change per request
-    const conversationSummary = this.buildConversationSummary(context.conversation_history);
-    const progressSummary = this.buildProgressSummary(context.task_progress);
-    const fullContext = `${progressSummary}\n${conversationSummary}`;
-    
-    // Create template that can accept variables
-    return ChatPromptTemplate.fromMessages([
-      new SystemMessage(systemPrompt),
-      new HumanMessage(fullContext + "\n\n" + humanTemplate),
-    ]);
-  }
-
-  /**
    * Execute LLM chain with error handling
    */
   protected async executeLLMChain(
     prompt: ChatPromptTemplate,
     inputData: Record<string, any>,
-    context: BaseToolContext,
+    context: ExecutionContext,
     options: {
       parseJson?: boolean;
       errorMessage?: string;
@@ -199,134 +121,148 @@ export abstract class BaseRegularTool implements RegularTool {
     try {
       const llm = this.createLLM(context.llm_config);
       const chain = prompt.pipe(llm).pipe(new StringOutputParser());
+      
       const response = await chain.invoke(inputData);
       
       if (options.parseJson) {
-        try {
-          const cleanedResponse = this.extractJsonFromResponse(response);
-          return JSON.parse(cleanedResponse);
-        } catch (parseError) {
-          console.error(`JSON parsing failed for response: "${response.substring(0, 500)}..."`);
-          throw parseError;
-        }
+        return this.parseJSONResponse(response);
       }
       
       return response;
     } catch (error) {
-      const errorMsg = options.errorMessage || `LLM execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      throw new Error(errorMsg);
+      const errorMsg = options.errorMessage || `${this.name} LLM execution failed`;
+      console.error(errorMsg, error);
+      throw new Error(`${errorMsg}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /**
-   * Extract JSON from response
+   * Parse JSON response from LLM
    */
-  protected extractJsonFromResponse(response: string): string {
-    let cleaned = response.trim();
-    
-    if (cleaned.startsWith('```json')) {
-      cleaned = cleaned.substring(7);
-    } else if (cleaned.startsWith('```')) {
-      cleaned = cleaned.substring(3);
-    }
-    
-    if (cleaned.endsWith('```')) {
-      cleaned = cleaned.substring(0, cleaned.length - 3);
-    }
-    
-    let jsonStart = -1;
-    let jsonEnd = -1;
-    
-    for (let i = 0; i < cleaned.length; i++) {
-      if (cleaned[i] === '{' || cleaned[i] === '[') {
-        jsonStart = i;
-        break;
+  protected parseJSONResponse(response: string): any {
+    try {
+      // Extract JSON from response if it's wrapped in markdown or other text
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
       }
+      return JSON.parse(response);
+    } catch (error) {
+      console.error("Failed to parse JSON response:", response);
+      throw new Error("Invalid JSON response from LLM");
     }
-    
-    for (let i = cleaned.length - 1; i >= 0; i--) {
-      if (cleaned[i] === '}' || cleaned[i] === ']') {
-            jsonEnd = i + 1;
-            break;
-          }
-        }
-    
-    if (jsonStart !== -1 && jsonEnd !== -1 && jsonStart < jsonEnd) {
-      return cleaned.substring(jsonStart, jsonEnd);
-    }
-    
-    return cleaned;
   }
 
   /**
-   * Build conversation summary
+   * Build conversation summary for context
    */
-  /**
-   * Build conversation summary including message_type
-   * @param messages - Array of conversation messages
-   * @returns Formatted conversation summary string
-   */
-  protected buildConversationSummary(messages: ConversationMessage[]): string {
-    // If there are no messages, return a default message
-    if (messages.length === 0) {
-      return "No conversation history available.";
-    }
-
-    let summary = "=== CONVERSATION HISTORY ===\n";
-    // Only include the last 10 messages for brevity
-    const recentMessages = messages.slice(-10);
-
-    for (const message of recentMessages) {
-      // Format timestamp to local time string
-      const timestamp = new Date(message.timestamp).toLocaleTimeString();
-      // Include message_type if available, otherwise use 'N/A'
-      const messageType = (message as any).message_type ? (message as any).message_type : 'N/A';
-      // Add message details to the summary, including message_type
-      summary += `[${timestamp}] ${message.role.toUpperCase()} (${messageType}): ${message.content.substring(0, 200)}\n`;
-    }
-
-    return summary + "\n";
+  protected buildConversationSummary(messages: Message[]): string {
+    return messages
+      .slice(-10) // Last 10 messages
+      .map(msg => `${msg.role}: ${msg.content}`)
+      .join("\n");
   }
 
   /**
-   * Build progress summary
+   * Build knowledge base summary
    */
-  protected buildProgressSummary(taskProgress: any): string {
-    const hasCharacter = !!taskProgress.character_data;
-    const hasWorldbook = !!taskProgress.worldbook_data && taskProgress.worldbook_data.length > 0;
-    
-    let summary = "=== CURRENT PROGRESS ===\n";
-    
-    if (hasCharacter) {
-      summary += `✅ Character Card: COMPLETE\n`;
-      summary += `   Name: ${taskProgress.character_data.name || 'N/A'}\n`;
-    } else {
-      summary += `❌ Character Card: NOT GENERATED\n`;
+  protected buildKnowledgeBaseSummary(knowledgeBase: KnowledgeEntry[]): string {
+    if (knowledgeBase.length === 0) {
+      return "No knowledge gathered yet.";
     }
     
-    if (hasWorldbook) {
-      summary += `✅ Worldbook: COMPLETE (${taskProgress.worldbook_data.length} entries)\n`;
-    } else {
-      summary += `❌ Worldbook: NOT GENERATED\n`;
-    }
-
-    return summary + "\n";
+    return knowledgeBase
+      .slice(0, 5) // Top 5 most relevant
+      .map(k => `- ${k.source}: ${k.content.substring(0, 100)}...`)
+      .join("\n");
   }
 
   /**
-   * Add message to conversation (logging for now)
+   * Build user questions summary
+   */
+  protected buildUserInteractionsSummary(UserInteractions: UserInteraction[]): string {
+    if (UserInteractions.length === 0) {
+      return "No user questions recorded.";
+    }
+    
+    return UserInteractions
+      .map(q => `- ${q.is_initial ? '[Initial]' : '[Follow-up]'} ${q.question}`)
+      .join("\n");
+  }
+
+  /**
+   * Build current task context summary
+   */
+  protected buildTaskContextSummary(context: ExecutionContext): string {
+    const state = context.research_state;
+    return `
+Main Objective: ${state.main_objective}
+Current Focus: ${state.current_focus}
+Active Tasks: ${state.active_tasks.join(", ")}
+Knowledge Gaps: ${state.knowledge_gaps.join(", ")}
+Progress Status:
+- Search Coverage: ${state.progress.search_coverage}%
+- Information Quality: ${state.progress.information_quality}%
+- Answer Confidence: ${state.progress.answer_confidence}%
+- User Satisfaction: ${state.progress.user_satisfaction}%
+`.trim();
+  }
+
+  /**
+   * Create knowledge entry from search results
+   */
+  protected createKnowledgeEntry(
+    source: string,
+    content: string,
+    url?: string,
+    relevanceScore: number = 70
+  ): KnowledgeEntry {
+    return {
+      id: uuidv4(),
+      source,
+      content,
+      url,
+      relevance_score: relevanceScore,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Create user question entry
+   */
+  protected createUserInteraction(
+    question: string,
+    isInitial: boolean = false,
+    parentQuestionId?: string
+  ): UserInteraction {
+    return {
+      id: uuidv4(),
+      question,
+      is_initial: isInitial,
+      parent_id: parentQuestionId,
+      timestamp: new Date().toISOString(),
+      status: "pending",
+    };
+  }
+
+  /**
+   * Add message to conversation
    */
   protected async addMessage(
     conversationId: string,
     role: "agent" | "system",
     content: string,
-    messageType: "agent_thinking" | "agent_action" | "agent_output" | "system_info" = "agent_output"
+    messageType: "agent_thinking" | "agent_action" | "agent_output" | "system_info" = "agent_action",
+    metadata?: Record<string, any>
   ): Promise<void> {
-    await AgentConversationOperations.addMessage(
-      conversationId, {
+    await ResearchSessionOperations.addMessage(conversationId, {
       role,
       content,
-      message_type: messageType,
+      type: messageType,
+      metadata: {
+        tool_used: this.toolType,
+        ...metadata,
+      },
     });
   }
 
@@ -337,423 +273,46 @@ export abstract class BaseRegularTool implements RegularTool {
     result: any,
     options: {
       shouldContinue?: boolean;
-      shouldUpdatePlan?: boolean;
-      userInputRequired?: boolean;
-      reasoning?: string;
+      knowledgeUpdates?: KnowledgeEntry[];
+      UserInteractionsUpdates?: UserInteraction[];
+      tokensUsed?: number;
     } = {}
-  ): ToolExecutionResult {
+  ): ExecutionResult {
     return {
       success: true,
       result,
       should_continue: options.shouldContinue ?? true,
-      should_update_plan: options.shouldUpdatePlan ?? false,
-      user_input_required: options.userInputRequired ?? false,
-      reasoning: options.reasoning,
-    };
+      knowledge_updates: options.knowledgeUpdates,
+      interaction_updates: options.UserInteractionsUpdates,
+      tokens_used: options.tokensUsed,
+    };  
   }
 
   /**
-   * Create unified failure result - all tools use this for fallback
-   * 创建统一的失败结果 - 所有工具的 fallback 都使用这个
+   * Create failure result
    */
   protected createFailureResult(
     error: any,
-    context: BaseToolContext,
     options: {
       shouldContinue?: boolean;
-      shouldUpdatePlan?: boolean;
       customMessage?: string;
     } = {}
-  ): ToolExecutionResult {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const failureMessage = options.customMessage || `Tool ${this.name} execution failed: ${errorMessage}`;
-    
-    // Log the failure
-    this.addMessage(
-      context.conversation_id, 
-      "system", 
-      failureMessage, 
-      "system_info"
-    );
-    
-    console.error(`❌ [${this.name}] ${failureMessage}`);
-    
+  ): ExecutionResult {
+    const errorMessage = options.customMessage || 
+      (error instanceof Error ? error.message : String(error));
+
     return {
       success: false,
-      error: errorMessage,
-      should_continue: options.shouldContinue ?? false,
-      should_update_plan: options.shouldUpdatePlan ?? true,  // Failure usually requires replanning
-      user_input_required: false,
-      reasoning: failureMessage,
-    };
-  }
-}
-
-/**
- * Enhanced Plan Tool with self-improvement
- * 具备自我改进能力的计划工具
- */
-export abstract class BasePlanTool implements PlanTool {
-  abstract readonly toolType: ToolType;
-  abstract readonly name: string;
-  abstract readonly description: string;
-
-  protected maxImprovementAttempts: number = 3; // 最多改进3次
-  protected abstract thinking: BaseThinking; // 思考模块 - 子类必须实现
-
-  constructor() {
-    // Base plan tool initialization
-  }
-
-  /**
-   * Main execution with self-improvement loop
-   * 主执行方法，包含自我改进循环
-   */
-  async execute(context: PlanToolContext): Promise<any> {
-    try {
-      let attempt = 1;
-      let result = await this.doWork(context);
-      
-      // Self-improvement loop
-      while (attempt <= this.maxImprovementAttempts) {
-        const evaluation = await this.thinking.evaluate(result, context, attempt);
-        
-        // If good enough, return
-        if (evaluation.is_satisfied || evaluation.next_action === "complete") {
-          if (attempt > 1) {
-            console.log(`✅ [${this.name}] Improved result after ${attempt} attempts. Quality: ${evaluation.quality_score}/100`);
-          }
-          return result;
-        }
-        
-        // Try to improve
-        if (evaluation.next_action === "improve" && attempt < this.maxImprovementAttempts) {
-          console.log(`🔄 [${this.name}] Quality: ${evaluation.quality_score}/100. Improving...`);
-          
-          const instruction = await this.thinking.generateImprovement(result, evaluation, context);
-          result = await this.improve(result, instruction, context);
-          attempt++;
-        } else {
-          console.log(`⏹️ [${this.name}] Stopping after ${attempt} attempts. Final quality: ${evaluation.quality_score}/100`);
-          break;
-        }
-      }
-      
-      return result;
-    } catch (error) {
-      // Unified fallback: always return failure result, never fake success
-      return this.createFailureResult(error, context);
-    }
-  }
-
-  /**
-   * Core work logic - implement this in your tool
-   * 核心工作逻辑 - 在你的工具中实现这个
-   */
-  abstract doWork(context: PlanToolContext): Promise<any>;
-
-  /**
-   * Improvement logic - implement this in your tool
-   * 改进逻辑 - 在你的工具中实现这个
-   */
-  abstract improve(
-    currentResult: any,
-    instruction: ImprovementInstruction,
-    context: PlanToolContext
-  ): Promise<any>;
-
-  /**
-   * Default task validation
-   */
-  canHandle(task: PlanTask): boolean {
-    return task.tool === this.toolType;
-  }
-
-  /**
-   * Default context validation
-   */
-  validate(context: PlanToolContext): boolean {
-    return !!(context.conversation_id && context.task_progress && context.planning_context);
-  }
-
-
-
-  /**
-   * Create unified failure result for plan tools
-   * 为计划工具创建统一的失败结果
-   */
-  protected createFailureResult(
-    error: any,
-    context: PlanToolContext,
-    options: {
-      shouldContinue?: boolean;
-      shouldUpdatePlan?: boolean;
-      customMessage?: string;
-    } = {}
-  ): ToolExecutionResult {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const failureMessage = options.customMessage || `Tool ${this.name} execution failed: ${errorMessage}`;
-    
-    // Log the failure
-    console.error(`❌ [${this.name}] ${failureMessage}`);
-    
-    return {
-      success: false,
-      error: errorMessage,
-      should_continue: options.shouldContinue ?? false,
-      should_update_plan: options.shouldUpdatePlan ?? true,  // Failure usually requires replanning
-      user_input_required: false,
-      reasoning: failureMessage,
-    };
-  }
-
-  // ============================================================================
-  // HELPER METHODS - Common functionality for plan tools
-  // ============================================================================
-
-  /**
-   * Create LLM instance from config
-   */
-  protected createLLM(config: PlanToolContext["llm_config"]) {
-    if (config.llm_type === "openai") {
-      return new ChatOpenAI({
-        modelName: config.model_name,
-        openAIApiKey: config.api_key,
-        configuration: {
-          baseURL: config.base_url,
-        },
-        temperature: config.temperature,
-        maxTokens: config.max_tokens,
-        streaming: false,
-      });
-    } else if (config.llm_type === "ollama") {
-      return new ChatOllama({
-        model: config.model_name,
-        baseUrl: config.base_url || "http://localhost:11434",
-        temperature: config.temperature,
-        streaming: false,
-      });
-    }
-
-    throw new Error(`Unsupported LLM type: ${config.llm_type}`);
-  }
-
-  /**
-   * Build planning-aware prompt with full context
-   */
-  protected buildPlanningPrompt(
-    systemPrompt: string,
-    humanTemplate: string,
-    context: PlanToolContext
-  ): ChatPromptTemplate {
-    // Pre-build context that doesn't change per request
-    const conversationSummary = this.buildConversationSummary(context.conversation_history);
-    const progressSummary = this.buildProgressSummary(context.task_progress);
-    const planningSummary = this.buildPlanningContextSummary(context.planning_context);
-    const fullContext = `${progressSummary}\n${planningSummary}\n${conversationSummary}`;
-    
-    // Create template that can accept variables
-    return ChatPromptTemplate.fromMessages([
-      new SystemMessage(systemPrompt),
-      new HumanMessage(fullContext + "\n\n" + humanTemplate)
-    ]);
-  }
-
-  /**
-   * Execute LLM chain with error handling for planning tools
-   */
-  protected async executeLLMChain(
-    prompt: ChatPromptTemplate,
-    inputData: Record<string, any>,
-    context: PlanToolContext,
-    options: {
-      parseJson?: boolean;
-      errorMessage?: string;
-    } = {}
-  ): Promise<any> {
-    try {
-      const llm = this.createLLM(context.llm_config);
-      const chain = prompt.pipe(llm).pipe(new StringOutputParser());
-      const response = await chain.invoke(inputData);
-      
-      if (options.parseJson) {
-        try {
-          const cleanedResponse = this.extractJsonFromResponse(response);
-          return JSON.parse(cleanedResponse);
-        } catch (parseError) {
-          console.error(`JSON parsing failed for response: "${response.substring(0, 500)}..."`);
-          throw parseError;
-        }
-      }
-      
-      return response;
-    } catch (error) {
-      const errorMsg = options.errorMessage || `LLM execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
-      throw new Error(errorMsg);
-    }
-  }
-
-  protected async addPlanMessage(context: PlanToolContext, content: string): Promise<void> {
-    await AgentConversationOperations.addMessage(context.conversation_id, {
-      role: "agent",
-      content,
-      message_type: "agent_thinking",
-    });
-  }
-
-  /**
-   * Extract JSON from response
-   */
-  protected extractJsonFromResponse(response: string): string {
-    let cleaned = response.trim();
-    
-    if (cleaned.startsWith('```json')) {
-      cleaned = cleaned.substring(7);
-    } else if (cleaned.startsWith('```')) {
-      cleaned = cleaned.substring(3);
-    }
-    
-    if (cleaned.endsWith('```')) {
-      cleaned = cleaned.substring(0, cleaned.length - 3);
-    }
-    
-    let jsonStart = -1;
-    let jsonEnd = -1;
-    
-    for (let i = 0; i < cleaned.length; i++) {
-      if (cleaned[i] === '{' || cleaned[i] === '[') {
-        jsonStart = i;
-        break;
-      }
-    }
-    
-    for (let i = cleaned.length - 1; i >= 0; i--) {
-      if (cleaned[i] === '}' || cleaned[i] === ']') {
-        jsonEnd = i + 1;
-        break;
-      }
-    }
-    
-    if (jsonStart !== -1 && jsonEnd !== -1 && jsonStart < jsonEnd) {
-      return cleaned.substring(jsonStart, jsonEnd);
-    }
-    
-    return cleaned;
-  }
-
-  /**
-   * Build conversation summary
-   */
-  protected buildConversationSummary(messages: ConversationMessage[]): string {
-    // If there are no messages, return a default message
-    if (messages.length === 0) {
-      return "No conversation history available.";
-    }
-
-    let summary = "=== CONVERSATION HISTORY ===\n";
-    // Only include the last 10 messages for brevity
-    const recentMessages = messages.slice(-10);
-
-    for (const message of recentMessages) {
-      // Format timestamp to local time string
-      const timestamp = new Date(message.timestamp).toLocaleTimeString();
-      // Include message_type if available, otherwise use 'N/A'
-      const messageType = (message as any).message_type ? (message as any).message_type : 'N/A';
-      // Add message details to the summary, including message_type
-      summary += `[${timestamp}] ${message.role.toUpperCase()} (${messageType}): ${message.content.substring(0, 200)}\n`;
-    }
-
-    return summary + "\n";
-  }
-
-  /**
-   * Build progress summary
-   */
-  protected buildProgressSummary(taskProgress: any): string {
-    const hasCharacter = !!taskProgress.character_data;
-    const hasWorldbook = !!taskProgress.worldbook_data && taskProgress.worldbook_data.length > 0;
-    
-    let summary = "=== CURRENT PROGRESS ===\n";
-    
-    if (hasCharacter) {
-      summary += `✅ Character Card: COMPLETE\n`;
-      summary += `   Name: ${taskProgress.character_data.name || 'N/A'}\n`;
-    } else {
-      summary += `❌ Character Card: NOT GENERATED\n`;
-    }
-    
-    if (hasWorldbook) {
-      summary += `✅ Worldbook: COMPLETE (${taskProgress.worldbook_data.length} entries)\n`;
-    } else {
-      summary += `❌ Worldbook: NOT GENERATED\n`;
-    }
-
-    return summary + "\n";
-  }
-
-  /**
-   * Build planning context summary
-   */
-  protected buildPlanningContextSummary(planningContext: any): string {
-    const pendingTasks = planningContext.current_tasks.filter((t: any) => t.status === 'pending');
-    const completedTasks = planningContext.completed_tasks.slice(-5);
-    
-    let summary = "=== PLANNING CONTEXT ===\n";
-    summary += `Original Request: "${planningContext.context.user_request}"\n`;
-    summary += `Current Focus: ${planningContext.context.current_focus}\n`;
-    summary += `Pending Tasks: ${pendingTasks.length}\n`;
-    summary += `Completed Tasks: ${planningContext.completed_tasks.length}\n\n`;
-    
-    if (pendingTasks.length > 0) {
-      summary += "Current Pending Tasks:\n";
-      for (const task of pendingTasks.slice(0, 5)) {
-        summary += `  - "${task.description}" (${task.tool}, Priority: ${task.priority})\n`;
-      }
-      summary += "\n";
-    }
-    
-    return summary;
-  }
-}
-
-/**
- * Context Manager for building appropriate contexts for tools
- * 上下文管理器，为工具构建适当的上下文
- */
-export class ContextManager {
-  /**
-   * Build context for regular tools
-   */
-  static buildRegularContext(
-    conversationId: string,
-    taskProgress: any,
-    conversationHistory: ConversationMessage[],
-    llmConfig: any
-  ): BaseToolContext {
-    return {
-      conversation_id: conversationId,
-      task_progress: taskProgress,
-      conversation_history: conversationHistory,
-      llm_config: llmConfig
+      error: `${this.name} failed: ${errorMessage}`,
+      should_continue: options.shouldContinue ?? true,
     };
   }
 
   /**
-   * Build context for plan tools
+   * Estimate token usage (rough estimation)
    */
-  static buildPlanContext(
-    conversationId: string,
-    taskProgress: any,
-    conversationHistory: ConversationMessage[],
-    llmConfig: any,
-    planningContext: any
-  ): PlanToolContext {
-    return {
-      conversation_id: conversationId,
-      task_progress: taskProgress,
-      conversation_history: conversationHistory,
-      llm_config: llmConfig,
-      planning_context: planningContext
-    };
+  protected estimateTokenUsage(text: string): number {
+    // Rough estimation: ~4 characters per token
+    return Math.ceil(text.length / 4);
   }
 } 

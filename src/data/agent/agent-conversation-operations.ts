@@ -1,82 +1,101 @@
-import { AgentConversation, AgentStatus, ConversationMessage, TaskProgress, PlanningContext } from "../../models/agent-model";
+import { 
+  ResearchSession, 
+  SessionStatus, 
+  Message, 
+  ResearchState,      
+  UserInteraction,
+  KnowledgeEntry,
+  GenerationOutput,
+} from "../../models/agent-model";
 import { readData, writeData, AGENT_CONVERSATIONS_FILE } from "../local-storage";
 import { v4 as uuidv4 } from "uuid";
 
 /**
- * Agent Conversation Operations - Redesigned
- * Handles conversation data with clear separation of concerns
+ * Agent Conversation Operations - Simplified for Real-time Architecture
  */
-export class AgentConversationOperations {
-
+export class ResearchSessionOperations {
 
   /**
-   * Create a new agent conversation with clean initial state
+   * Create a new agent conversation with simplified initial state
    */
   static async createConversation(
     title: string,
-    llmConfig: AgentConversation["llm_config"],
+    llmConfig: ResearchSession["llm_config"],
     initialUserRequest: string
-  ): Promise<AgentConversation> {
+  ): Promise<ResearchSession> {
     const conversationId = uuidv4();
     const now = new Date().toISOString();
 
-    // Create initial task progress
-    const taskProgress: TaskProgress = {
+    // Create initial task state
+    const ResearchState: ResearchState = {
       id: uuidv4(),
-      conversation_id: conversationId,
-      generation_metadata: {
-        total_iterations: 0,
-        tools_used: [],
-        last_updated: now,
+      session_id: conversationId,
+      main_objective: initialUserRequest,
+      current_focus: "Understanding user requirements and gathering initial information",
+      progress: {
+        search_coverage: 0,
+        information_quality: 0,
+        answer_confidence: 0,
+        user_satisfaction: 0,
       },
+      active_tasks: [
+        "Analyze user requirements",
+        "Identify information needs",
+        "Begin character concept development"
+      ],
+      completed_tasks: [],
+      knowledge_gaps: [
+        "Character background details",
+        "World setting information", 
+        "User preferences and constraints"
+      ],
+      knowledge_base: [],
+      user_interactions: [{
+        id: uuidv4(),
+        question: initialUserRequest,
+        is_initial: true,
+        timestamp: now,
+        status: "pending",
+      }],
       created_at: now,
       updated_at: now,
     };
 
-    // Create initial planning context
-    const planningContext: PlanningContext = {
-      id: uuidv4(),
-      conversation_id: conversationId,
-      goals: [],
-      current_tasks: [],
-      completed_tasks: [],
-      context: {
-        user_request: initialUserRequest,
-        current_focus: "Initial setup and planning",
-        constraints: [],
-        preferences: {},
-        failure_history: {
-          failed_tool_attempts: {},
-          recent_failures: [],
-        },
+    // Create initial character progress
+    const GenerationOutput: GenerationOutput = {
+      quality_metrics: {
+        completeness: 0,
+        consistency: 0,
+        creativity: 0,
+        user_satisfaction: 0,
       },
-      created_at: now,
-      updated_at: now,
     };
 
     // Create initial user message
-    const initialMessage: ConversationMessage = {
+    const initialMessage: Message = {
       id: uuidv4(),
       role: "user",
       content: initialUserRequest,
-      message_type: "user_input",
+      type: "user_input",
       timestamp: now,
     };
 
-    const conversation: AgentConversation = {
+    const conversation: ResearchSession = {
       id: conversationId,
       title,
-      status: AgentStatus.IDLE,
+      status: SessionStatus.IDLE,
       messages: [initialMessage],
-      task_progress: taskProgress,
-      planning_context: planningContext,
+      research_state: ResearchState,
+      generation_output: GenerationOutput,
       llm_config: llmConfig,
-      execution_metadata: {
+      execution_info: {
         current_iteration: 0,
         max_iterations: 50,
         start_time: now,
         last_activity: now,
         error_count: 0,
+        total_tokens_used: 0,
+        token_budget: 100000, // 100K tokens default budget
       },
       created_at: now,
       updated_at: now,
@@ -89,7 +108,7 @@ export class AgentConversationOperations {
   /**
    * Get conversation by ID
    */
-  static async getConversationById(conversationId: string): Promise<AgentConversation | null> {
+  static async getConversationById(conversationId: string): Promise<ResearchSession | null> {
     const conversations = await this.getAllConversations();
     return conversations.find(c => c.id === conversationId) || null;
   }
@@ -97,7 +116,7 @@ export class AgentConversationOperations {
   /**
    * Get all conversations
    */
-  static async getAllConversations(): Promise<AgentConversation[]> {
+  static async getAllConversations(): Promise<ResearchSession[]> {
     try {
       const data = await readData(AGENT_CONVERSATIONS_FILE);
       return Array.isArray(data) ? data : [];
@@ -110,12 +129,12 @@ export class AgentConversationOperations {
   /**
    * Save conversation to storage
    */
-  static async saveConversation(conversation: AgentConversation): Promise<void> {
+  static async saveConversation(conversation: ResearchSession): Promise<void> {
     const conversations = await this.getAllConversations();
     const existingIndex = conversations.findIndex(c => c.id === conversation.id);
     
     conversation.updated_at = new Date().toISOString();
-    conversation.execution_metadata.last_activity = conversation.updated_at;
+    conversation.execution_info.last_activity = conversation.updated_at;
 
     if (existingIndex >= 0) {
       conversations[existingIndex] = conversation;
@@ -129,14 +148,14 @@ export class AgentConversationOperations {
   /**
    * Update conversation with partial data
    */
-  static async updateConversation(conversation: AgentConversation): Promise<void> {
+  static async updateConversation(conversation: ResearchSession): Promise<void> {
     await this.saveConversation(conversation);
   }
 
   /**
    * Update conversation status
    */
-  static async updateStatus(conversationId: string, status: AgentStatus): Promise<void> {
+  static async updateStatus(conversationId: string, status: SessionStatus): Promise<void> {
     const conversation = await this.getConversationById(conversationId);
     if (!conversation) {
       throw new Error(`Conversation not found: ${conversationId}`);
@@ -151,14 +170,14 @@ export class AgentConversationOperations {
    */
   static async addMessage(
     conversationId: string,
-    messageData: Omit<ConversationMessage, "id" | "timestamp">
-  ): Promise<ConversationMessage> {
+    messageData: Omit<Message, "id" | "timestamp">
+  ): Promise<Message> {
     const conversation = await this.getConversationById(conversationId);
     if (!conversation) {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    const message: ConversationMessage = {
+    const message: Message = {
       ...messageData,
       id: uuidv4(),
       timestamp: new Date().toISOString(),
@@ -171,46 +190,80 @@ export class AgentConversationOperations {
   }
 
   /**
-   * Update task progress
+   * Update task state
    */
-  static async updateTaskProgress(
+  static async updateResearchState(
     conversationId: string,
-    updates: Partial<Omit<TaskProgress, "id" | "conversation_id" | "created_at">>
+    updates: Partial<Omit<ResearchState, "id" | "session_id" | "created_at">>
   ): Promise<void> {
     const conversation = await this.getConversationById(conversationId);
     if (!conversation) {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    // Update task progress
-    Object.assign(conversation.task_progress, updates);
-    conversation.task_progress.updated_at = new Date().toISOString();
-    conversation.task_progress.generation_metadata.last_updated = conversation.task_progress.updated_at;
+    // Update task state
+    Object.assign(conversation.research_state, updates);
+    conversation.research_state.updated_at = new Date().toISOString();
 
     await this.saveConversation(conversation);
   }
 
   /**
-   * Update planning context
+   * Update character progress
    */
-  static async updatePlanningContext(
+  static async updateGenerationOutput(
     conversationId: string,
-    updates: Partial<Omit<PlanningContext, "id" | "conversation_id" | "created_at">>
+    updates: Partial<GenerationOutput>
   ): Promise<void> {
     const conversation = await this.getConversationById(conversationId);
     if (!conversation) {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    // Update planning context
-    Object.assign(conversation.planning_context, updates);
-    conversation.planning_context.updated_at = new Date().toISOString();
+    // Update character progress
+    Object.assign(conversation.generation_output, updates);
 
     await this.saveConversation(conversation);
   }
 
   /**
-   * Increment iteration count
+   * Add knowledge entries to the knowledge base
+   */
+  static async addKnowledgeEntries(
+    conversationId: string,
+    entries: KnowledgeEntry[]
+  ): Promise<void> {
+    const conversation = await this.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    conversation.research_state.knowledge_base.push(...entries);
+    conversation.research_state.updated_at = new Date().toISOString();
+
+    await this.saveConversation(conversation);
+  }
+
+  /**
+   * Add user questions to the questions array
+   */
+  static async addUserInteractions(
+    conversationId: string,
+    questions: UserInteraction[]
+  ): Promise<void> {
+    const conversation = await this.getConversationById(conversationId);
+    if (!conversation) {
+      throw new Error(`Conversation not found: ${conversationId}`);
+    }
+
+    conversation.research_state.user_interactions.push(...questions);
+    conversation.research_state.updated_at = new Date().toISOString();
+
+    await this.saveConversation(conversation);
+  }
+
+  /**
+   * Increment iteration counter
    */
   static async incrementIteration(conversationId: string): Promise<number> {
     const conversation = await this.getConversationById(conversationId);
@@ -218,32 +271,27 @@ export class AgentConversationOperations {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    conversation.execution_metadata.current_iteration++;
-    conversation.task_progress.generation_metadata.total_iterations = conversation.execution_metadata.current_iteration;
-    
+    conversation.execution_info.current_iteration++;
     await this.saveConversation(conversation);
-    return conversation.execution_metadata.current_iteration;
+    
+    return conversation.execution_info.current_iteration;
   }
 
   /**
-   * Record tool usage in task progress
+   * Record token usage
    */
-  static async recordToolUsage(conversationId: string, toolType: string): Promise<void> {
+  static async recordTokenUsage(conversationId: string, tokensUsed: number): Promise<void> {
     const conversation = await this.getConversationById(conversationId);
     if (!conversation) {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    const toolsUsed = conversation.task_progress.generation_metadata.tools_used;
-    if (!toolsUsed.includes(toolType as any)) {
-      toolsUsed.push(toolType as any);
-    }
-
+    conversation.execution_info.total_tokens_used += tokensUsed;
     await this.saveConversation(conversation);
   }
 
   /**
-   * Record error in execution metadata
+   * Record error
    */
   static async recordError(conversationId: string, error: string): Promise<void> {
     const conversation = await this.getConversationById(conversationId);
@@ -251,9 +299,8 @@ export class AgentConversationOperations {
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    conversation.execution_metadata.error_count++;
-    conversation.execution_metadata.last_error = error;
-
+    conversation.execution_info.error_count++;
+    conversation.execution_info.last_error = error;
     await this.saveConversation(conversation);
   }
 
@@ -271,34 +318,36 @@ export class AgentConversationOperations {
    */
   static async getConversationSummary(conversationId: string): Promise<{
     title: string;
-    status: AgentStatus;
+    status: SessionStatus;
     messageCount: number;
     hasCharacter: boolean;
     hasWorldbook: boolean;
     lastActivity: string;
     completionPercentage: number;
+    knowledgeBaseSize: number;
+    currentFocus: string;
   } | null> {
     const conversation = await this.getConversationById(conversationId);
     if (!conversation) return null;
 
-    const hasCharacter = !!conversation.task_progress.character_data;
-    const hasWorldbook = !!conversation.task_progress.worldbook_data && conversation.task_progress.worldbook_data.length > 0;
-    
-    let completionPercentage = 0;
-    if (hasCharacter && hasWorldbook) {
-      completionPercentage = 100;
-    } else if (hasCharacter || hasWorldbook) {
-      completionPercentage = 50;
-    }
+    const completion = conversation.research_state.progress;
+    const averageCompletion = (
+      completion.search_coverage + 
+      completion.information_quality + 
+      completion.answer_confidence + 
+      completion.user_satisfaction
+    ) / 4;
 
     return {
       title: conversation.title,
       status: conversation.status,
       messageCount: conversation.messages.length,
-      hasCharacter,
-      hasWorldbook,
-      lastActivity: conversation.execution_metadata.last_activity,
-      completionPercentage,
+      hasCharacter: !!conversation.generation_output.character_data,
+      hasWorldbook: !!conversation.generation_output.worldbook_data && conversation.generation_output.worldbook_data.length > 0,
+      lastActivity: conversation.execution_info.last_activity,
+      completionPercentage: Math.round(averageCompletion),
+      knowledgeBaseSize: conversation.research_state.knowledge_base.length,
+      currentFocus: conversation.research_state.current_focus,
     };
   }
 } 

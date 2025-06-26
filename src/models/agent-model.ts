@@ -1,57 +1,160 @@
 /**
- * Redesigned Agent Model - Clear Context Architecture
- * Separates concerns between different tool types and provides clear context interfaces
+ * Agent Model - Real-time Decision Architecture
+ * Inspired by Jina AI DeepResearch design philosophy
+ * Optimized naming conventions for clarity
  */
 
-// Core tool types available to the agent
+// Tool types - pure execution units
 export enum ToolType {
-  PLAN = "PLAN",
-  ASK_USER = "ASK_USER",
-  SEARCH = "SEARCH",
-  OUTPUT = "OUTPUT"
+  SEARCH = "SEARCH",     // Search and gather information
+  ASK_USER = "ASK_USER", // Get user input
+  OUTPUT = "OUTPUT"      // Generate final output
 }
 
-// Agent execution status
-export enum AgentStatus {
+// Session execution status
+export enum SessionStatus {
   IDLE = "idle",
   THINKING = "thinking",
-  EXECUTING = "executing",
+  EXECUTING = "executing", 
   WAITING_USER = "waiting_user",
   COMPLETED = "completed",
   FAILED = "failed"
 }
 
 // ============================================================================
-// CONVERSATION CONTEXT - The core context all tools need
+// CORE DECISION STRUCTURES
 // ============================================================================
 
 /**
- * Core conversation message structure
- * This represents the full dialogue history in role:content format
+ * Real-time tool decision - inspired by DeepResearch action types
  */
-export interface ConversationMessage {
+export interface ToolDecision {
+  tool: ToolType;
+  parameters: Record<string, any>;
+  reasoning: string;
+  priority: number;
+}
+
+/**
+ * Knowledge entry from search/research results
+ */
+export interface KnowledgeEntry {
+  id: string;
+  source: string;
+  content: string;
+  url?: string;
+  relevance_score: number;
+  timestamp: string;
+}
+
+/**
+ * User interaction tracking (questions and responses)
+ */
+export interface UserInteraction {
+  id: string;
+  question: string;
+  is_initial: boolean;
+  parent_id?: string;
+  timestamp: string;
+  status: "pending" | "answered" | "clarifying";
+}
+
+/**
+ * Research state - similar to DeepResearch's context management
+ */
+export interface ResearchState {
+  id: string;
+  session_id: string;
+  
+  // Current research objective
+  main_objective: string;
+  current_focus: string;
+  
+  // Progress tracking (0-100 scale)
+  progress: {
+    search_coverage: number;      // How much we've searched
+    information_quality: number;  // Quality of gathered info
+    answer_confidence: number;    // Confidence in current answer
+    user_satisfaction: number;    // Based on user feedback
+  };
+  
+  // Dynamic research status
+  active_tasks: string[];         // Current work items
+  completed_tasks: string[];      // Finished work items
+  knowledge_gaps: string[];       // What we still need to research
+  
+  // Research artifacts
+  knowledge_base: KnowledgeEntry[];
+  user_interactions: UserInteraction[];
+  
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Tool execution result
+ */
+export interface ExecutionResult {
+  success: boolean;
+  result?: any;
+  error?: string;
+  knowledge_updates?: KnowledgeEntry[];
+  interaction_updates?: UserInteraction[];
+  should_continue: boolean;
+  tokens_used?: number;
+}
+
+// ============================================================================
+// EXECUTION CONTEXT
+// ============================================================================
+
+/**
+ * Tool execution context - unified for all tools
+ */
+export interface ExecutionContext {
+  session_id: string;
+  
+  // Current research state
+  research_state: ResearchState;
+  message_history: Message[];
+  
+  // LLM configuration
+  llm_config: {
+    model_name: string;
+    api_key: string;
+    base_url?: string;
+    llm_type: "openai" | "ollama";
+    temperature: number;
+    max_tokens?: number;
+  };
+
+}
+
+// ============================================================================
+// COMMUNICATION STRUCTURES
+// ============================================================================
+
+/**
+ * Message in the conversation/research process
+ */
+export interface Message {
   id: string;
   role: "user" | "agent" | "system";
   content: string;
-  message_type: "user_input" | "agent_thinking" | "agent_action" | "agent_output" | "system_info";
+  type: "user_input" | "agent_thinking" | "agent_action" | "agent_output" | "system_info";
   metadata?: {
-    task_id?: string;
     tool_used?: ToolType;
     reasoning?: string;
-    attachments?: any[];
+    knowledge_added?: number;
+    interactions_added?: number;
   };
   timestamp: string;
 }
 
 /**
- * Current task progress state (result of all work so far)
- * This represents the character card and worldbook generation progress
+ * Generation output (specific to character creation application)
  */
-export interface TaskProgress {
-  id: string;
-  conversation_id: string;
-  
-  // Character generation progress
+export interface GenerationOutput {
   character_data?: {
     name: string;
     description: string;
@@ -66,26 +169,14 @@ export interface TaskProgress {
     [key: string]: any;
   };
   
-  // Worldbook generation progress
   worldbook_data?: WorldbookEntry[];
   
-  // Additional progress tracking
-  integration_notes?: string;
   quality_metrics?: {
     completeness: number;
     consistency: number;
     creativity: number;
     user_satisfaction: number;
   };
-  
-  generation_metadata: {
-    total_iterations: number;
-    tools_used: ToolType[];
-    last_updated: string;
-  };
-  
-  created_at: string;
-  updated_at: string;
 }
 
 export interface WorldbookEntry {
@@ -105,147 +196,22 @@ export interface WorldbookEntry {
 }
 
 // ============================================================================
-// PLANNING CONTEXT - Additional context needed only by planning tools
+// MAIN SESSION STRUCTURE
 // ============================================================================
 
 /**
- * Task structure for planning
+ * Research Session - the main data container
+ * Represents a complete research/generation session
  */
-export interface PlanTask {
-  id: string;
-  description: string;
-  tool: ToolType;
-  status: "pending" | "executing" | "completed" | "failed" | "obsolete";
-  result?: any;
-  reasoning?: string;
-  priority: number;
-  created_at: string;
-  completed_at?: string;
-  obsolete_reason?: string;
-}
-
-/**
- * Goal structure for hierarchical planning
- */
-export interface Goal {
-  id: string;
-  description: string;
-  type: "main_goal" | "sub_goal" | "task";
-  parent_id?: string;
-  children: string[];
-  status: "pending" | "in_progress" | "completed" | "failed";
-  checkpoint?: {
-    progress: number;
-    description: string;
-    timestamp: string;
-  };
-  metadata?: Record<string, any>;
-}
-
-/**
- * Planning state - only needed by PLAN tools
- */
-export interface PlanningContext {
-  id: string;
-  conversation_id: string;
-  
-  // Goal hierarchy
-  goals: Goal[];
-  
-  // Task management
-  current_tasks: PlanTask[];
-  completed_tasks: PlanTask[];
-  
-  // Planning metadata
-  context: {
-    user_request: string;
-    current_focus: string;
-    constraints: string[];
-    preferences: Record<string, any>;
-    failure_history: {
-      failed_tool_attempts: Record<string, number>;
-      recent_failures: Array<{
-        tool: string;
-        description: string;
-        error: string;
-        timestamp: string;
-        attempt_count: number;
-      }>;
-    };
-  };
-  
-  created_at: string;
-  updated_at: string;
-}
-
-// ============================================================================
-// CONTEXT INTERFACES - Clear separation by tool type
-// ============================================================================
-
-/**
- * Base context that ALL tools receive
- * Contains only essential conversation and progress information
- */
-export interface BaseToolContext {
-  conversation_id: string;
-  
-  // Current task progress (character card + worldbook state)
-  task_progress: TaskProgress;
-  
-  // Full conversation history (user inputs + agent responses + system messages)
-  conversation_history: ConversationMessage[];
-  
-  // LLM configuration
-  llm_config: {
-    model_name: string;
-    api_key: string;
-    base_url?: string;
-    llm_type: "openai" | "ollama";
-    temperature: number;
-    max_tokens?: number;
-  };
-}
-
-/**
- * Extended context for PLAN tools only
- * Includes planning-specific information in addition to base context
- */
-export interface PlanToolContext extends BaseToolContext {
-  // Planning state (tasks, goals, etc.)
-  planning_context: PlanningContext;
-}
-
-/**
- * Generic tool execution result
- */
-export interface ToolExecutionResult {
-  success: boolean;
-  result?: any;
-  error?: string;
-  should_update_plan?: boolean;
-  should_continue?: boolean;
-  user_input_required?: boolean;
-  reasoning?: string;
-}
-
-// ============================================================================
-// MAIN CONVERSATION STRUCTURE - Simplified
-// ============================================================================
-
-/**
- * Main agent conversation - simplified and focused
- */
-export interface AgentConversation {
+export interface ResearchSession {
   id: string;
   title: string;
-  status: AgentStatus;
+  status: SessionStatus;
   
-  // Core conversation data
-  messages: ConversationMessage[];
-  task_progress: TaskProgress;
-  
-  // Planning data (separate from core conversation)
-  planning_context: PlanningContext;
+  // Core session data
+  messages: Message[];
+  research_state: ResearchState;
+  generation_output: GenerationOutput;
   
   // LLM configuration
   llm_config: {
@@ -257,14 +223,16 @@ export interface AgentConversation {
     max_tokens?: number;
   };
   
-  // Execution metadata
-  execution_metadata: {
+  // Execution tracking
+  execution_info: {
     current_iteration: number;
     max_iterations: number;
     start_time: string;
     last_activity: string;
     error_count: number;
     last_error?: string;
+    total_tokens_used: number;
+    token_budget: number;
   };
   
   created_at: string;

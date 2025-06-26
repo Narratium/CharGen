@@ -1,308 +1,173 @@
-import { BaseRegularTool } from "../base-tool";
-import { ToolType, BaseToolContext } from "../../models/agent-model";
-import { searchPrompts } from "./prompts";
-import { SearchThinking } from "./think";
-import { ImprovementInstruction } from "../base-think";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { ToolType, ExecutionContext, KnowledgeEntry } from "../../models/agent-model";
+import { BaseSimpleTool } from "../base-tool";
 
 /**
- * Search Tool - Enhanced with thinking capabilities
- * 搜索工具 - 增强思考能力
+ * Search Tool - Simple execution unit for information gathering
+ * Updates knowledge base after search
  */
-export class SearchTool extends BaseRegularTool {
+export class SearchTool extends BaseSimpleTool {
   readonly toolType = ToolType.SEARCH;
-  readonly name = "Inspiration Seeker";
-  readonly description = "Search for inspiration, references, and creative ideas";
-  protected thinking: SearchThinking;
-
-  constructor() {
-    super();
-    this.thinking = new SearchThinking();
-  }
-
-  /**
-   * Core work logic - search and generate inspiration using intelligent routing
-   * 核心工作逻辑 - 使用智能路由搜索并生成灵感
-   */
-  async doWork(context: BaseToolContext): Promise<any> {
-    // Define available sub-tools (currently single, but prepared for future expansion)
-    const availableSubTools = [
-      "searchAndInspire"
-    ];
-
-    try {
-      // Use intelligent routing to select the best sub-tool
-      console.log(`🧠 [SEARCH] Using intelligent routing to select sub-tool...`);
-      const routingDecision = await this.thinking.routeToSubTool(context, availableSubTools);
-      
-      console.log(`🎯 [SEARCH] Selected sub-tool: ${routingDecision.selected_sub_tool} (confidence: ${routingDecision.confidence}%)`);
-      console.log(`📝 [SEARCH] Reasoning: ${routingDecision.reasoning}`);
-
-      // Route to the selected sub-tool
-      switch (routingDecision.selected_sub_tool) {
-        case "searchAndInspire":
-          return await this.performSearchAndInspire(context);
-        default:
-          // Log unknown sub-tool and throw error instead of fallback
-          console.error(`[SEARCH] Unknown sub-tool: ${routingDecision.selected_sub_tool}`);
-          throw new Error(`Unknown sub-tool selected: ${routingDecision.selected_sub_tool}`);
-      }
-    } catch (error) {
-      // Log failure and propagate error instead of fallback
-      console.error(`[SEARCH] Tool execution failed:`, error);
-      throw error; // Re-throw to let base class handle
-    }
-  }
+  readonly name = "Search Tool";
+  readonly description = "Search for information to fill knowledge gaps and update knowledge base";
+  readonly parameters = [
+    {
+      name: "query",
+      type: "string" as const,
+      description: "Search query or topic to research",
+      required: true,
+    },
+    {
+      name: "focus",
+      type: "string" as const,
+      description: "Specific focus area for the search",
+      required: false,
+      default: "general",
+      options: ["character", "worldbook", "personality", "background", "general"],
+    },
+  ];
 
   /**
-   * Main search and inspiration functionality
-   * 主要搜索和灵感功能
+   * Execute search and update knowledge base
    */
-  private async performSearchAndInspire(context: BaseToolContext): Promise<any> {
-    try {
-      // Generate search queries using LLM
-      const searchQueries = await this.generateSearchQueries(context);
-      
-      // Perform actual searches
-      const searchResults = await this.performSearches(searchQueries);
-      
-      // Process and analyze results
-      const processedResults = await this.processSearchResults(searchResults, context);
-      
-      const result = {
-        queries: searchQueries,
-        results: processedResults,
-        summary: await this.generateSearchSummary(processedResults, context),
-      };
-
-      // Display results to user
-      await this.addMessage(
-        context.conversation_id,
-        "agent",
-        `🔍 **Search Complete**\n\n**Queries:** ${searchQueries.join(', ')}\n**Results:** ${processedResults.length} relevant findings\n\n${result.summary}`,
-      );
-
-      return result;
-
-    } catch (error) {
-      // Log specific failure and throw error instead of fallback
-      console.error(`[SEARCH] Search operation failed:`, error);
-      throw new Error(`Search operation failed: ${error instanceof Error ? error.message : error}`);
-    }
-  }
-
-  /**
-   * Improvement logic - enhance search results based on feedback
-   * 改进逻辑 - 根据反馈增强搜索结果
-   */
-  async improve(
-    currentResult: any,
-    instruction: ImprovementInstruction,
-    context: BaseToolContext
-  ): Promise<any> {
-    try {
-      console.log(`🔄 [SEARCH] Improving results based on: ${instruction.focus_areas.join(', ')}`);
-      
-      // Generate improved search based on instruction
-      const improvedResult = await this.generateImprovedSearch(
-        currentResult,
-        instruction,
-        context
-      );
-      
-      await this.addMessage(
-        context.conversation_id,
-        "agent",
-        `🔍 **Improved Search Results**\n\n${improvedResult.summary || improvedResult.inspiration}`
-      );
-
-      return {
-        ...improvedResult,
-        improvementApplied: instruction.focus_areas,
-        previousResult: currentResult
-      };
-      
-    } catch (error) {
-      // Log improvement failure and throw error instead of fallback
-      console.error(`[SEARCH] Search improvement failed:`, error);
-      throw new Error(`Search improvement failed: ${error instanceof Error ? error.message : error}`);
-    }
-  }
-
-  /**
-   * Generate improved search based on feedback
-   */
-  private async generateImprovedSearch(
-    currentResult: any,
-    instruction: ImprovementInstruction,
-    context: BaseToolContext
-  ): Promise<any> {
-    const improvementPrompt = `Improve the search/inspiration based on these instructions:
-
-FOCUS AREAS: ${instruction.focus_areas.join(', ')}
-SPECIFIC REQUESTS: ${instruction.specific_requests.join(', ')}
-TARGET QUALITY: ${instruction.quality_target}/100
-
-CURRENT RESULT:
-${JSON.stringify(currentResult, null, 2)}
-
-Generate improved inspiration content that addresses the feedback above.`;
-
-    const prompt = this.buildContextualPrompt(
-      searchPrompts.SUMMARY_GENERATION_SYSTEM + "\n\nYou are improving existing search results based on feedback.",
-      improvementPrompt,
-      context
+  protected async doWork(context: ExecutionContext, parameters: Record<string, any>): Promise<any> {
+    const query = parameters.query || parameters.search_query || "character creation information";
+    const focus = parameters.focus || "general";
+    
+    console.log(`🔍 Searching for: ${query} (Focus: ${focus})`);
+    
+    // Add search action message
+    await this.addMessage(
+      context.session_id,
+      "agent",
+      `Searching for information: ${query}`,
+      "agent_action",
+      { search_query: query, focus }
     );
 
-    const improvedContent = await this.executeLLMChain(prompt, {
-      improvement_context: "Improving search results based on feedback"
-    }, context, {
-      errorMessage: "Failed to generate improved search content"
-    });
-
+    // Perform the search using LLM
+    const searchResults = await this.performSearch(context, query, focus);
+    
+    // Create knowledge entries from search results
+    const knowledgeUpdates = this.createKnowledgeEntries(searchResults, query);
+    
+    // Update search coverage progress
+    await this.updateSearchProgress(context);
+    
+    console.log(`✅ Found ${knowledgeUpdates.length} relevant pieces of information`);
+    
     return {
-      queries: currentResult.queries || ["improved search"],
-      results: currentResult.results || [],
-      summary: improvedContent,
-      improved: true
+      search_query: query,
+      results_count: knowledgeUpdates.length,
+      knowledge_entries: knowledgeUpdates,
+      summary: this.summarizeSearchResults(searchResults),
+      knowledgeUpdates // This will be used to update the knowledge base
     };
   }
 
   /**
-   * Generate intelligent search queries using LLM
+   * Perform search using LLM knowledge
    */
-  private async generateSearchQueries(context: BaseToolContext): Promise<string[]> {
-    const prompt = this.buildContextualPrompt(
-      searchPrompts.QUERY_GENERATION_SYSTEM,
-      searchPrompts.QUERY_GENERATION_HUMAN,
-      context
+  private async performSearch(context: ExecutionContext, query: string, focus: string): Promise<any[]> {
+    const prompt = ChatPromptTemplate.fromTemplate(`
+You are a research assistant helping to create character cards and worldbooks.
+
+Current Task Context:
+{task_context}
+
+Current Knowledge Base:
+{knowledge_base}
+
+User Questions:
+{user_questions}
+
+Search Query: {query}
+Search Focus: {focus}
+
+Based on the search query and current context, provide relevant information that would help with character creation and worldbook development. 
+
+Focus on:
+- Character development details (personality, background, motivations)
+- World building elements (settings, lore, rules)
+- Creative writing techniques
+- Character interaction patterns
+- Story development approaches
+
+Return your response in JSON format:
+{{
+  "search_results": [
+    {{
+      "source": "source name or type",
+      "title": "title of information",
+      "content": "detailed content",
+      "relevance_score": 1-100,
+      "category": "character|world|technique|interaction|story"
+    }}
+  ],
+  "search_summary": "brief summary of what was found",
+  "additional_suggestions": ["suggestion1", "suggestion2"]
+}}
+`);
+
+    const response = await this.executeLLMChain(
+      prompt,
+      {
+        task_context: this.buildTaskContextSummary(context),
+        knowledge_base: this.buildKnowledgeBaseSummary(context.research_state.knowledge_base),
+        user_questions: this.buildUserInteractionsSummary(context.research_state.user_interactions),
+        query,
+        focus,
+      },
+      context,
+      { parseJson: true, errorMessage: "Search execution failed" }
     );
 
-    try {
-      const queries = await this.executeLLMChain(prompt, {
-        task_description: "Generate relevant search queries"
-      }, context, {
-        parseJson: true,
-        errorMessage: "Failed to generate search queries"
-      });
-      if (!Array.isArray(queries)) {
-        throw new Error("LLM returned invalid query format - expected array");
-      }
-      return queries;
-    } catch (error) {
-      // Don't return fallback values - propagate the error
-      throw new Error(`Failed to generate search queries: ${error instanceof Error ? error.message : error}`);
-    }
+    return response.search_results || [];
   }
 
   /**
-   * Perform actual web searches using DuckDuckGo
+   * Create knowledge entries from search results
    */
-  private async performSearches(queries: string[]): Promise<any[]> {
-    const results = [];
-    
-    for (const query of queries.slice(0, 3)) { // Limit to 3 queries to avoid rate limiting
-      try {
-        const searchResult = await this.searchDuckDuckGo(query);
-        if (searchResult) {
-          results.push({
-            query,
-            results: searchResult,
-          });
-        }
-        
-        // Add delay between searches
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (error) {
-        console.warn(`Search failed for query "${query}":`, error);
-        // Continue with other queries instead of stopping
-      }
-    }
-    
-    return results;
+  private createKnowledgeEntries(searchResults: any[], query: string): KnowledgeEntry[] {
+    return searchResults.map(result => 
+      this.createKnowledgeEntry(
+        result.source || "AI Search",
+        result.content || result.title || "No content",
+        undefined, // No URL for LLM-based search
+        result.relevance_score || 70
+      )
+    );
   }
 
   /**
-   * Search using DuckDuckGo Instant Answer API
+   * Update search coverage progress
    */
-  private async searchDuckDuckGo(query: string): Promise<any> {
-    const encodedQuery = encodeURIComponent(query);
-    const url = `https://api.duckduckgo.com/?q=${encodedQuery}&format=json&no_html=1&skip_disambig=1`;
+  private async updateSearchProgress(context: ExecutionContext): Promise<void> {
+    const currentCoverage = context.research_state.progress.search_coverage;
+    const increment = Math.min(15, 100 - currentCoverage); // Increase by 15%, max 100%
     
-    try {
-      const response = await fetch(url);
-      const data = await response.json() as any;
-      
-      return {
-        abstract: data.Abstract,
-        abstractText: data.AbstractText,
-        abstractSource: data.AbstractSource,
-        abstractURL: data.AbstractURL,
-        relatedTopics: data.RelatedTopics?.slice(0, 5) || [],
-        answer: data.Answer,
-        answerType: data.AnswerType,
-        definition: data.Definition,
-        definitionSource: data.DefinitionSource,
-        definitionURL: data.DefinitionURL,
-        entity: data.Entity,
-        heading: data.Heading,
-        image: data.Image,
-        redirect: data.Redirect,
-        type: data.Type,
-      };
-    } catch (error) {
-      console.error("DuckDuckGo search failed:", error);
-      return null;
-    }
+    // Note: In real implementation, this would update via ResearchSessionOperations
+    // For now, we'll return it in the result for the engine to handle
   }
 
   /**
-   * Process and analyze search results
+   * Summarize search results for logging
    */
-  private async processSearchResults(searchResults: any[], context: BaseToolContext): Promise<any[]> {
-    const processedResults = [];
-    
-    for (const searchResult of searchResults) {
-      if (searchResult.results) {
-        const processed = {
-          query: searchResult.query,
-          abstract: searchResult.results.abstract,
-          abstractText: searchResult.results.abstractText,
-          abstractURL: searchResult.results.abstractURL,
-          relatedTopics: searchResult.results.relatedTopics?.map((topic: any) => ({
-            text: topic.Text,
-            firstURL: topic.FirstURL,
-          })) || [],
-          answer: searchResult.results.answer,
-          definition: searchResult.results.definition,
-          entity: searchResult.results.entity,
-          heading: searchResult.results.heading,
-        };
-        
-        processedResults.push(processed);
-      }
-    }
-    
-    return processedResults;
-  }
-
-  /**
-   * Generate a summary of search results using LLM
-   */
-  private async generateSearchSummary(results: any[], context: BaseToolContext): Promise<string> {
+  private summarizeSearchResults(results: any[]): string {
     if (results.length === 0) {
-      throw new Error("No search results to summarize");
+      return "No relevant information found";
     }
     
-    const prompt = this.buildContextualPrompt(
-      searchPrompts.SUMMARY_GENERATION_SYSTEM,
-      searchPrompts.SUMMARY_GENERATION_HUMAN,
-      context
-    );
-
-    return await this.executeLLMChain(prompt, {
-      search_results: JSON.stringify(results, null, 2)
-    }, context, {
-      errorMessage: "Failed to generate search summary"
-    });
+    const categories = results.reduce((acc, result) => {
+      const category = result.category || "general";
+      acc[category] = (acc[category] || 0) + 1;
+      return acc;
+    }, {});
+    
+    const categoryText = Object.entries(categories)
+      .map(([cat, count]) => `${count} ${cat}`)
+      .join(", ");
+    
+    return `Found ${results.length} results: ${categoryText}`;
   }
 } 

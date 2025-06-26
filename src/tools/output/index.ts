@@ -1,389 +1,265 @@
-import { BaseRegularTool } from "../base-tool";
-import { ToolType, BaseToolContext, ToolExecutionResult } from "../../models/agent-model";
-import { AgentConversationOperations } from "../../data/agent/agent-conversation-operations";
-import { outputPrompts } from "./prompts";
-import { OutputThinking } from "./think";
-import { ImprovementInstruction } from "../base-think";
+import { ChatPromptTemplate } from "@langchain/core/prompts";
+import { ToolType, ExecutionContext, GenerationOutput } from "../../models/agent-model";
+import { BaseSimpleTool } from "../base-tool";
 
 /**
- * OUTPUT Tool - Enhanced with thinking capabilities
- * 输出工具 - 增强思考能力
+ * Output Tool - Simple execution unit for final output generation
+ * Creates character cards and worldbooks from knowledge base
  */
-export class OutputTool extends BaseRegularTool {
+export class OutputTool extends BaseSimpleTool {
   readonly toolType = ToolType.OUTPUT;
   readonly name = "Output Generator";
-  readonly description = "Generate final output and present results to user";
-
-  protected thinking: OutputThinking;
-
-  constructor() {
-    super();
-    this.thinking = new OutputThinking();
-  }
-
-  /**
-   * Core work logic - generate output using intelligent routing
-   * 核心工作逻辑 - 使用智能路由生成输出
-   */
-  async doWork(context: BaseToolContext): Promise<any> {
-    // Define available sub-tools
-    const availableSubTools = [
-      "generateFinalOutput",
-      "generateCharacterOutput",
-      "generateWorldbookOutput", 
-      "generateProgressReport"
-    ];
-
-    try {
-      // Use intelligent routing to select the best sub-tool
-      console.log(`🧠 [OUTPUT] Using intelligent routing to select sub-tool...`);
-      const routingDecision = await this.thinking.routeToSubTool(context, availableSubTools);
-      
-      
-      console.log(`🎯 [OUTPUT] Selected sub-tool: ${routingDecision.selected_sub_tool} (confidence: ${routingDecision.confidence}%)`);
-      console.log(`📝 [OUTPUT] Reasoning: ${routingDecision.reasoning}`);
-
-      // Route to the selected sub-tool
-      switch (routingDecision.selected_sub_tool) {
-        case "generateFinalOutput":
-          return await this.generateFinalOutput(context);
-        case "generateCharacterOutput":
-          return await this.generateCharacterOutput(context);
-        case "generateWorldbookOutput":
-          return await this.generateWorldbookOutput(context);
-        case "generateProgressReport":
-          return await this.generateProgressReport(context);
-        default:
-          // Log unknown sub-tool and throw error instead of fallback
-          console.error(`[OUTPUT] Unknown sub-tool: ${routingDecision.selected_sub_tool}`);
-          throw new Error(`Unknown sub-tool selected: ${routingDecision.selected_sub_tool}`);
-      }
-    } catch (error) {
-      // Log failure and propagate error instead of fallback
-      console.error(`[OUTPUT] Tool execution failed:`, error);
-      throw error; // Re-throw to let base class handle
-    }
-  }
+  readonly description = "Generate final character card and worldbook output";
+  readonly parameters = [
+    {
+      name: "type",
+      type: "string" as const,
+      description: "Type of output to generate",
+      required: false,
+      default: "complete",
+      options: ["complete", "character_only", "worldbook_only", "preview"],
+    },
+    {
+      name: "focus",
+      type: "string" as const,
+      description: "Focus area for generation",
+      required: false,
+      default: "both",
+      options: ["character", "worldbook", "both"],
+    },
+  ];
 
   /**
-   * Improvement logic - enhance output based on feedback
-   * 改进逻辑 - 根据反馈增强输出
+   * Execute output generation based on knowledge base
    */
-  async improve(
-    currentResult: any,
-    instruction: ImprovementInstruction,
-    context: BaseToolContext
-  ): Promise<any> {
-    try {
-      console.log(`🔄 [OUTPUT] Improving output based on: ${instruction.focus_areas.join(', ')}`);
-      
-      // Generate improved output based on instruction
-      const improvedOutput = await this.generateImprovedOutput(
-        currentResult,
-        instruction,
-        context
-      );
-      
-      return {
-        ...improvedOutput,
-        improvementApplied: instruction.focus_areas,
-        previousResult: currentResult
-      };
-      
-    } catch (error) {
-      // Log improvement failure and throw error instead of fallback
-      console.error(`[OUTPUT] Output improvement failed:`, error);
-      throw new Error(`Output improvement failed: ${error instanceof Error ? error.message : error}`);
-    }
-  }
-
-  /**
-   * Generate improved output based on feedback
-   */
-  private async generateImprovedOutput(
-    currentResult: any,
-    instruction: ImprovementInstruction,
-    context: BaseToolContext
-  ): Promise<any> {
-    const improvementPrompt = `Improve the generated content based on these instructions:
-
-FOCUS AREAS: ${instruction.focus_areas.join(', ')}
-SPECIFIC REQUESTS: ${instruction.specific_requests.join(', ')}
-TARGET QUALITY: ${instruction.quality_target}/100
-
-CURRENT OUTPUT:
-${JSON.stringify(currentResult, null, 2)}
-
-Generate improved content that addresses the feedback above.`;
-
-    const prompt = this.buildContextualPrompt(
-      outputPrompts.FINAL_OUTPUT_SYSTEM + "\n\nYou are improving existing output based on feedback.",
-      improvementPrompt,
-      context
+  protected async doWork(context: ExecutionContext, parameters: Record<string, any>): Promise<any> {
+    const outputType = parameters.type || "complete";
+    const focus = parameters.focus || "both"; // "character", "worldbook", or "both"
+    
+    console.log(`📄 Generating ${outputType} output with focus: ${focus}`);
+    
+    // Add output generation message
+    await this.addMessage(
+      context.session_id,
+      "agent",
+      `Generating final output: ${outputType} (${focus})`,
+      "agent_output",
+      { output_type: outputType, focus }
     );
 
-    const improvedContent = await this.executeLLMChain(prompt, {
-      improvement_context: "Improving output based on feedback"
-    }, context, {
-      errorMessage: "Failed to generate improved output"
-    });
+    // Generate outputs based on focus
+    let characterData = null;
+    let worldbookData = null;
+
+    if (focus === "character" || focus === "both") {
+      characterData = await this.generateCharacterCard(context);
+    }
+
+    if (focus === "worldbook" || focus === "both") {
+      worldbookData = await this.generateWorldbook(context);
+    }
+
+    // Calculate quality metrics
+    const qualityMetrics = this.calculateQualityMetrics(context, characterData, worldbookData || []);
+
+    // Create character progress update
+    const GenerationOutput: Partial<GenerationOutput> = {
+      character_data: characterData,
+      worldbook_data: worldbookData || undefined,
+      quality_metrics: qualityMetrics,
+    };
+
+    console.log(`✅ Generated output - Character: ${!!characterData}, Worldbook: ${!!worldbookData}`);
 
     return {
-      ...currentResult,
-      output: improvedContent,
-      improved: true
+      output_type: outputType,
+      focus,
+      character_data: characterData,
+      worldbook_data: worldbookData,
+      quality_metrics: qualityMetrics,
+      GenerationOutputUpdate: GenerationOutput // This will update character progress
     };
   }
 
   /**
-   * Generate final output with both character and worldbook
+   * Generate character card from knowledge base and user requirements
    */
-  private async generateFinalOutput(context: BaseToolContext): Promise<any> {
-    const { task_progress } = context;
+  private async generateCharacterCard(context: ExecutionContext): Promise<any> {
+    const prompt = ChatPromptTemplate.fromTemplate(`
+You are an expert character creator. Generate a detailed character card based on the user requirements and gathered knowledge.
 
-    // Check if we have both character and worldbook data
-    if (!task_progress.character_data) {
-      console.error(`[OUTPUT] Cannot generate final output: Character data is missing`);
-      throw new Error("Cannot generate final output: Character data is missing");
-    }
+User Requirements:
+{user_questions}
 
-    if (!task_progress.worldbook_data || task_progress.worldbook_data.length === 0) {
-      console.error(`[OUTPUT] Cannot generate final output: Worldbook data is missing`);
-      throw new Error("Cannot generate final output: Worldbook data is missing");
-    }
+Task Context:
+{task_context}
 
-    // Build the final output prompt using the context manager
-    const prompt = this.buildContextualPrompt(
-      outputPrompts.FINAL_OUTPUT_SYSTEM,
-      outputPrompts.FINAL_OUTPUT_HUMAN,
-      context
-    );
+Knowledge Base:
+{knowledge_base}
 
-    try {
-      // Generate final output using LLM
-      const finalOutput = await this.executeLLMChain(
-        prompt,
-        {
-          character_name: task_progress.character_data.name,
-          character_description: task_progress.character_data.description,
-          worldbook_entries: task_progress.worldbook_data.length,
-          quality_score: task_progress.quality_metrics?.completeness || 0
-        },
-        context
-      );
+Recent Conversation:
+{recent_conversation}
 
-      // Add the final output message to conversation
-      await this.addMessage(
-        context.conversation_id,
-        "agent",
-        finalOutput,
-        "agent_output"
-      );
-    
-      // Update quality metrics
-      await AgentConversationOperations.updateTaskProgress(context.conversation_id, {
-        quality_metrics: {
-          completeness: 100,
-          consistency: task_progress.quality_metrics?.consistency || 85,
-          creativity: task_progress.quality_metrics?.creativity || 80,
-          user_satisfaction: task_progress.quality_metrics?.user_satisfaction || 85
-        }
-      });
+Create a comprehensive character card with the following structure:
 
-      return this.createSuccessResult(
-        {
-          output: finalOutput,
-          character_data: task_progress.character_data,
-          worldbook_data: task_progress.worldbook_data,
-          message: "✅ Character and worldbook generation completed successfully!"
-        },
-        {
-          shouldContinue: false, // This is the final step
-          reasoning: "Successfully generated and presented final output"
-        }
-      );
+{{
+  "name": "character name",
+  "description": "brief character description",
+  "personality": "detailed personality description",
+  "scenario": "initial scenario/setting description",
+  "first_mes": "character's first message/greeting",
+  "mes_example": "example dialogue between {{{{char}}}} and {{{{user}}}}",
+  "creator_notes": "notes about the character creation process",
+  "alternate_greetings": ["alternative greeting 1", "alternative greeting 2"],
+  "tags": ["tag1", "tag2", "tag3"],
+  "background": {{
+    "age": "character age",
+    "occupation": "character occupation",
+    "appearance": "physical description",
+    "history": "character background and history",
+    "goals": "character goals and motivations",
+    "relationships": "important relationships",
+    "skills": "abilities and talents",
+    "quirks": "unique traits and mannerisms"
+  }}
+}}
 
-    } catch (error) {
-      // Log specific failure and throw error instead of fallback
-      console.error(`[OUTPUT] Final output generation failed:`, error);
-      throw new Error(`Final output generation failed: ${error instanceof Error ? error.message : error}`);
-    }
-  }
+Guidelines:
+- Make the character engaging and well-rounded
+- Ensure consistency across all fields
+- Use the knowledge base to inform character details
+- Make the character interactive and dynamic
+- Include specific details that make the character unique
+- Ensure all dialogue examples use proper formatting
+`);
 
-  /**
-   * Generate progress report
-   */
-  private async generateProgressReport(context: BaseToolContext): Promise<ToolExecutionResult> {
-    const { task_progress } = context;
-
-    // Build progress summary
-    const hasCharacter = !!task_progress.character_data;
-    const hasWorldbook = !!task_progress.worldbook_data && task_progress.worldbook_data.length > 0;
-    
-    let progressReport = "📊 **Generation Progress Report**\n\n";
-    
-    if (hasCharacter) {
-      progressReport += `✅ **Character Card**: COMPLETE\n`;
-      progressReport += `   - Name: ${task_progress.character_data!.name}\n`;
-      progressReport += `   - Description: ${task_progress.character_data!.description.substring(0, 100)}...\n\n`;
-    } else {
-      progressReport += `❌ **Character Card**: NOT GENERATED\n\n`;
-    }
-    
-    if (hasWorldbook) {
-      progressReport += `✅ **Worldbook**: COMPLETE (${task_progress.worldbook_data!.length} entries)\n`;
-      progressReport += "   - Recent entries:\n";
-      for (const entry of task_progress.worldbook_data!.slice(0, 3)) {
-        progressReport += `     * ${entry.comment}\n`;
-      }
-      if (task_progress.worldbook_data!.length > 3) {
-        progressReport += `     * ... and ${task_progress.worldbook_data!.length - 3} more\n`;
-      }
-    } else {
-      progressReport += `❌ **Worldbook**: NOT GENERATED\n`;
-    }
-
-    progressReport += `\n🔧 **Tools Used**: ${task_progress.generation_metadata.tools_used.join(", ")}\n`;
-    progressReport += `📈 **Iterations**: ${task_progress.generation_metadata.total_iterations}\n`;
-
-    // Add progress report to conversation
-    await this.addMessage(
-      context.conversation_id, 
-      "agent", 
-      progressReport,
-      "agent_output"
-    );
-    
-    return this.createSuccessResult(
+    const response = await this.executeLLMChain(
+      prompt,
       {
-        progress_report: progressReport,
-        has_character: hasCharacter,
-        has_worldbook: hasWorldbook,
-        completion_percentage: hasCharacter && hasWorldbook ? 100 : (hasCharacter || hasWorldbook ? 50 : 0)
+        user_questions: this.buildUserInteractionsSummary(context.research_state.user_interactions),
+        task_context: this.buildTaskContextSummary(context),
+        knowledge_base: this.buildKnowledgeBaseSummary(context.research_state.knowledge_base),
+        recent_conversation: this.buildConversationSummary(context.message_history),
       },
-      {
-        shouldContinue: true,
-        reasoning: "Progress report generated successfully"
-      }
+      context,
+      { parseJson: true, errorMessage: "Character card generation failed" }
     );
+
+    return response;
   }
 
   /**
-   * Generate character-only output
+   * Generate worldbook from knowledge base and user requirements
    */
-  private async generateCharacterOutput(context: BaseToolContext): Promise<ToolExecutionResult> {
-    const { task_progress } = context;
+  private async generateWorldbook(context: ExecutionContext): Promise<any[]> {
+    const prompt = ChatPromptTemplate.fromTemplate(`
+You are an expert worldbuilder. Create worldbook entries based on the user requirements and gathered knowledge.
 
-    if (!task_progress.character_data) {
-      return {
-        success: false,
-        error: "Cannot generate character output: Character data is missing",
-        should_continue: true,
-        reasoning: "Need character data to generate character output"
-      };
-    }
+User Requirements:
+{user_questions}
 
-    const characterOutput = this.formatCharacterCard(task_progress.character_data);
+Task Context:
+{task_context}
 
-    await this.addMessage(
-      context.conversation_id, 
-      "agent", 
-      `🎭 **Character Card Generated**\n\n${characterOutput}`,
-      "agent_output"
-    );
+Knowledge Base:
+{knowledge_base}
 
-    return this.createSuccessResult(
+Recent Conversation:
+{recent_conversation}
+
+Create comprehensive worldbook entries that support the character and setting. Return as an array of entries:
+
+[
+  {{
+    "id": "unique_id",
+    "uid": "numeric_uid",
+    "key": ["trigger", "keywords", "for", "this", "entry"],
+    "keysecondary": ["secondary", "keywords"],
+    "comment": "Description of what this entry covers",
+    "content": "Detailed content that will be inserted into the conversation when triggered",
+    "constant": false,
+    "selective": true,
+    "order": 100,
+    "position": 0,
+    "disable": false,
+    "probability": 100,
+    "useProbability": true
+  }}
+]
+
+Guidelines for worldbook entries:
+- Create 5-10 relevant entries covering key world elements
+- Include entries for: locations, organizations, important NPCs, world rules, history, technology/magic
+- Use clear, triggerable keywords
+- Make content rich but concise
+- Ensure entries complement the character
+- Include both broad and specific concepts
+- Make sure keywords won't trigger too frequently
+- Content should enhance roleplay without overwhelming
+`);
+
+    const response = await this.executeLLMChain(
+      prompt,
       {
-        character_output: characterOutput,
-        character_data: task_progress.character_data
+        user_questions: this.buildUserInteractionsSummary(context.research_state.user_interactions),
+        task_context: this.buildTaskContextSummary(context),
+        knowledge_base: this.buildKnowledgeBaseSummary(context.research_state.knowledge_base),
+        recent_conversation: this.buildConversationSummary(context.message_history),
       },
-      {
-        shouldContinue: true,
-        reasoning: "Character output generated successfully"
-      }
+      context,
+      { parseJson: true, errorMessage: "Worldbook generation failed" }
     );
+
+    // Ensure response is an array
+    return Array.isArray(response) ? response : (response.entries || []);
   }
 
   /**
-   * Generate worldbook-only output
+   * Calculate quality metrics for the generated output
    */
-  private async generateWorldbookOutput(context: BaseToolContext): Promise<ToolExecutionResult> {
-    const { task_progress } = context;
+  private calculateQualityMetrics(
+    context: ExecutionContext, 
+    characterData: any, 
+    worldbookData: any[]
+  ): any {
+    const metrics = {
+      completeness: 0,
+      consistency: 0,
+      creativity: 0,
+      user_satisfaction: 0,
+    };
 
-    if (!task_progress.worldbook_data || task_progress.worldbook_data.length === 0) {
-      return {
-        success: false,
-        error: "Cannot generate worldbook output: Worldbook data is missing",
-        should_continue: true,
-        reasoning: "Need worldbook data to generate worldbook output"
-      };
-    }
-
-    const worldbookOutput = this.formatWorldbookEntries(task_progress.worldbook_data);
-
-    await this.addMessage(
-      context.conversation_id, 
-      "agent", 
-      `📚 **Worldbook Generated** (${task_progress.worldbook_data.length} entries)\n\n${worldbookOutput}`,
-      "agent_output"
-    );
-
-    return this.createSuccessResult(
-      {
-        worldbook_output: worldbookOutput,
-        worldbook_data: task_progress.worldbook_data
-      },
-      {
-        shouldContinue: true,
-        reasoning: "Worldbook output generated successfully"
-      }
-    );
-  }
-
-  /**
-   * Format character card for display
-   */
-  private formatCharacterCard(characterData: any): string {
-    let output = `**${characterData.name}**\n\n`;
-    output += `**Description:** ${characterData.description}\n\n`;
-    output += `**Personality:** ${characterData.personality}\n\n`;
-    
-    if (characterData.scenario) {
-      output += `**Scenario:** ${characterData.scenario}\n\n`;
+    // Calculate completeness based on available data
+    let completenessScore = 0;
+    if (characterData) {
+      const requiredFields = ['name', 'description', 'personality', 'scenario', 'first_mes'];
+      const presentFields = requiredFields.filter(field => characterData[field] && characterData[field].length > 0);
+      completenessScore += (presentFields.length / requiredFields.length) * 50;
     }
     
-    if (characterData.first_mes) {
-      output += `**First Message:** ${characterData.first_mes}\n\n`;
+    if (worldbookData && worldbookData.length > 0) {
+      completenessScore += Math.min(worldbookData.length * 5, 50); // Up to 50 points for worldbook
     }
     
-    if (characterData.mes_example) {
-      output += `**Example Messages:** ${characterData.mes_example}\n\n`;
-    }
-    
-    if (characterData.tags && characterData.tags.length > 0) {
-      output += `**Tags:** ${characterData.tags.join(", ")}\n\n`;
-    }
+    metrics.completeness = Math.min(completenessScore, 100);
 
-    return output;
-  }
+    // Calculate consistency based on knowledge base usage
+    const knowledgeBaseSize = context.research_state.knowledge_base.length;
+    metrics.consistency = Math.min(knowledgeBaseSize * 10, 100);
 
-  /**
-   * Format worldbook entries for display
-   */
-  private formatWorldbookEntries(worldbookData: any[]): string {
-    let output = "";
-    
-    for (let i = 0; i < Math.min(worldbookData.length, 5); i++) {
-      const entry = worldbookData[i];
-      output += `**${i + 1}. ${entry.comment}**\n`;
-      output += `Keywords: ${entry.key.join(", ")}\n`;
-      output += `${entry.content.substring(0, 200)}${entry.content.length > 200 ? "..." : ""}\n\n`;
-    }
-    
-    if (worldbookData.length > 5) {
-      output += `... and ${worldbookData.length - 5} more entries\n`;
-    }
+    // Calculate creativity based on content richness
+    const contentLength = (characterData ? JSON.stringify(characterData).length : 0) + 
+                         (worldbookData ? JSON.stringify(worldbookData).length : 0);
+    metrics.creativity = Math.min(contentLength / 100, 100);
 
-    return output;
+    // User satisfaction based on completion status
+    const avgCompletion = (
+      context.research_state.progress.search_coverage +
+      context.research_state.progress.information_quality +
+      context.research_state.progress.answer_confidence
+    ) / 3;
+    metrics.user_satisfaction = avgCompletion;
+
+    return metrics;
   }
 } 
