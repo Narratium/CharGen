@@ -40,9 +40,6 @@ export class ResearchSessionOperations {
       task_queue: [], // Empty initially - will be filled by initializeWithTaskDecomposition
       completed_tasks: [],
       knowledge_gaps: [
-        "Character background details",
-        "World setting information", 
-        "User preferences and constraints"
       ],
       sub_questions: [], // Will be populated by task decomposition
       knowledge_base: [],

@@ -155,7 +155,7 @@ export interface Message {
   id: string;
   role: "user" | "agent" | "system";
   content: string;
-  type: "user_input" | "agent_thinking" | "agent_action" | "agent_output" | "system_info";
+  type: "user_input" | "agent_thinking" | "agent_action" | "agent_output" | "system_info" | "quality_evaluation";
   metadata?: {
     tool_used?: ToolType;
     reasoning?: string;

@@ -71,7 +71,7 @@ export abstract class BaseSimpleTool implements SimpleTool {
       
       console.log(`✅ [${this.name}] Execution completed`);
       
-      return this.createSuccessResult(result);
+      return result;
       
     } catch (error) {
       console.error(`❌ [${this.name}] Execution failed:`, error);

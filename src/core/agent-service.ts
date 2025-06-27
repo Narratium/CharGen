@@ -91,7 +91,7 @@ export class AgentService {
   /**
    * Get conversation status and progress with new data structure
    */
-  async getConversationStatus(sessionId: string): Promise<{
+  async getSessionStatus(sessionId: string): Promise<{
     session: ResearchSession | null;
     status: SessionStatus;
     progress: {

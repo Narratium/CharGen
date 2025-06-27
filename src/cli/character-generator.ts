@@ -135,12 +135,11 @@ export class CharacterGeneratorCLI {
       }
 
       // Generation completed - get final result
-      const status = await this.agentService.getConversationStatus(result.conversationId);
+      const status = await this.agentService.getSessionStatus(result.conversationId);
       
       if (status.hasResult && status.result) {
         spinner.succeed('Character generation completed!');
         await this.saveResults(status.result, params.outputDir);
-        console.log(chalk.green('\n✅ Character and worldbook saved to:'), chalk.cyan(params.outputDir));
         
         // Show generation statistics
         await this.showGenerationStats(result.conversationId);

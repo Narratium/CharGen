@@ -79,8 +79,6 @@ export class CharacterTool extends BaseSimpleTool {
     
     return this.createSuccessResult({
       character_data: characterUpdates,
-      updated_fields: Object.keys(characterUpdates),
-      is_complete: characterUpdates.scenario && characterUpdates.first_mes
     });
   }
 

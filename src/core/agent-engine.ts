@@ -7,6 +7,7 @@ import {
   KnowledgeEntry,
   UserInteraction,
   ResearchState,
+  GenerationOutput,
 } from "../models/agent-model";
 import { ResearchSessionOperations } from "../data/agent/agent-conversation-operations";
 import { ToolRegistry } from "../tools/tool-registry";
@@ -275,24 +276,30 @@ Return a structured task decomposition in JSON format:
         
         // Update generation output with new data
         if (decision.tool === ToolType.CHARACTER && result.result?.character_data) {
+          console.log("🔄 Updating generation output with character data");
           await ResearchSessionOperations.updateGenerationOutput(this.conversationId, {
             character_data: result.result.character_data,
           });
         }
         
         if (decision.tool === ToolType.WORLDBOOK && result.result?.worldbook_data) {
+          console.log("🔄 Updating generation output with worldbook data");
           await ResearchSessionOperations.updateGenerationOutput(this.conversationId, {
             worldbook_data: result.result.worldbook_data,
           });
         }
         
         // Check if we should continue or if task is complete
-        const isComplete = await this.evaluateGenerationProgress(result.result, context, decision.tool);
-        if (isComplete) {
-          console.log("✅ Generation task completed successfully");
-          break;
-        } else {
-          console.log("🔄 Generation needs improvement or additional work, continuing...");
+        // Get the latest complete generation output from the session
+        const session = await ResearchSessionOperations.getSessionById(this.conversationId);
+        if (session?.generation_output) {
+          const isComplete = await this.evaluateGenerationProgress(session.generation_output);
+          if (isComplete) {
+            console.log("✅ Generation task completed successfully");
+            break;
+          } else {
+            console.log("🔄 Generation needs improvement or additional work, continuing...");
+          }
         }
       }
 
@@ -635,91 +642,145 @@ Return a structured task decomposition in JSON format:
   }
 
   /**
-   * Evaluate generation progress - for CHARACTER and WORLDBOOK tools
+   * Evaluate generation progress - assess if GenerationOutput meets completion standards
    */
-  private async evaluateGenerationProgress(output: any, context: ExecutionContext, toolType: ToolType): Promise<boolean> {
+  private async evaluateGenerationProgress(generationOutput: GenerationOutput): Promise<boolean> {
+    // First, perform basic validation checks
+    const basicValidation = this.performBasicValidation(generationOutput);
+    if (!basicValidation.isValid) {
+
+      await ResearchSessionOperations.addMessage(this.conversationId, {
+        role: "agent",
+        content: `Basic validation failed: ${basicValidation.reason}`,
+        type: "quality_evaluation",
+      });
+
+      console.log(`❌ Basic validation failed: ${basicValidation.reason}`);
+      return false;
+    }
+
+    console.log("✅ Basic validation passed, proceeding with LLM quality assessment");
+
+    // If basic validation passes, use LLM for quality assessment
     const prompt = ChatPromptTemplate.fromTemplate(`
 <prompt>
   <system_role>
-    You are an expert quality assurance agent. Your task is to evaluate the output of a generation tool ({tool_type}) and determine if it meets the required standards for the project.
+    You are an expert quality assurance agent for character and worldbook generation. Your task is to evaluate the GenerationOutput and determine if it meets high-quality standards for completion.
   </system_role>
 
   <evaluation_context>
-    <tool_used>{tool_type}</tool_used>
-    <output_generated>
-      <![CDATA[{output}]]>
-    </output_generated>
-    <user_requirements>
-      {user_context}
-    </user_requirements>
-    <knowledge_base>
-      {knowledge_summary}
-    </knowledge_base>
-    <current_project_progress>
-      {current_progress}
-    </current_project_progress>
+    <generation_output>
+      <![CDATA[{generation_output}]]>
+    </generation_output>
   </evaluation_context>
 
+  <evaluation_criteria>
+    <character_data_criteria>
+      - All required fields must be complete and non-empty
+      - Character personality should be distinctive, engaging, and well-developed
+      - Scenario should be compelling and provide clear context
+      - First message should be engaging and in-character
+      - Example messages should demonstrate consistent personality and writing style
+      - Creator notes should provide useful guidance
+    </character_data_criteria>
+    
+    <worldbook_criteria>
+      - Must have at least 5 high-quality entries
+      - For world-building stories, must include: character relationships, world information, world rules
+      - Each entry should have appropriate keywords for discovery
+      - Content should be detailed, useful, and consistent
+      - Entries should complement the character and enhance the storytelling experience
+    </worldbook_criteria>
+    
+    <overall_quality_standards>
+      - Content should be engaging, creative, and well-written
+      - All elements should work together cohesively
+      - Quality should meet professional standards for character AI applications
+    </overall_quality_standards>
+  </evaluation_criteria>
+
   <instructions>
-    1.  Review the <output_generated> in the context of the user's requirements and the project's knowledge base.
-    2.  Assess the output based on the specific guidelines for the tool used.
-        <guidelines tool="CHARACTER">
-          - Completeness: Is the character well-developed? Are all key fields present?
-          - Consistency: Does the character align with the knowledge base and user requirements?
-          - Engagement: Is the personality distinctive? Is the dialogue high quality?
-        </guidelines>
-        <guidelines tool="WORLDBOOK">
-          - Comprehensiveness: Are the entries useful and detailed?
-          - Complementarity: Do the entries support the main character and world?
-          - Coverage: Is there good coverage of the world? Are keywords well-chosen?
-        </guidelines>
-    3.  Provide your evaluation in the specified XML format below.
+    Evaluate the GenerationOutput strictly based on the criteria above. Focus on content quality, completeness, and overall excellence. Be thorough but demanding in your assessment.
   </instructions>
 
   <output_specification>
     You MUST respond using the following XML format. Do not include any other text outside this block.
 
     <evaluation_response>
-      <reasoning>Detailed explanation for your assessment of the output's quality and alignment.</reasoning>
-      <quality_score>An overall quality score from 0 to 100.</quality_score>
-      <completeness_score>A completeness score from 0 to 100.</completeness_score>
-      <alignment_score>A user alignment score from 0 to 100.</alignment_score>
-      <is_sufficient>true or false, based on whether the generation task is complete and meets a high standard (quality_score >= 80).</is_sufficient>
-      <next_steps>
-        <step>Actionable next step 1 to improve the output, if needed.</step>
-        <step>Actionable next step 2.</step>
-      </next_steps>
+      <reasoning>Detailed explanation of your assessment, covering character data quality, worldbook quality, and overall cohesion.</reasoning>
+      <character_quality_score>Character data quality score from 0 to 100.</character_quality_score>
+      <worldbook_quality_score>Worldbook data quality score from 0 to 100.</worldbook_quality_score>
+      <overall_quality_score>Overall quality score from 0 to 100.</overall_quality_score>
+      <is_sufficient>true or false, based on whether the generation meets high-quality completion standards (overall_quality_score >= 85).</is_sufficient>
+      <improvement_suggestions>
+        <suggestion>Specific improvement suggestion 1, if needed.</suggestion>
+        <suggestion>Specific improvement suggestion 2, if needed.</suggestion>
+      </improvement_suggestions>
     </evaluation_response>
   </output_specification>
 </prompt>`);
 
+    const context = await this.buildExecutionContext();
     const llm = this.createLLM(context.llm_config);
     const chain = prompt.pipe(llm).pipe(new StringOutputParser());
 
     try {
       const response = await chain.invoke({
-        tool_type: toolType,
-        output: JSON.stringify(output, null, 2),
-        user_context: this.buildUserContextSummary(context),
-        knowledge_summary: this.buildKnowledgeBaseSummary(context.research_state.knowledge_base),
-        current_progress: this.buildProgressSummary(context)
+        generation_output: JSON.stringify(generationOutput, null, 2)
       });
 
-      const evaluation = this.parseEvaluationXMLResponse(response);
+      const evaluation = this.parseQualityEvaluationXMLResponse(response);
       
       // Update completion status based on evaluation
       await this.updateCompletionStatus({
-        answer_confidence: evaluation.quality_score,
-        information_quality: evaluation.completeness_score,
-        user_satisfaction: evaluation.alignment_score,
+        answer_confidence: evaluation.overall_quality_score,
+        information_quality: evaluation.worldbook_quality_score,
+        user_satisfaction: evaluation.character_quality_score,
       });
 
+      await ResearchSessionOperations.addMessage(this.conversationId, {
+        role: "agent",
+        content: `Quality evaluation: ${JSON.stringify(evaluation)}`,
+        type: "quality_evaluation",
+      }); 
+
+      console.log(`📊 Quality Assessment - Character: ${evaluation.character_quality_score}%, Worldbook: ${evaluation.worldbook_quality_score}%, Overall: ${evaluation.overall_quality_score}%`);
+      
       return evaluation.is_sufficient;
 
     } catch (error) {
       console.error("❌ Generation evaluation failed:", error);
       return false;
     }
+  }
+
+  /**
+   * Perform basic validation of GenerationOutput before LLM assessment
+   */
+  private performBasicValidation(generationOutput: GenerationOutput): { isValid: boolean; reason?: string } {
+    // Check if character_data exists and all required fields are non-empty
+    if (!generationOutput.character_data) {
+      return { isValid: false, reason: "character_data is missing" };
+    }
+
+    const charData = generationOutput.character_data;
+    const requiredCharFields = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'creator_notes'];
+    
+    for (const field of requiredCharFields) {
+      if (!charData[field] || charData[field].trim() === '') {
+        return { isValid: false, reason: `character_data.${field} is empty or missing` };
+      }
+    }
+
+    // Check if worldbook_data exists and has at least 5 entries
+    if (!generationOutput.worldbook_data || !Array.isArray(generationOutput.worldbook_data)) {
+      return { isValid: false, reason: "worldbook_data is missing or not an array" };
+    }
+
+    if (generationOutput.worldbook_data.length < 5) {
+      return { isValid: false, reason: `worldbook_data has only ${generationOutput.worldbook_data.length} entries, minimum 5 required` };
+    }
+    return { isValid: true };
   }
 
   /**
@@ -748,6 +809,34 @@ Return a structured task decomposition in JSON format:
     }
 
     return { reasoning, quality_score, completeness_score, alignment_score, is_sufficient, next_steps };
+  }
+
+  /**
+   * Parses the XML quality evaluation response from the LLM for GenerationOutput assessment.
+   */
+  private parseQualityEvaluationXMLResponse(xmlString: string): {
+    reasoning: string;
+    character_quality_score: number;
+    worldbook_quality_score: number;
+    overall_quality_score: number;
+    is_sufficient: boolean;
+    improvement_suggestions: string[];
+  } {
+    const reasoning = xmlString.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1].trim() ?? 'No reasoning provided';
+    const character_quality_score = parseInt(xmlString.match(/<character_quality_score>(\d+)<\/character_quality_score>/)?.[1] ?? '0', 10);
+    const worldbook_quality_score = parseInt(xmlString.match(/<worldbook_quality_score>(\d+)<\/worldbook_quality_score>/)?.[1] ?? '0', 10);
+    const overall_quality_score = parseInt(xmlString.match(/<overall_quality_score>(\d+)<\/overall_quality_score>/)?.[1] ?? '0', 10);
+    const is_sufficient = xmlString.match(/<is_sufficient>(true|false)<\/is_sufficient>/)?.[1] === 'true';
+
+    const improvement_suggestions: string[] = [];
+    const suggestionsMatch = xmlString.match(/<improvement_suggestions>([\s\S]*?)<\/improvement_suggestions>/)?.[1] ?? '';
+    const suggestionRegex = /<suggestion>([\s\S]*?)<\/suggestion>/g;
+    let match;
+    while ((match = suggestionRegex.exec(suggestionsMatch)) !== null) {
+        improvement_suggestions.push(match[1].trim());
+    }
+
+    return { reasoning, character_quality_score, worldbook_quality_score, overall_quality_score, is_sufficient, improvement_suggestions };
   }
 
   // ============================================================================
