@@ -7,7 +7,8 @@ import {
 import { SimpleTool, DetailedToolInfo } from "./base-tool";
 import { SearchTool } from "./search";
 import { AskUserTool } from "./ask-user";
-import { OutputTool } from "./output";
+import { CharacterTool } from "./character";
+import { WorldbookTool } from "./worldbook";
 import { ReflectTool } from "./reflect";
 
 /**
@@ -27,11 +28,12 @@ export class ToolRegistry {
     // Register simplified tools
     this.tools.set(ToolType.SEARCH, new SearchTool());
     this.tools.set(ToolType.ASK_USER, new AskUserTool());
-    this.tools.set(ToolType.OUTPUT, new OutputTool());
+    this.tools.set(ToolType.CHARACTER, new CharacterTool());
+    this.tools.set(ToolType.WORLDBOOK, new WorldbookTool());
     this.tools.set(ToolType.REFLECT, new ReflectTool());
 
     this.initialized = true;
-    console.log("🔧 Tool Registry initialized with 4 tools");
+    console.log("🔧 Tool Registry initialized with 5 tools");
   }
 
   /**
@@ -145,28 +147,46 @@ export class ToolRegistry {
   }
 
   /**
-   * Get detailed tool information with parameters for LLM planning
+   * Generates a detailed XML string describing all registered tools and their parameters.
+   * This structured format is easier for the LLM to parse in prompts.
    */
-  static getDetailedToolsInfo(): Array<{
-    type: string;
-    name: string;
-    description: string;
-    parameters: Array<{
-      name: string;
-      type: string;
-      description: string;
-      required: boolean;
-      default?: any;
-      options?: string[];
-    }>;
-  }> {
+  static getDetailedToolsInfo(): string {
     this.initialize();
-    return this.getAllTools().map(tool => ({
-      type: tool.toolType,
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters,
-    }));
+
+    let xmlOutput = "<tools>\n";
+
+    this.tools.forEach((tool, toolType) => {
+      xmlOutput += `  <tool>\n`;
+      xmlOutput += `    <type>${toolType}</type>\n`;
+      xmlOutput += `    <name>${tool.name}</name>\n`;
+      xmlOutput += `    <description>${tool.description}</description>\n`;
+      xmlOutput += `    <parameters>\n`;
+      
+      tool.parameters.forEach(param => {
+        xmlOutput += `      <parameter>\n`;
+        xmlOutput += `        <name>${param.name}</name>\n`;
+        xmlOutput += `        <type>${param.type}</type>\n`;
+        xmlOutput += `        <required>${param.required}</required>\n`;
+        xmlOutput += `        <description>${param.description}</description>\n`;
+        if (param.options) {
+          xmlOutput += `        <options>${param.options.join(", ")}</options>\n`;
+        }
+        if (param.properties) {
+          xmlOutput += `        <properties>\n`;
+          for (const [key, value] of Object.entries(param.properties)) {
+            xmlOutput += `          <property name="${key}" type="${value.type}" description="${value.description}" />\n`;
+          }
+          xmlOutput += `        </properties>\n`;
+        }
+        xmlOutput += `      </parameter>\n`;
+      });
+
+      xmlOutput += `    </parameters>\n`;
+      xmlOutput += `  </tool>\n`;
+    });
+
+    xmlOutput += "</tools>";
+    return xmlOutput;
   }
 }
 

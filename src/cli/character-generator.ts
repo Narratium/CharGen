@@ -432,11 +432,9 @@ export class CharacterGeneratorCLI {
       ID: conv.id.slice(0, 8),
       Title: conv.title,
       Status: conv.status,
-      Created: new Date(conv.created_at).toLocaleDateString(),
       'Has Character': conv.generation_output.character_data ? '✅' : '❌',
       'Has Worldbook': (conv.generation_output.worldbook_data && conv.generation_output.worldbook_data.length > 0) ? '✅' : '❌',
       'Knowledge': conv.research_state.knowledge_base.length,
-      'Focus': conv.research_state.current_focus.substring(0, 30) + '...',
     })));
 
     // Show overall statistics
@@ -479,8 +477,6 @@ export class CharacterGeneratorCLI {
           id: conversation.id,
           title: conversation.title,
           status: conversation.status,
-          created_at: conversation.created_at,
-          updated_at: conversation.updated_at,
         },
       };
       await fs.writeJson(outputFile, exportData, { spaces: 2 });

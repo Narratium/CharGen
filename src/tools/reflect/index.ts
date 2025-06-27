@@ -5,28 +5,36 @@ import {
   TaskEntry 
 } from "../../models/agent-model";
 import { BaseSimpleTool, ToolParameter, DetailedToolInfo } from "../base-tool";
-import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { StringOutputParser } from "@langchain/core/output_parsers";
 
 /**
- * Reflect Tool - Simple Task Management
- * Think about current progress and either add new tasks or decompose existing tasks
+ * Reflect Tool - Pure Execution Unit
+ * Updates task queue based on provided parameters from planner
  */
 export class ReflectTool extends BaseSimpleTool {
   
-  // Required BaseSimpleTool properties
   readonly toolType = ToolType.REFLECT;
-  readonly name = "Reflect Tool";
-  readonly description = "Think about progress and update task queue with new tasks or sub-tasks";
+  readonly name = "REFLECT";
+  readonly description = "Analyze progress and manage task queue based on current state";
   
-  readonly parameters = [
+  readonly parameters: ToolParameter[] = [
     {
       name: "action",
-      type: "string" as const,
-      required: false,
-      description: "What to do: add new tasks or decompose existing tasks",
-      options: ["add_tasks", "decompose_tasks", "auto"],
-      default: "auto"
+      type: "string",
+      description: "What action to take with the task queue and progress analysis",
+      required: true,
+      options: ["add_tasks", "decompose_tasks", "auto"]
+    },
+    {
+      name: "new_tasks",
+      type: "array",
+      description: "Array of new task descriptions to add to the task queue. Each item should be a clear, actionable task string (e.g., 'Research character's family background', 'Define world's magic system')",
+      required: false
+    },
+    {
+      name: "decompose_tasks",
+      type: "boolean", 
+      description: "Whether to break down complex existing tasks into smaller, more manageable sub-tasks",
+      required: false
     }
   ];
 
@@ -35,179 +43,80 @@ export class ReflectTool extends BaseSimpleTool {
       type: ToolType.REFLECT,
       name: this.name,
       description: this.description,
-      parameters: this.parameters,
-      examples: [
-        "Think about what tasks are needed next",
-        "Break down complex tasks into smaller ones",
-        "Add missing tasks based on current progress"
-      ]
+      parameters: this.parameters
     };
   }
 
-  protected async doWork(
-    parameters: Record<string, any>, 
-    context: ExecutionContext
-  ): Promise<ExecutionResult> {
-    console.log("🤔 Reflecting on task progress and updating task queue...");
-
+  protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<any> {
     const action = parameters.action || "auto";
-
-    try {
-      // Think about current state and decide what tasks to add/modify
-      const taskUpdates = await this.thinkAndUpdateTasks(context, action);
-      
-      console.log(`✅ Reflection complete: ${taskUpdates.added_count} tasks added, ${taskUpdates.decomposed_count} tasks decomposed`);
-
-      return {
-        success: true,
-        result: {
-          task_updates: taskUpdates,
-          ResearchStateUpdate: {
-            task_queue: taskUpdates.updated_queue,
-            last_reflection: new Date().toISOString(),
-            reflection_trigger: "manual",
-            updated_at: new Date().toISOString()
-          }
-        },
-        should_continue: true,
-        tokens_used: taskUpdates.tokens_used || 0
-      };
-
-    } catch (error) {
-      console.error("❌ Reflection failed:", error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-        should_continue: true
-      };
-    }
-  }
-
-  /**
-   * Core thinking function: analyze current state and update tasks
-   */
-  private async thinkAndUpdateTasks(
-    context: ExecutionContext, 
-    action: string
-  ): Promise<any> {
-    const prompt = ChatPromptTemplate.fromTemplate(`
-You are helping generate character cards and worldbooks. Look at the current situation and think about what tasks need to be done.
-
-CURRENT STATE:
-Main Objective: {main_objective}
-
-EXISTING TASK QUEUE:
-{task_queue_status}
-
-KNOWLEDGE GAPS:
-{knowledge_gaps}
-
-PROGRESS:
-- Search Coverage: {search_coverage}%
-- Information Quality: {information_quality}%
-- Answer Confidence: {answer_confidence}%
-
-INSTRUCTIONS:
-Think about what's missing or what tasks are too complex. Then either:
-1. Add new specific tasks that are needed
-2. Break down existing complex tasks into smaller sub-tasks
-3. Both if needed
-
-ACTION PREFERENCE: {action}
-
-Return your thinking and task updates in JSON format:
-{{
-  "thinking": "your analysis of what's needed",
-  "new_tasks": [
-    {{
-      "description": "specific new task description", 
-      "priority": 1-10,
-      "reasoning": "why this task is needed"
-    }}
-  ],
-  "decompose_tasks": [
-    {{
-      "original_task_id": "task_id_to_decompose",
-      "sub_tasks": [
-        {{
-          "description": "sub-task description",
-          "priority": 1-10,
-          "reasoning": "why this sub-task is needed"
-        }}
-      ]
-    }}
-  ]
-}}
-    `);
-
-    const llm = this.createLLM(context.llm_config);
-    const chain = prompt.pipe(llm).pipe(new StringOutputParser());
-
-    const response = await chain.invoke({
-      main_objective: context.research_state.main_objective,
-      task_queue_status: this.buildTaskQueueStatus(context),
-      knowledge_gaps: context.research_state.knowledge_gaps?.join(", ") || "Unknown",
-      search_coverage: context.research_state.progress?.search_coverage.toString() || "0",
-      information_quality: context.research_state.progress?.information_quality.toString() || "0",
-      answer_confidence: context.research_state.progress?.answer_confidence.toString() || "0",
-      action: action
-    });
-
-    const thinking = this.parseJSONResponse(response);
+    const newTasks = parameters.new_tasks || [];
+    const shouldDecompose = parameters.decompose_tasks !== false;
     
-    // Apply the thinking to update task queue
-    return this.applyTaskUpdates(context, thinking);
-  }
+    console.log(`🤔 Reflecting on task queue: ${action}`);
 
-  /**
-   * Apply thinking results to update the task queue
-   */
-  private async applyTaskUpdates(context: ExecutionContext, thinking: any): Promise<any> {
     const currentQueue = context.research_state.task_queue || [];
-    const newQueue = [...currentQueue];
+    const updatedQueue = [...currentQueue];
     
     let addedCount = 0;
     let decomposedCount = 0;
 
-    // Add new tasks
-    if (thinking.new_tasks && thinking.new_tasks.length > 0) {
-      for (const newTask of thinking.new_tasks) {
-        const task: TaskEntry = {
+    // Add new tasks if provided
+    if (newTasks.length > 0) {
+      for (const taskDesc of newTasks) {
+        const newTask: TaskEntry = {
           id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          description: newTask.description,
-          priority: newTask.priority || 5,
+          description: taskDesc,
+          priority: 5,
           status: "pending",
-          reasoning: newTask.reasoning || "Added during reflection"
+          reasoning: "Added during reflection"
         };
-        newQueue.push(task);
+        updatedQueue.push(newTask);
         addedCount++;
       }
     }
 
-    // Decompose existing tasks
-    if (thinking.decompose_tasks && thinking.decompose_tasks.length > 0) {
-      for (const decomposition of thinking.decompose_tasks) {
-        const originalTask = newQueue.find(t => 
-          t.id === decomposition.original_task_id || 
-          t.description.toLowerCase().includes(decomposition.original_task_id.toLowerCase())
-        );
-        
-        if (originalTask && decomposition.sub_tasks && decomposition.sub_tasks.length > 0) {
-          // Mark original task as decomposed
-          originalTask.status = "obsolete";
-          originalTask.reasoning = "Decomposed into sub-tasks during reflection";
+    // Auto-generate tasks based on action type
+    if (action === "auto") {
+      const autoTasks = this.generateAutoTasks(context);
+      for (const taskDesc of autoTasks) {
+        const newTask: TaskEntry = {
+          id: `auto_task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          description: taskDesc,
+          priority: 6,
+          status: "pending",
+          reasoning: "Auto-generated during reflection"
+        };
+        updatedQueue.push(newTask);
+        addedCount++;
+      }
+    }
+
+    // Decompose complex tasks if requested
+    if (shouldDecompose) {
+      const complexTasks = updatedQueue.filter(t => 
+        t.status === "pending" && 
+        t.description.length > 100 && 
+        !t.parent_task_id
+      );
+
+      for (const complexTask of complexTasks) {
+        const subTasks = this.decomposeComplexTask(complexTask);
+        if (subTasks.length > 1) {
+          // Mark parent as decomposed
+          complexTask.status = "obsolete";
+          complexTask.reasoning = "Decomposed into sub-tasks";
           
           // Add sub-tasks
-          for (const subTask of decomposition.sub_tasks) {
-            const task: TaskEntry = {
+          for (const subTaskDesc of subTasks) {
+            const subTask: TaskEntry = {
               id: `subtask_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              description: subTask.description,
-              priority: subTask.priority || originalTask.priority,
+              description: subTaskDesc,
+              priority: complexTask.priority,
               status: "pending",
-              parent_task_id: originalTask.id,
-              reasoning: subTask.reasoning || "Sub-task from decomposition"
+              parent_task_id: complexTask.id,
+              reasoning: "Sub-task from decomposition"
             };
-            newQueue.push(task);
+            updatedQueue.push(subTask);
             addedCount++;
           }
           decomposedCount++;
@@ -215,43 +124,75 @@ Return your thinking and task updates in JSON format:
       }
     }
 
+    console.log(`✅ Reflection complete: ${addedCount} tasks added, ${decomposedCount} tasks decomposed`);
+
     return {
-      updated_queue: newQueue,
+      action,
       added_count: addedCount,
       decomposed_count: decomposedCount,
-      thinking: thinking.thinking,
-      summary: `Added ${addedCount} new tasks, decomposed ${decomposedCount} complex tasks`
+      ResearchStateUpdate: {
+        task_queue: updatedQueue,
+        last_reflection: new Date().toISOString(),
+        reflection_trigger: "manual",
+        updated_at: new Date().toISOString()
+      }
     };
   }
 
-  // ============================================================================
-  // HELPER METHODS
-  // ============================================================================
+  /**
+   * Generate automatic tasks based on current state
+   */
+  private generateAutoTasks(context: ExecutionContext): string[] {
+    const gaps = context.research_state.knowledge_gaps || [];
+    const tasks: string[] = [];
+    
+    // Generate tasks based on knowledge gaps
+    for (const gap of gaps.slice(0, 3)) { // Max 3 auto tasks
+      tasks.push(`Research and gather information about: ${gap}`);
+    }
+    
+    // Add default tasks if no gaps
+    if (tasks.length === 0) {
+      tasks.push("Review and analyze current progress");
+      tasks.push("Identify next steps for completion");
+    }
+    
+    return tasks;
+  }
 
-  private buildTaskQueueStatus(context: ExecutionContext): string {
-    const queue = context.research_state.task_queue || [];
-    const pending = queue.filter(t => t.status === "pending");
-    const active = queue.filter(t => t.status === "active");
-    const completed = queue.filter(t => t.status === "completed");
+  /**
+   * Decompose a complex task into simpler sub-tasks
+   */
+  private decomposeComplexTask(task: TaskEntry): string[] {
+    const description = task.description.toLowerCase();
     
-    if (queue.length === 0) {
-      return "No tasks in queue yet";
+    // Simple rule-based decomposition
+    if (description.includes("character") && description.includes("create")) {
+      return [
+        "Define character basic information (name, age, appearance)",
+        "Develop character personality and traits",
+        "Create character background and history",
+        "Write character dialogue examples"
+      ];
     }
     
-    const summary = [`Total: ${queue.length} tasks`];
-    
-    if (pending.length > 0) {
-      summary.push(`Pending (${pending.length}): ${pending.slice(0, 3).map(t => `"${t.description}"`).join(", ")}${pending.length > 3 ? "..." : ""}`);
+    if (description.includes("worldbook") || description.includes("world")) {
+      return [
+        "Research world setting and theme",
+        "Create location entries",
+        "Develop character relationships",
+        "Write lore and history entries"
+      ];
     }
     
-    if (active.length > 0) {
-      summary.push(`Active (${active.length}): ${active.map(t => `"${t.description}"`).join(", ")}`);
+    // Generic decomposition
+    if (description.length > 100) {
+      const parts = description.split(/[,;]/);
+      if (parts.length > 1) {
+        return parts.map(part => part.trim()).filter(part => part.length > 10);
+      }
     }
     
-    if (completed.length > 0) {
-      summary.push(`Completed (${completed.length})`);
-    }
-    
-    return summary.join("\n");
+    return []; // No decomposition possible
   }
 } 

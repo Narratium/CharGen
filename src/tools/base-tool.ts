@@ -1,7 +1,3 @@
-import { ChatOpenAI } from "@langchain/openai";
-import { ChatOllama } from "@langchain/ollama";
-import { ChatPromptTemplate } from "@langchain/core/prompts";
-import { StringOutputParser } from "@langchain/core/output_parsers";
 import { 
   ToolType,
   ExecutionContext,
@@ -14,65 +10,67 @@ import { ResearchSessionOperations } from "../data/agent/agent-conversation-oper
 import { v4 as uuidv4 } from "uuid";
 
 // ============================================================================
-// SIMPLIFIED TOOL ARCHITECTURE - Pure Execution Units
+// PURE EXECUTION TOOL ARCHITECTURE - Following DeepResearch Design
 // ============================================================================
 
 /**
- * Tool parameter definition for intelligent parameter selection
+ * Tool parameter definition for planning phase
+ * Following DeepResearch approach - simple parameter schema
  */
 export interface ToolParameter {
   name: string;
-  type: "string" | "number" | "boolean" | "array" | "object";
+  type: "string" | "number" | "boolean" | "object" | "array";
   required: boolean;
   description: string;
-  options?: string[]; // For enum-like parameters
+  options?: any[];
   default?: any;
+  items?: ToolParameter | { type: string; description?: string; };
+  properties?: { [key: string]: Omit<ToolParameter, 'name' | 'required'> & { required?: boolean } };
 }
 
 /**
- * Detailed tool information including parameter schema
+ * Detailed tool information for planning
  */
 export interface DetailedToolInfo {
   type: ToolType;
   name: string;
   description: string;
   parameters: ToolParameter[];
-  examples?: string[];
 }
 
 /**
- * Simple tool interface - no thinking, just execution
+ * Simple tool interface - pure execution only
  */
 export interface SimpleTool {
   readonly name: string;
   readonly description: string;
   readonly toolType: ToolType;
-  readonly parameters: ToolParameter[]; // Parameter schema for intelligent planning
+  readonly parameters: ToolParameter[];
   
   execute(context: ExecutionContext, parameters: Record<string, any>): Promise<ExecutionResult>;
 }
 
 /**
- * Base Tool - Simplified for pure execution
- * No self-improvement, no thinking layers, just direct execution
+ * Base Tool - Pure Execution Unit (Following DeepResearch Philosophy)
+ * No LLM calls, no parameter generation, just direct execution
  */
 export abstract class BaseSimpleTool implements SimpleTool {
   abstract readonly toolType: ToolType;
   abstract readonly name: string;
   abstract readonly description: string;
-  abstract readonly parameters: ToolParameter[]; // Parameter schema for intelligent planning
+  abstract readonly parameters: ToolParameter[];
 
   /**
-   * Main execution method - pure and simple
+   * Pure execution method - no LLM calls, just execute with given parameters
    */
   async execute(context: ExecutionContext, parameters: Record<string, any>): Promise<ExecutionResult> {
     try {
-      console.log(`🛠️ [${this.name}] Starting execution`);
+      console.log(`🛠️ [${this.name}] Executing with parameters:`, parameters);
       
-      // Direct execution - no thinking loops
-      const result = await this.doWork(context, parameters);
+      // Direct execution with provided parameters
+      const result = await this.doWork(parameters, context);
       
-      console.log(`✅ [${this.name}] Execution completed successfully`);
+      console.log(`✅ [${this.name}] Execution completed`);
       return this.createSuccessResult(result);
       
     } catch (error) {
@@ -83,158 +81,16 @@ export abstract class BaseSimpleTool implements SimpleTool {
 
   /**
    * Core work logic - implement this in your tool
+   * This should be pure execution without any LLM calls
    */
-  protected abstract doWork(context: ExecutionContext, parameters: Record<string, any>): Promise<any>;
+  protected abstract doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<any>;
 
   // ============================================================================
-  // HELPER METHODS - Common functionality for all tools
+  // HELPER METHODS - Pure utilities without LLM calls
   // ============================================================================
 
   /**
-   * Create LLM instance from config
-   */
-  protected createLLM(config: ExecutionContext["llm_config"]) {
-    if (config.llm_type === "openai") {
-      return new ChatOpenAI({
-        modelName: config.model_name,
-        openAIApiKey: config.api_key,
-        configuration: {
-          baseURL: config.base_url,
-        },
-        temperature: config.temperature,
-        maxTokens: config.max_tokens,
-        streaming: false,
-      });
-    } else if (config.llm_type === "ollama") {
-      return new ChatOllama({
-        model: config.model_name,
-        baseUrl: config.base_url || "http://localhost:11434",
-        temperature: config.temperature,
-        streaming: false,
-      });
-    }
-
-    throw new Error(`Unsupported LLM type: ${config.llm_type}`);
-  }
-
-  /**
-   * Execute LLM chain with error handling
-   */
-  protected async executeLLMChain(
-    prompt: ChatPromptTemplate,
-    inputData: Record<string, any>,
-    context: ExecutionContext,
-    options: {
-      parseJson?: boolean;
-      errorMessage?: string;
-    } = {}
-  ): Promise<any> {
-    try {
-      const llm = this.createLLM(context.llm_config);
-      const chain = prompt.pipe(llm).pipe(new StringOutputParser());
-      
-      const response = await chain.invoke(inputData);
-      
-      if (options.parseJson) {
-        return this.parseJSONResponse(response);
-      }
-      
-      return response;
-    } catch (error) {
-      const errorMsg = options.errorMessage || `${this.name} LLM execution failed`;
-      console.error(errorMsg, error);
-      throw new Error(`${errorMsg}: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
-  /**
-   * Parse JSON response from LLM
-   */
-  protected parseJSONResponse(response: string): any {
-    try {
-      // Extract JSON from response if it's wrapped in markdown or other text
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-      return JSON.parse(response);
-    } catch (error) {
-      console.error("Failed to parse JSON response:", response);
-      throw new Error("Invalid JSON response from LLM");
-    }
-  }
-
-  /**
-   * Build conversation summary for context
-   */
-  protected buildConversationSummary(messages: Message[]): string {
-    return messages
-      .slice(-10) // Last 10 messages
-      .map(msg => `${msg.role}: ${msg.content}`)
-      .join("\n");
-  }
-
-  /**
-   * Build knowledge base summary
-   */
-  protected buildKnowledgeBaseSummary(knowledgeBase: KnowledgeEntry[]): string {
-    if (knowledgeBase.length === 0) {
-      return "No knowledge gathered yet.";
-    }
-    
-    return knowledgeBase
-      .slice(0, 5) // Top 5 most relevant
-      .map(k => `- ${k.source}: ${k.content.substring(0, 100)}...`)
-      .join("\n");
-  }
-
-  /**
-   * Build user questions summary
-   */
-  protected buildUserInteractionsSummary(UserInteractions: UserInteraction[]): string {
-    if (UserInteractions.length === 0) {
-      return "No user questions recorded.";
-    }
-    
-    return UserInteractions
-      .map(q => `- ${q.is_initial ? '[Initial]' : '[Follow-up]'} ${q.question}`)
-      .join("\n");
-  }
-
-  /**
-   * Build current task context summary including task queue
-   */
-  protected buildTaskContextSummary(context: ExecutionContext): string {
-    const state = context.research_state;
-    
-    // Build task queue summary
-    const pendingTasks = state.task_queue?.filter(t => t.status === "pending") || [];
-    const activeTasks = state.task_queue?.filter(t => t.status === "active") || [];
-    const completedTasks = state.task_queue?.filter(t => t.status === "completed") || [];
-    
-    return `
-Main Objective: ${state.main_objective}
-
-Task Queue Status:
-- Pending Tasks (${pendingTasks.length}): ${pendingTasks.map(t => t.description).join(", ")}
-- Active Tasks (${activeTasks.length}): ${activeTasks.map(t => t.description).join(", ")}
-- Completed Tasks (${completedTasks.length}): ${completedTasks.map(t => t.description).join(", ")}
-
-Sub-questions: ${state.sub_questions?.join(", ") || "None"}
-Knowledge Gaps: ${state.knowledge_gaps?.join(", ") || "None"}
-
-Progress Status:
-- Search Coverage: ${state.progress.search_coverage}%
-- Information Quality: ${state.progress.information_quality}%
-- Answer Confidence: ${state.progress.answer_confidence}%
-- User Satisfaction: ${state.progress.user_satisfaction}%
-
-Last Reflection: ${state.last_reflection || "Never"}
-`.trim();
-  }
-
-  /**
-   * Create knowledge entry from search results
+   * Create knowledge entry from results
    */
   protected createKnowledgeEntry(
     source: string,
@@ -253,7 +109,7 @@ Last Reflection: ${state.last_reflection || "Never"}
   }
 
   /**
-   * Create user question entry
+   * Create user interaction entry
    */
   protected createUserInteraction(
     question: string,
@@ -299,7 +155,7 @@ Last Reflection: ${state.last_reflection || "Never"}
     options: {
       shouldContinue?: boolean;
       knowledgeUpdates?: KnowledgeEntry[];
-      UserInteractionsUpdates?: UserInteraction[];
+      interactionUpdates?: UserInteraction[];
       tokensUsed?: number;
     } = {}
   ): ExecutionResult {
@@ -308,7 +164,7 @@ Last Reflection: ${state.last_reflection || "Never"}
       result,
       should_continue: options.shouldContinue ?? true,
       knowledge_updates: options.knowledgeUpdates,
-      interaction_updates: options.UserInteractionsUpdates,
+      interaction_updates: options.interactionUpdates,
       tokens_used: options.tokensUsed,
     };  
   }
@@ -334,10 +190,26 @@ Last Reflection: ${state.last_reflection || "Never"}
   }
 
   /**
-   * Estimate token usage (rough estimation)
+   * Build simple summaries for context (no LLM calls)
    */
-  protected estimateTokenUsage(text: string): number {
-    // Rough estimation: ~4 characters per token
-    return Math.ceil(text.length / 4);
+  protected buildKnowledgeBaseSummary(knowledgeBase: KnowledgeEntry[]): string {
+    if (knowledgeBase.length === 0) {
+      return "No knowledge gathered yet.";
+    }
+    
+    return knowledgeBase
+      .slice(0, 5)
+      .map(k => `- ${k.source}: ${k.content.substring(0, 100)}...`)
+      .join("\n");
+  }
+
+  protected buildUserInteractionsSummary(interactions: UserInteraction[]): string {
+    if (interactions.length === 0) {
+      return "No user questions recorded.";
+    }
+    
+    return interactions
+      .map(q => `- ${q.is_initial ? '[Initial]' : '[Follow-up]'} ${q.question}`)
+      .join("\n");
   }
 } 

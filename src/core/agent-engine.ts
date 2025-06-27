@@ -22,6 +22,7 @@ type UserInputCallback = (message?: string) => Promise<string>;
  * Agent Engine - Real-time Decision Architecture
  * Inspired by Jina AI DeepResearch: Keep searching, reading, reasoning until answer found
  * Enhanced with task decomposition and reflection capabilities
+ * Following DeepResearch: Planning generates parameters, tools execute
  */
 export class AgentEngine {
   private conversationId: string;
@@ -266,25 +267,28 @@ Return a structured task decomposition in JSON format:
         continue;
       }
 
-      // If OUTPUT tool was used, evaluate results
-      if (decision.tool === ToolType.OUTPUT && result.success) {
-        const isComplete = await this.evaluateOutput(result.result, context);
+      // If CHARACTER or WORLDBOOK tool was used, handle generated content
+      if ((decision.tool === ToolType.CHARACTER || decision.tool === ToolType.WORLDBOOK) && result.success) {
+        console.log(`✅ ${decision.tool} execution completed with pre-generated content`);
+        
+        // Content was already generated in planning phase, just update progress
+        if (result.result.GenerationOutputUpdate) {
+          await ResearchSessionOperations.updateGenerationOutput(
+            this.conversationId, 
+            result.result.GenerationOutputUpdate
+          );
+        }
+        
+        // Check if we should continue or if task is complete
+        const isComplete = await this.evaluateGenerationProgress(result.result, context, decision.tool);
         if (isComplete) {
-          console.log("✅ Task completed successfully");
-          
-          // Update character progress with the output
-          if (result.result.GenerationOutputUpdate) {
-            await ResearchSessionOperations.updateGenerationOutput(
-              this.conversationId, 
-              result.result.GenerationOutputUpdate
-            );
-          }
-          
+          console.log("✅ Generation task completed successfully");
           break;
         } else {
-          console.log("🔄 Output needs improvement, continuing...");
-          await this.updateTasksAfterEvaluation(context);
+          console.log("🔄 Generation needs improvement or additional work, continuing...");
         }
+      } else if (result.success) {
+        console.log(`✅ ${decision.tool} execution completed`);
       }
 
       // If REFLECT tool was used, update task queue and research state
@@ -342,120 +346,145 @@ Return a structured task decomposition in JSON format:
   }
 
   /**
-   * Core planning module - real-time decision making
-   * Inspired by DeepResearch: analyze current state and decide next action
-   * Enhanced with reflection capabilities and task queue management
+   * Core planning module - real-time decision making with complete content generation
+   * Following DeepResearch: planner generates ALL content, tools just store/process results
    */
   private async makeRealTimeDecision(context: ExecutionContext): Promise<ToolDecision | null> {
-    // Get detailed tool information including parameters
-    const availableTools = ToolRegistry.getDetailedToolsInfo();
+    // Get detailed tool information in XML format to inject into the prompt
+    const availableToolsXML = ToolRegistry.getDetailedToolsInfo();
     
     // Check if reflection is needed
     const shouldReflect = this.shouldTriggerReflection(context);
     
     const prompt = ChatPromptTemplate.fromTemplate(`
-You are an intelligent agent that helps generate character cards and worldbooks. 
-Analyze the current state and decide what tool to use next with appropriate parameters.
+<prompt>
+  <system_role>
+    You are a master planning agent for a character and world-building assistant.
+    Your primary goal is to analyze the user's request, the current state of the project, and the available tools to decide the single best next action.
+    You must think step-by-step and provide your reasoning, your chosen action, and the complete parameters for that action in the specified XML format.
+  </system_role>
 
-Available Tools:
-{available_tools}
+  <tools_schema>
+    {available_tools_xml}
+  </tools_schema>
 
-Current State:
-Main Objective: {main_objective}
+  <current_state>
+    <main_objective>{main_objective}</main_objective>
+    <task_queue>{task_queue_status}</task_queue>
+    <knowledge_gaps>{knowledge_gaps}</knowledge_gaps>
+    <generation_progress>
+      <search_coverage>{search_coverage}%</search_coverage>
+      <information_quality>{information_quality}%</information_quality>
+      <answer_confidence>{answer_confidence}%</answer_confidence>
+    </generation_progress>
+    <conversation_history>{recent_conversation}</conversation_history>
+    <knowledge_base>{knowledge_base}</knowledge_base>
+    <user_requirements>{user_requirements}</user_requirements>
+  </current_state>
 
-Task Queue Status:
-{task_queue_status}
+  <instructions>
+    1.  Carefully analyze the <current_state> and the <tools_schema>.
+    2.  Determine the single most critical action to perform next to progress towards the <main_objective>.
+    3.  If the project is drifting or stuck, consider using the REFLECT tool. Priority: {should_reflect}.
+    4.  Construct your response meticulously following the <output_specification>.
+  </instructions>
 
-Sub-questions: {sub_questions}
-Knowledge Gaps: {knowledge_gaps}
+  <output_specification>
+    You MUST respond using the following XML format. Do not include any other text, explanations, or formatting outside of the <response> block.
 
-Completion Status:
-- Search Coverage: {search_coverage}%
-- Information Quality: {information_quality}%
-- Answer Confidence: {answer_confidence}%
-- User Satisfaction: {user_satisfaction}%
-
-Recent Conversation:
-{recent_conversation}
-
-Knowledge Base Entries: {knowledge_count}
-User Questions: {user_questions}
-
-Reflection Status:
-- Last Reflection: {last_reflection}
-- Should Reflect: {should_reflect}
-- Reflection Trigger: {reflection_trigger}
-
-DECISION GUIDELINES:
-1. **REFLECT**: Use when {should_reflect} is true, or when:
-   - Progress seems stuck (no improvement in 3+ iterations)
-   - Task queue needs updating based on new information
-   - Major knowledge gaps identified
-   - User requirements have changed
-
-2. **SEARCH**: Use when:
-   - Knowledge gaps exist and search coverage < 80%
-   - Sub-questions need answers
-   - Specific information is missing
-
-3. **ASK_USER**: Use when:
-   - Information is unclear or user requirements need clarification
-   - User input would significantly improve direction
-
-4. **OUTPUT**: Use when:
-   - Answer confidence > 70% and information quality > 60%
-   - Task queue shows sufficient completion
-   - Ready to generate character/worldbook content
-
-5. **NULL**: Return when task is essentially complete
-
-Return your decision in JSON format:
-{{
-  "tool": "REFLECT|SEARCH|ASK_USER|OUTPUT|null",
-  "parameters": {{}},
-  "reasoning": "why this tool is needed now",
-  "priority": 1-10
-}}
+    <response>
+      <think>
+        Provide a detailed, step-by-step reasoning for your choice of action. Explain how this action helps achieve the main objective based on the current state.
+      </think>
+      <action>The name of the ONE tool you are choosing to use (e.g., SEARCH, CHARACTER, WORLDBOOK).</action>
+      <parameters>
+        <!--
+        - Provide all parameters for the chosen action inside this block.
+        - For complex types like 'object' or 'array', you MUST provide the value as a JSON string wrapped in a <![CDATA[...]]> block.
+        - Example for SEARCH: <query>Search for dragon lore</query><focus>lore</focus>
+        - Example for CHARACTER: <character_data><![CDATA[{{\"name\": \"Elara\", \"description\": \"A cunning sorceress...\"}}]]></character_data>
+        - Example for WORLDBOOK: <worldbook_entry><![CDATA[{{\"key\": [\"magic\"], \"content\": \"Magic is volatile...\"}}]]></worldbook_entry>
+        -->
+      </parameters>
+    </response>
+  </output_specification>
+</prompt>
     `);
 
     try {
       const response = await this.model.invoke([
         await prompt.format({
-          available_tools: JSON.stringify(availableTools, null, 2),
+          available_tools_xml: availableToolsXML,
           main_objective: context.research_state.main_objective,
           task_queue_status: this.buildTaskQueueSummary(context),
-          sub_questions: context.research_state.sub_questions?.join(", ") || "None",
           knowledge_gaps: context.research_state.knowledge_gaps?.join(", ") || "Unknown",
           search_coverage: context.research_state.progress?.search_coverage || 0,
           information_quality: context.research_state.progress?.information_quality || 0,
           answer_confidence: context.research_state.progress?.answer_confidence || 0,
           user_satisfaction: context.research_state.progress?.user_satisfaction || 0,
           recent_conversation: this.buildRecentConversationSummary(context.message_history),
-          knowledge_count: context.research_state.knowledge_base?.length || 0,
-          user_questions: JSON.stringify(context.research_state.user_interactions || []),
+          knowledge_base: this.buildKnowledgeBaseSummary(context.research_state.knowledge_base),
+          user_requirements: this.buildUserInteractionsSummary(context.research_state.user_interactions),
           last_reflection: context.research_state.last_reflection || "Never",
-          should_reflect: shouldReflect,
-          reflection_trigger: this.getReflectionTriggerReason(context)
+          should_reflect: shouldReflect
         }),
       ]);
 
       const content = response.content as string;
-      const decision = JSON.parse(content);
+      const decision = this.parseXMLResponse(content);
 
-      if (decision.tool === "null" || !decision.tool) {
+      if (decision.action === "null" || !decision.action) {
         return null;
       }
 
       return {
-        tool: decision.tool as ToolType,
-        parameters: decision.parameters || {},
-        reasoning: decision.reasoning,
-        priority: decision.priority || 5,
+        tool: decision.action as ToolType,
+        parameters: decision.parameters,
+        reasoning: decision.think,
+        priority: 5,
       };
     } catch (error) {
       console.error("Error in makeRealTimeDecision:", error);
       return null;
     }
+  }
+
+  /**
+   * Parses the XML response from the LLM to extract action, parameters, and reasoning.
+   */
+  private parseXMLResponse(xmlString: string): { think: string, action: string, parameters: Record<string, any> } {
+    const think = xmlString.match(/<think>([\s\S]*?)<\/think>/)?.[1].trim() ?? 'No reasoning provided';
+    const action = xmlString.match(/<action>([\s\S]*?)<\/action>/)?.[1].trim() ?? 'null';
+    
+    const paramsMatch = xmlString.match(/<parameters>([\s\S]*?)<\/parameters>/);
+    const parameters: Record<string, any> = {};
+
+    if (paramsMatch && paramsMatch[1]) {
+        const paramsString = paramsMatch[1].trim();
+        const paramRegex = /<(\w+)>([\s\S]*?)<\/(\1)>/g;
+        let match;
+
+        while ((match = paramRegex.exec(paramsString)) !== null) {
+            const key = match[1];
+            let value = match[2].trim();
+
+            const cdataMatch = value.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
+            if (cdataMatch) {
+                try {
+                    // It's a JSON string in CDATA, parse it
+                    parameters[key] = JSON.parse(cdataMatch[1]);
+                } catch (e) {
+                    // Fallback to raw string if JSON parsing fails
+                    parameters[key] = cdataMatch[1];
+                }
+            } else {
+                // It's a simple string value
+                parameters[key] = value;
+            }
+        }
+    }
+
+    return { think, action, parameters };
   }
 
   /**
@@ -599,82 +628,119 @@ Return your decision in JSON format:
   }
 
   /**
-   * Evaluate output quality - only after OUTPUT tool usage
+   * Evaluate generation progress - for CHARACTER and WORLDBOOK tools
    */
-  private async evaluateOutput(output: any, context: ExecutionContext): Promise<boolean> {
+  private async evaluateGenerationProgress(output: any, context: ExecutionContext, toolType: ToolType): Promise<boolean> {
     const prompt = ChatPromptTemplate.fromTemplate(`
-Evaluate the quality of this character card and worldbook output.
+<prompt>
+  <system_role>
+    You are an expert quality assurance agent. Your task is to evaluate the output of a generation tool ({tool_type}) and determine if it meets the required standards for the project.
+  </system_role>
 
-Output to evaluate:
-{output}
+  <evaluation_context>
+    <tool_used>{tool_type}</tool_used>
+    <output_generated>
+      <![CDATA[{output}]]>
+    </output_generated>
+    <user_requirements>
+      {user_context}
+    </user_requirements>
+    <knowledge_base>
+      {knowledge_summary}
+    </knowledge_base>
+    <current_project_progress>
+      {current_progress}
+    </current_project_progress>
+  </evaluation_context>
 
-User requirements and context:
-{user_context}
+  <instructions>
+    1.  Review the <output_generated> in the context of the user's requirements and the project's knowledge base.
+    2.  Assess the output based on the specific guidelines for the tool used.
+        <guidelines tool="CHARACTER">
+          - Completeness: Is the character well-developed? Are all key fields present?
+          - Consistency: Does the character align with the knowledge base and user requirements?
+          - Engagement: Is the personality distinctive? Is the dialogue high quality?
+        </guidelines>
+        <guidelines tool="WORLDBOOK">
+          - Comprehensiveness: Are the entries useful and detailed?
+          - Complementarity: Do the entries support the main character and world?
+          - Coverage: Is there good coverage of the world? Are keywords well-chosen?
+        </guidelines>
+    3.  Provide your evaluation in the specified XML format below.
+  </instructions>
 
-Knowledge base used:
-{knowledge_summary}
+  <output_specification>
+    You MUST respond using the following XML format. Do not include any other text outside this block.
 
-Rate the output on these criteria (0-100):
-1. Completeness: Are all required elements present?
-2. Quality: Is the content well-written and engaging?
-3. Consistency: Is the output internally consistent?
-4. User Requirements: Does it meet the user's specific needs?
-
-Return evaluation in JSON format:
-{{
-  "completeness": 0-100,
-  "quality": 0-100,
-  "consistency": 0-100,
-  "requirements_met": 0-100,
-  "overall_score": 0-100,
-  "is_acceptable": true/false,
-  "improvement_needed": "specific areas that need work",
-  "missing_elements": ["list", "of", "missing", "elements"]
-}}
-`);
+    <evaluation_response>
+      <reasoning>Detailed explanation for your assessment of the output's quality and alignment.</reasoning>
+      <quality_score>An overall quality score from 0 to 100.</quality_score>
+      <completeness_score>A completeness score from 0 to 100.</completeness_score>
+      <alignment_score>A user alignment score from 0 to 100.</alignment_score>
+      <is_sufficient>true or false, based on whether the generation task is complete and meets a high standard (quality_score >= 80).</is_sufficient>
+      <next_steps>
+        <step>Actionable next step 1 to improve the output, if needed.</step>
+        <step>Actionable next step 2.</step>
+      </next_steps>
+    </evaluation_response>
+  </output_specification>
+</prompt>`);
 
     const llm = this.createLLM(context.llm_config);
     const chain = prompt.pipe(llm).pipe(new StringOutputParser());
 
     try {
       const response = await chain.invoke({
+        tool_type: toolType,
         output: JSON.stringify(output, null, 2),
         user_context: this.buildUserContextSummary(context),
         knowledge_summary: this.buildKnowledgeBaseSummary(context.research_state.knowledge_base),
+        current_progress: this.buildProgressSummary(context)
       });
 
-      const evaluation = this.parseJSONResponse(response);
+      const evaluation = this.parseEvaluationXMLResponse(response);
       
       // Update completion status based on evaluation
       await this.updateCompletionStatus({
-        answer_confidence: evaluation.overall_score,
-        information_quality: evaluation.quality,
-        user_satisfaction: evaluation.requirements_met,
+        answer_confidence: evaluation.quality_score,
+        information_quality: evaluation.completeness_score,
+        user_satisfaction: evaluation.alignment_score,
       });
 
-      return evaluation.is_acceptable && evaluation.overall_score >= 80;
+      return evaluation.is_sufficient;
 
     } catch (error) {
-      console.error("❌ Output evaluation failed:", error);
+      console.error("❌ Generation evaluation failed:", error);
       return false;
     }
   }
 
   /**
-   * Update tasks after evaluation - remove completed, add new gaps
+   * Parses the XML evaluation response from the LLM.
    */
-  private async updateTasksAfterEvaluation(context: ExecutionContext): Promise<void> {
-    // Update task state to reflect what needs improvement
-    const conversation = await ResearchSessionOperations.getConversationById(this.conversationId);
-    if (!conversation) return;
+  private parseEvaluationXMLResponse(xmlString: string): {
+    reasoning: string;
+    quality_score: number;
+    completeness_score: number;
+    alignment_score: number;
+    is_sufficient: boolean;
+    next_steps: string[];
+  } {
+    const reasoning = xmlString.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1].trim() ?? 'No reasoning provided';
+    const quality_score = parseInt(xmlString.match(/<quality_score>(\d+)<\/quality_score>/)?.[1] ?? '0', 10);
+    const completeness_score = parseInt(xmlString.match(/<completeness_score>(\d+)<\/completeness_score>/)?.[1] ?? '0', 10);
+    const alignment_score = parseInt(xmlString.match(/<alignment_score>(\d+)<\/alignment_score>/)?.[1] ?? '0', 10);
+    const is_sufficient = xmlString.match(/<is_sufficient>(true|false)<\/is_sufficient>/)?.[1] === 'true';
 
-    // Mark current focus as completed and update with new focus
-    const updatedResearchState = {
-      completed_tasks: [...conversation.research_state.completed_tasks],
-      updated_at: new Date().toISOString(),
-    };
+    const next_steps: string[] = [];
+    const stepsMatch = xmlString.match(/<next_steps>([\s\S]*?)<\/next_steps>/)?.[1] ?? '';
+    const stepRegex = /<step>([\s\S]*?)<\/step>/g;
+    let match;
+    while ((match = stepRegex.exec(stepsMatch)) !== null) {
+        next_steps.push(match[1].trim());
+    }
 
-    await ResearchSessionOperations.updateResearchState(this.conversationId, updatedResearchState);
+    return { reasoning, quality_score, completeness_score, alignment_score, is_sufficient, next_steps };
   }
 
   // ============================================================================
@@ -685,13 +751,13 @@ Return evaluation in JSON format:
     const conversation = await ResearchSessionOperations.getConversationById(this.conversationId);
     if (!conversation) throw new Error("Conversation not found");
 
-    return {
+      return {
       session_id: this.conversationId,
       research_state: conversation.research_state,
       message_history: conversation.messages,
       llm_config: conversation.llm_config,  
-    };
-  }
+      };
+    }
 
   private createLLM(config: ExecutionContext["llm_config"]) {
     if (config.llm_type === "openai") {
@@ -745,10 +811,29 @@ Return evaluation in JSON format:
   }
 
   private buildKnowledgeBaseSummary(knowledgeBase: KnowledgeEntry[]): string {
+    if (!knowledgeBase || knowledgeBase.length === 0) {
+      return "No knowledge gathered yet.";
+    }
+
     return knowledgeBase
-      .slice(0, 5) // Top 5 most relevant
-      .map(k => `${k.source}: ${k.content.substring(0, 100)}...`)
+      .slice(0, 5)
+      .map(k => `- ${k.source}: ${k.content.substring(0, 100)}...`)
       .join("\n");
+  }
+
+  private buildUserInteractionsSummary(interactions: UserInteraction[]): string {
+    if (!interactions || interactions.length === 0) {
+      return "No user questions recorded.";
+    }
+    
+    return interactions
+      .map(q => `- ${q.is_initial ? '[Initial]' : '[Follow-up]'} ${q.question}`)
+      .join("\n");
+  }
+
+  private buildProgressSummary(context: ExecutionContext): string {
+    const progress = context.research_state.progress;
+    return `Search: ${progress.search_coverage}%, Info: ${progress.information_quality}%, Confidence: ${progress.answer_confidence}%, Satisfaction: ${progress.user_satisfaction}%`;
   }
 
   private async updateConversationState(result: ExecutionResult): Promise<void> {

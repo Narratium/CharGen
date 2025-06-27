@@ -8,7 +8,8 @@
 export enum ToolType {
   SEARCH = "SEARCH",     // Search and gather information
   ASK_USER = "ASK_USER", // Get user input
-  OUTPUT = "OUTPUT",     // Generate final output
+  CHARACTER = "CHARACTER", // Generate/update character card
+  WORLDBOOK = "WORLDBOOK", // Generate worldbook entries
   REFLECT = "REFLECT"    // Reflect on progress and update tasks
 }
 
@@ -217,8 +218,6 @@ export interface WorldbookEntry {
   order: number;
   position: number;
   disable: boolean;
-  probability: number;
-  useProbability: boolean;
 }
 
 // ============================================================================
