@@ -6,7 +6,6 @@ import {
   KnowledgeEntry,
   UserInteraction,
 } from "../models/agent-model";
-import { ResearchSessionOperations } from "../data/agent/agent-conversation-operations";
 import { v4 as uuidv4 } from "uuid";
 
 // ============================================================================
@@ -71,6 +70,7 @@ export abstract class BaseSimpleTool implements SimpleTool {
       const result = await this.doWork(parameters, context);
       
       console.log(`✅ [${this.name}] Execution completed`);
+      
       return this.createSuccessResult(result);
       
     } catch (error) {
@@ -103,8 +103,7 @@ export abstract class BaseSimpleTool implements SimpleTool {
       source,
       content,
       url,
-      relevance_score: relevanceScore,
-      timestamp: new Date().toISOString(),
+      relevance_score: relevanceScore,  
     };
   }
 
@@ -121,7 +120,6 @@ export abstract class BaseSimpleTool implements SimpleTool {
       question,
       is_initial: isInitial,
       parent_id: parentQuestionId,
-      timestamp: new Date().toISOString(),
       status: "pending",
     };
   }
@@ -136,6 +134,7 @@ export abstract class BaseSimpleTool implements SimpleTool {
     messageType: "agent_thinking" | "agent_action" | "agent_output" | "system_info" = "agent_action",
     metadata?: Record<string, any>
   ): Promise<void> {
+    const { ResearchSessionOperations } = await import("../data/agent/agent-conversation-operations");
     await ResearchSessionOperations.addMessage(conversationId, {
       role,
       content,
@@ -154,18 +153,17 @@ export abstract class BaseSimpleTool implements SimpleTool {
     result: any,
     options: {
       shouldContinue?: boolean;
-      knowledgeUpdates?: KnowledgeEntry[];
-      interactionUpdates?: UserInteraction[];
       tokensUsed?: number;
+      knowledge_updates?: KnowledgeEntry[];
+      interaction_updates?: UserInteraction[];
     } = {}
   ): ExecutionResult {
     return {
       success: true,
       result,
-      should_continue: options.shouldContinue ?? true,
-      knowledge_updates: options.knowledgeUpdates,
-      interaction_updates: options.interactionUpdates,
       tokens_used: options.tokensUsed,
+      knowledge_updates: options.knowledge_updates,
+      interaction_updates: options.interaction_updates,
     };  
   }
 
@@ -185,7 +183,6 @@ export abstract class BaseSimpleTool implements SimpleTool {
     return {
       success: false,
       error: `${this.name} failed: ${errorMessage}`,
-      should_continue: options.shouldContinue ?? true,
     };
   }
 

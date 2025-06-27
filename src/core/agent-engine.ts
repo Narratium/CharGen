@@ -54,10 +54,10 @@ export class AgentEngine {
       this.model = this.createLLM(context.llm_config);
       
       // Initialize with task decomposition - inspired by DeepResearch
-      await this.initializeWithTaskDecomposition(context);
+      await this.initialize(context);
       
       // Main execution loop - real-time decision making
-      return await this.realTimeExecutionLoop();
+      return await this.executionLoop();
       
     } catch (error) { 
       await ResearchSessionOperations.updateStatus(this.conversationId, SessionStatus.FAILED);
@@ -66,14 +66,14 @@ export class AgentEngine {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
       };
-    }
+    } 
   }
 
   /**
    * Initialize session with task decomposition
    * Inspired by DeepResearch's approach to breaking down complex objectives
    */
-  private async initializeWithTaskDecomposition(context: ExecutionContext): Promise<void> {
+  private async initialize  (context: ExecutionContext): Promise<void> {
     console.log("🚀 Initializing session with task decomposition...");
     
     // Check if already initialized
@@ -213,18 +213,18 @@ Return a structured task decomposition in JSON format:
    * Real-time execution loop - core planning and decision making
    * Based on DeepResearch philosophy: continuous search and reasoning
    */
-  private async realTimeExecutionLoop(): Promise<{
+  private async executionLoop(): Promise<{
     success: boolean;
     result?: any;
     error?: string;
   }> {
-    const conversation = await ResearchSessionOperations.getConversationById(this.conversationId);
-    if (!conversation) throw new Error("Conversation not found");
+    const session = await ResearchSessionOperations.getSessionById(this.conversationId);
+    if (!session) throw new Error("Session not found");
 
     let iteration = 0;
-    const maxIterations = conversation.execution_info.max_iterations;
-    const tokenBudget = conversation.execution_info.token_budget;
-    let usedTokens = conversation.execution_info.total_tokens_used || 0;
+    const maxIterations = session.execution_info.max_iterations;
+    const tokenBudget = session.execution_info.token_budget;
+    let usedTokens = session.execution_info.total_tokens_used || 0;
 
     while (iteration < maxIterations && usedTokens < tokenBudget) {
       iteration++;
@@ -234,23 +234,18 @@ Return a structured task decomposition in JSON format:
       const context = await this.buildExecutionContext();
       
       // Real-time planning: What should we do next?
-      const decision = await this.makeRealTimeDecision(context);
+      const decision = await this.selectNextDecision(context);
       
       if (!decision) {
         console.log("🎯 No more actions needed - task complete");
         break;
       }
 
-      console.log(`🔄 [Iteration ${iteration}] Decided: ${decision.tool} - ${decision.reasoning}`);
-
       // Execute the decided tool
-      const result = await this.executeToolDecision(decision, context);
+      const result = await this.executeDecision(decision, context);
       usedTokens += result.tokens_used || 0;
 
-      // Update conversation state
-      await this.updateConversationState(result);
-
-      // Handle user input requirement
+      // Handle ASK_USER tool - special case for user interaction flow control
       if (decision.tool === ToolType.ASK_USER && result.success) {
         if (!this.userInputCallback) {
           throw new Error("User input required but no callback provided");
@@ -261,22 +256,32 @@ Return a structured task decomposition in JSON format:
         const userInput = await this.userInputCallback(result.result?.message || "I need more information from you.");
         
         // Add user input and update questions array
-        await this.addUserInput(userInput);
+        await ResearchSessionOperations.addUserInteractions(this.conversationId, [{
+          id: `q_${Date.now()}`,
+          question: userInput,
+          is_initial: false,
+          status: "pending",
+        }]);
         
         await ResearchSessionOperations.updateStatus(this.conversationId, SessionStatus.THINKING);
         continue;
       }
 
-      // If CHARACTER or WORLDBOOK tool was used, handle generated content
+      // Handle CHARACTER or WORLDBOOK tool - data updates and completion evaluation
       if ((decision.tool === ToolType.CHARACTER || decision.tool === ToolType.WORLDBOOK) && result.success) {
-        console.log(`✅ ${decision.tool} execution completed with pre-generated content`);
+        console.log(`✅ ${decision.tool} execution completed with generated content`);
         
-        // Content was already generated in planning phase, just update progress
-        if (result.result.GenerationOutputUpdate) {
-          await ResearchSessionOperations.updateGenerationOutput(
-            this.conversationId, 
-            result.result.GenerationOutputUpdate
-          );
+        // Update generation output with new data
+        if (decision.tool === ToolType.CHARACTER && result.result?.character_data) {
+          await ResearchSessionOperations.updateGenerationOutput(this.conversationId, {
+            character_data: result.result.character_data,
+          });
+        }
+        
+        if (decision.tool === ToolType.WORLDBOOK && result.result?.worldbook_data) {
+          await ResearchSessionOperations.updateGenerationOutput(this.conversationId, {
+            worldbook_data: result.result.worldbook_data,
+          });
         }
         
         // Check if we should continue or if task is complete
@@ -287,40 +292,41 @@ Return a structured task decomposition in JSON format:
         } else {
           console.log("🔄 Generation needs improvement or additional work, continuing...");
         }
-      } else if (result.success) {
-        console.log(`✅ ${decision.tool} execution completed`);
       }
 
-      // If REFLECT tool was used, update task queue and research state
-      if (decision.tool === ToolType.REFLECT && result.success && result.result?.ResearchStateUpdate) {
-        console.log("🔄 Updating research state from reflection...");
-        await ResearchSessionOperations.updateResearchState(
-          this.conversationId, 
-          result.result.ResearchStateUpdate
-        );
+      // Handle REFLECT tool - update research state and log results
+      if (decision.tool === ToolType.REFLECT && result.success) {
+        console.log("🔄 Reflection completed");
         
-        // Log reflection results
-        if (result.result.task_updates) {
-          console.log(`📋 Task updates: +${result.result.task_updates.added} new, ~${result.result.task_updates.updated} modified`);
+        // Update research state with new task queue from reflection
+        if (result.result.updated_task_queue) {
+          await ResearchSessionOperations.updateResearchState(this.conversationId, {
+            task_queue: result.result.updated_task_queue,
+            last_reflection: new Date().toISOString(),
+            reflection_trigger: "manual"
+          });
         }
         
-        if (result.result.new_sub_questions?.length > 0) {
-          console.log(`❓ New sub-questions: ${result.result.new_sub_questions.length}`);
+        if (result.result.added_count > 0) {
+          console.log(`📋 Added ${result.result.added_count} new tasks`);
+        }
+        
+        if (result.result.decomposed_count > 0) {
+          console.log(`🔄 Decomposed ${result.result.decomposed_count} complex tasks`);
         }
       }
+      if (result.tokens_used) {
+        await ResearchSessionOperations.recordTokenUsage(this.conversationId, result.tokens_used);
+      }
 
-      // Update knowledge base if needed
+      // Update knowledge base if tool provided knowledge updates
       if (result.knowledge_updates && result.knowledge_updates.length > 0) {
-        await this.updateKnowledgeBase(result.knowledge_updates);
+        await ResearchSessionOperations.addKnowledgeEntries(this.conversationId, result.knowledge_updates);
       }
 
-      // Update user questions if needed
+      // Update user interactions if tool provided interaction updates  
       if (result.interaction_updates && result.interaction_updates.length > 0) {
-        await this.updateUserInteractions(result.interaction_updates);
-      }
-
-      if (!result.should_continue) {
-        break;
+        await ResearchSessionOperations.addUserInteractions(this.conversationId, result.interaction_updates);
       }
 
       // Small delay to prevent tight loops
@@ -349,9 +355,9 @@ Return a structured task decomposition in JSON format:
    * Core planning module - real-time decision making with complete content generation
    * Following DeepResearch: planner generates ALL content, tools just store/process results
    */
-  private async makeRealTimeDecision(context: ExecutionContext): Promise<ToolDecision | null> {
+  private async selectNextDecision(context: ExecutionContext): Promise<ToolDecision | null> {
     // Get detailed tool information in XML format to inject into the prompt
-    const availableToolsXML = ToolRegistry.getDetailedToolsInfo();
+    const availableTools = ToolRegistry.getDetailedToolsInfo();
     
     // Check if reflection is needed
     const shouldReflect = this.shouldTriggerReflection(context);
@@ -365,7 +371,7 @@ Return a structured task decomposition in JSON format:
   </system_role>
 
   <tools_schema>
-    {available_tools_xml}
+    {available_tools}
   </tools_schema>
 
   <current_state>
@@ -414,7 +420,7 @@ Return a structured task decomposition in JSON format:
     try {
       const response = await this.model.invoke([
         await prompt.format({
-          available_tools_xml: availableToolsXML,
+          available_tools: availableTools,
           main_objective: context.research_state.main_objective,
           task_queue_status: this.buildTaskQueueSummary(context),
           knowledge_gaps: context.research_state.knowledge_gaps?.join(", ") || "Unknown",
@@ -444,7 +450,7 @@ Return a structured task decomposition in JSON format:
         priority: 5,
       };
     } catch (error) {
-      console.error("Error in makeRealTimeDecision:", error);
+      console.error("Error in selectNextDecision:", error);
       return null;
     }
   }
@@ -598,7 +604,7 @@ Return a structured task decomposition in JSON format:
   /**
    * Execute a tool decision
    */
-  private async executeToolDecision(
+  private async executeDecision(
     decision: ToolDecision, 
     context: ExecutionContext
   ): Promise<ExecutionResult> {
@@ -622,7 +628,6 @@ Return a structured task decomposition in JSON format:
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
-        should_continue: true,
       };
     }
   }
@@ -748,14 +753,14 @@ Return a structured task decomposition in JSON format:
   // ============================================================================
 
   private async buildExecutionContext(): Promise<ExecutionContext> {
-    const conversation = await ResearchSessionOperations.getConversationById(this.conversationId);
-    if (!conversation) throw new Error("Conversation not found");
+    const session = await ResearchSessionOperations.getSessionById(this.conversationId);
+    if (!session) throw new Error("Session not found");
 
       return {
-      session_id: this.conversationId,
-      research_state: conversation.research_state,
-      message_history: conversation.messages,
-      llm_config: conversation.llm_config,  
+        session_id: this.conversationId,
+        research_state: session.research_state,
+        message_history: session.messages,
+        llm_config: session.llm_config,  
       };
     }
 
@@ -836,65 +841,37 @@ Return a structured task decomposition in JSON format:
     return `Search: ${progress.search_coverage}%, Info: ${progress.information_quality}%, Confidence: ${progress.answer_confidence}%, Satisfaction: ${progress.user_satisfaction}%`;
   }
 
-  private async updateConversationState(result: ExecutionResult): Promise<void> {
+  private async updateSessionState(result: ExecutionResult): Promise<void> {
     // Update execution metadata with token usage
     if (result.tokens_used) {
       await ResearchSessionOperations.recordTokenUsage(this.conversationId, result.tokens_used);
     }
   }
 
-  private async updateKnowledgeBase(updates: KnowledgeEntry[]): Promise<void> {
-    await ResearchSessionOperations.addKnowledgeEntries(this.conversationId, updates);
-  }
-
-  private async updateUserInteractions(updates: UserInteraction[]): Promise<void> {
-    await ResearchSessionOperations.addUserInteractions(this.conversationId, updates);
-  }
-
-  private async addUserInput(userInput: string): Promise<void> {
-    // Add user message to conversation
-    await ResearchSessionOperations.addMessage(this.conversationId, {
-      role: "user",
-      content: userInput,
-      type: "user_input",
-    });
-
-    // Add to user questions array
-    const newQuestion: UserInteraction = {
-      id: `q_${Date.now()}`,
-      question: userInput,
-      is_initial: false,
-      timestamp: new Date().toISOString(),
-      status: "pending",
-    };
-
-    await this.updateUserInteractions([newQuestion]);
-  }
-
   private async updateCompletionStatus(updates: Partial<ResearchState["progress"]>): Promise<void> {
-    const conversation = await ResearchSessionOperations.getConversationById(this.conversationId);
-    if (!conversation) return;
+    const session = await ResearchSessionOperations.getSessionById(this.conversationId);
+    if (!session) return;
 
     // Update the completion status
-    Object.assign(conversation.research_state.progress, updates);
+    Object.assign(session.research_state.progress, updates);
     
     // Update the entire task state
     await ResearchSessionOperations.updateResearchState(this.conversationId, {
-      progress: conversation.research_state.progress,
+      progress: session.research_state.progress,
     });
   }
 
   private async generateFinalResult(): Promise<any> {
-    const conversation = await ResearchSessionOperations.getConversationById(this.conversationId);
-    if (!conversation) return null;
+    const session = await ResearchSessionOperations.getSessionById(this.conversationId);
+    if (!session) return null;
 
     return {
-      character_data: conversation.generation_output.character_data,
-      worldbook_data: conversation.generation_output.worldbook_data,
-      quality_metrics: conversation.generation_output.quality_metrics,
-      knowledge_base: conversation.research_state.knowledge_base,
-      completion_status: conversation.research_state.progress,
+      character_data: session.generation_output.character_data,
+      worldbook_data: session.generation_output.worldbook_data,
+      knowledge_base: session.research_state.knowledge_base,
+      completion_status: session.research_state.progress,
     };
   }
 } 
+ 
  

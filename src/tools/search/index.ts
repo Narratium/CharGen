@@ -3,7 +3,7 @@ import {
   ExecutionContext, 
   ExecutionResult 
 } from "../../models/agent-model";
-import { BaseSimpleTool, ToolParameter, DetailedToolInfo } from "../base-tool";
+import { BaseSimpleTool, ToolParameter } from "../base-tool";
 
 /**
  * Search Tool - Pure Execution Unit
@@ -30,16 +30,9 @@ export class SearchTool extends BaseSimpleTool {
     }
   ];
 
-  getToolInfo(): DetailedToolInfo {
-    return {
-      type: ToolType.SEARCH,
-      name: this.name,
-      description: this.description,
-      parameters: this.parameters
-    };
-  }
 
-  protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<any> {
+
+  protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<ExecutionResult> {
     const query = parameters.query;
     const focus = parameters.focus || "general";
     
@@ -64,13 +57,16 @@ export class SearchTool extends BaseSimpleTool {
 
     console.log(`✅ Search completed: ${knowledgeEntries.length} results found`);
 
-    return {
-      query,
-      focus,
-      results_count: knowledgeEntries.length,
-      search_summary: `Found ${knowledgeEntries.length} results for "${query}"`,
-      knowledge_updates: knowledgeEntries
-    };
+    return this.createSuccessResult(
+      {
+        query,
+        focus,
+        results_count: knowledgeEntries.length
+      },
+      {
+        knowledge_updates: knowledgeEntries
+      }
+    );
   }
 
   /**

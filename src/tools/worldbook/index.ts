@@ -3,7 +3,7 @@ import {
   ExecutionContext, 
   ExecutionResult 
 } from "../../models/agent-model";
-import { BaseSimpleTool, ToolParameter, DetailedToolInfo } from "../base-tool";
+import { BaseSimpleTool, ToolParameter } from "../base-tool";
 
 /**
  * Worldbook Tool - Pure Execution Unit
@@ -39,16 +39,9 @@ export class WorldbookTool extends BaseSimpleTool {
     }
   ];
 
-  getToolInfo(): DetailedToolInfo {
-    return {
-      type: ToolType.WORLDBOOK,
-      name: this.name,
-      description: this.description,
-      parameters: this.parameters
-    };
-  }
 
-  protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<any> {
+
+  protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<ExecutionResult> {
     const worldbookEntry = parameters.worldbook_entry;
     
     console.log(`📚 Worldbook tool processing a single pre-generated entry`);
@@ -74,71 +67,12 @@ export class WorldbookTool extends BaseSimpleTool {
       useProbability: worldbookEntry.useProbability !== false
     };
 
-    // Calculate quality metrics based on the generated entry
-    const qualityMetrics = this.calculateWorldbookQuality([validatedEntry], context);
+    console.log(`✅ Worldbook data processed and saved - 1 entry`);
 
-    console.log(`✅ Worldbook data processed - 1 entry, Quality: ${Math.round(qualityMetrics.overall_quality)}%`);
-
-    return {
+    return this.createSuccessResult({
       entry_count: 1,
-      worldbook_data: [validatedEntry], // Return as array for consistent state updates
-      quality_metrics: qualityMetrics,
-      GenerationOutputUpdate: {
-        worldbook_data: [validatedEntry], // Keep it as an array in the state
-        quality_metrics: {
-          completeness: qualityMetrics.overall_quality,
-          consistency: qualityMetrics.consistency,
-          creativity: qualityMetrics.creativity,
-          user_satisfaction: context.research_state.progress.user_satisfaction
-        }
-      }
-    };
+      worldbook_data: [validatedEntry],
+    });
   }
 
-  /**
-   * Calculate worldbook quality metrics based on generated entries
-   */
-  private calculateWorldbookQuality(entries: any[], context: ExecutionContext): any {
-    const metrics = {
-      coverage: 0,
-      keyword_quality: 0,
-      content_richness: 0,
-      consistency: 0,
-      overall_quality: 0
-    };
-
-    if (!entries || entries.length === 0) {
-      return metrics;
-    }
-
-    // Coverage: Based on number and variety of entries (now always 1)
-    metrics.coverage = 20; // Single entry gives low coverage score
-
-    // Keyword quality: Check if keywords are well-formed
-    const totalKeywords = entries.reduce((sum, entry) => 
-      sum + (entry.key ? entry.key.length : 0), 0
-    );
-    const avgKeywords = totalKeywords / entries.length;
-    metrics.keyword_quality = Math.min(avgKeywords * 25, 100); // 3-4 keywords per entry ideal
-
-    // Content richness: Based on content length and detail
-    const avgContentLength = entries.reduce((sum, entry) => 
-      sum + (entry.content ? entry.content.length : 0), 0
-    ) / entries.length;
-    metrics.content_richness = Math.min((avgContentLength / 300) * 100, 100); // 300 chars ideal
-
-    // Consistency: Based on available knowledge and character alignment
-    const hasVariety = new Set(entries.map(e => e.comment.split(' ')[0])).size > 1;
-    metrics.consistency = hasVariety ? 80 : 60;
-
-    // Overall quality
-    metrics.overall_quality = (
-      metrics.coverage * 0.25 + 
-      metrics.keyword_quality * 0.25 + 
-      metrics.content_richness * 0.3 + 
-      metrics.consistency * 0.2
-    );
-
-    return { ...metrics, creativity: metrics.content_richness };
-  }
-} 
+}

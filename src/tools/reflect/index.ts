@@ -38,16 +38,9 @@ export class ReflectTool extends BaseSimpleTool {
     }
   ];
 
-  getToolInfo(): DetailedToolInfo {
-    return {
-      type: ToolType.REFLECT,
-      name: this.name,
-      description: this.description,
-      parameters: this.parameters
-    };
-  }
 
-  protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<any> {
+
+  protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<ExecutionResult> {
     const action = parameters.action || "auto";
     const newTasks = parameters.new_tasks || [];
     const shouldDecompose = parameters.decompose_tasks !== false;
@@ -124,19 +117,14 @@ export class ReflectTool extends BaseSimpleTool {
       }
     }
 
-    console.log(`✅ Reflection complete: ${addedCount} tasks added, ${decomposedCount} tasks decomposed`);
+    console.log(`✅ Reflection complete and saved: ${addedCount} tasks added, ${decomposedCount} tasks decomposed`);
 
-    return {
+    return this.createSuccessResult({
       action,
       added_count: addedCount,
       decomposed_count: decomposedCount,
-      ResearchStateUpdate: {
-        task_queue: updatedQueue,
-        last_reflection: new Date().toISOString(),
-        reflection_trigger: "manual",
-        updated_at: new Date().toISOString()
-      }
-    };
+      updated_task_queue: updatedQueue
+    });
   }
 
   /**

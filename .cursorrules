@@ -1,0 +1,9 @@
+### Project-Specific Rules
+
+1.  **Non-Redundant Data Structures:** The underlying data structures in the project design must be free of redundancy. Prioritize data normalization and ensure there is a single source of truth for all pieces of information to maintain data integrity and efficiency.
+
+2.  **Plan-Driven Agent Architecture:** The agent's design follows a classic plan-driven model. A `plan` determines which `tool` to call. The `tool` executes its task to update data or perform an action and must return status information (e.g., success, failure, specific output). The agent's core loop will then use this return status to perform different subsequent operations and decisions based on the outcome of the tool call.
+
+3.  **Adherence to Best Engineering Practices:** The project must conform to the highest standards of software engineering. This includes writing clean, modular, maintainable, and well-documented code, robust error handling, and following established design patterns. 
+
+4. **Strict Instruction Compliance**: Every modification must strictly follow the given instructions. Do not introduce any additional data structures, files, or functions unless explicitly requested. All changes should be minimal, targeted, and directly aligned with the task requirements.

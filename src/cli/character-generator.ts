@@ -287,15 +287,7 @@ export class CharacterGeneratorCLI {
         console.log(chalk.gray(`  Knowledge Base: ${summary.knowledgeBaseSize} entries`));
         console.log(chalk.gray(`  Completion: ${summary.completionPercentage}%`));
         console.log(chalk.gray(`  Search Coverage: ${progress.searchCoverage}%`));
-        console.log(chalk.gray(`  Information Quality: ${progress.informationQuality}%`));
         console.log(chalk.gray(`  Answer Confidence: ${progress.answerConfidence}%`));
-        
-        if (progress.qualityMetrics) {
-          console.log(chalk.blue('\n🎯 Quality Metrics:'));
-          console.log(chalk.gray(`  Completeness: ${progress.qualityMetrics.completeness}%`));
-          console.log(chalk.gray(`  Consistency: ${progress.qualityMetrics.consistency}%`));
-          console.log(chalk.gray(`  Creativity: ${progress.qualityMetrics.creativity}%`));
-        }
       }
     } catch (error) {
       console.error('Failed to show stats:', error);
@@ -444,7 +436,6 @@ export class CharacterGeneratorCLI {
     console.log(chalk.gray(`  Completed Generations: ${stats.completedGenerations}`));
     console.log(chalk.gray(`  Success Rate: ${stats.successRate.toFixed(1)}%`));
     console.log(chalk.gray(`  Average Iterations: ${stats.averageIterations.toFixed(1)}`));
-    console.log(chalk.gray(`  Average Quality Score: ${stats.averageQualityScore.toFixed(1)}`));
     console.log(chalk.gray(`  Average Knowledge Base Size: ${stats.averageKnowledgeBaseSize.toFixed(1)}`));
     console.log(chalk.gray(`  Average Tokens Used: ${stats.averageTokensUsed.toFixed(0)}`));
   }

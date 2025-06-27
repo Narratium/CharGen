@@ -18,13 +18,12 @@ export class ResearchSessionOperations {
   /**
    * Create a new agent conversation with simplified initial state
    */
-  static async createConversation(
+  static async createSession(
     title: string,
     llmConfig: ResearchSession["llm_config"],
     initialUserRequest: string
   ): Promise<ResearchSession> {
     const conversationId = uuidv4();
-    const now = new Date().toISOString();
 
     // Create initial task state
     const ResearchState: ResearchState = {
@@ -51,7 +50,6 @@ export class ResearchSessionOperations {
         id: uuidv4(),
         question: initialUserRequest,
         is_initial: true,
-        timestamp: now,
         status: "pending",
       }],
       // Reflection tracking
@@ -61,12 +59,6 @@ export class ResearchSessionOperations {
 
     // Create initial character progress
     const GenerationOutput: GenerationOutput = {
-      quality_metrics: {
-        completeness: 0,
-        consistency: 0,
-        creativity: 0,
-        user_satisfaction: 0,
-      },
     };
 
     // Create initial user message
@@ -75,10 +67,9 @@ export class ResearchSessionOperations {
       role: "user",
       content: initialUserRequest,
       type: "user_input",
-      timestamp: now,
     };
 
-    const conversation: ResearchSession = {
+    const session: ResearchSession = {
       id: conversationId,
       title,
       status: SessionStatus.IDLE,
@@ -89,34 +80,33 @@ export class ResearchSessionOperations {
       execution_info: {
         current_iteration: 0,
         max_iterations: 50,
-        start_time: now,
         error_count: 0,
         total_tokens_used: 0,
         token_budget: 100000, // 100K tokens default budget
       },
     };
 
-    await this.saveConversation(conversation);
-    return conversation;
+    await this.saveSession(session);
+    return session;
   }
 
   /**
    * Get conversation by ID
    */
-  static async getConversationById(conversationId: string): Promise<ResearchSession | null> {
-    const conversations = await this.getAllConversations();
-    return conversations.find(c => c.id === conversationId) || null;
+  static async getSessionById(sessionId: string): Promise<ResearchSession | null> {
+    const sessions = await this.getAllSessions();
+    return sessions.find(s => s.id === sessionId) || null;
   }
 
   /**
    * Get all conversations
    */
-  static async getAllConversations(): Promise<ResearchSession[]> {
+  static async getAllSessions(): Promise<ResearchSession[]> {
     try {
       const data = await readData(AGENT_CONVERSATIONS_FILE);
       return Array.isArray(data) ? data : [];
     } catch (error) {
-      console.error("Failed to load conversations:", error);
+      console.error("Failed to load sessions:", error);
       return [];
     }
   }
@@ -124,59 +114,51 @@ export class ResearchSessionOperations {
   /**
    * Save conversation to storage
    */
-  static async saveConversation(conversation: ResearchSession): Promise<void> {
-    const conversations = await this.getAllConversations();
-    const existingIndex = conversations.findIndex(c => c.id === conversation.id);
+  static async saveSession(session: ResearchSession): Promise<void> {
+    const sessions = await this.getAllSessions();
+    const existingIndex = sessions.findIndex(s => s.id === session.id);
     
     if (existingIndex >= 0) {
-      conversations[existingIndex] = conversation;
+      sessions[existingIndex] = session;
     } else {
-      conversations.push(conversation);
+      sessions.push(session);
     }
 
-    await writeData(AGENT_CONVERSATIONS_FILE, conversations);
-  }
-
-  /**
-   * Update conversation with partial data
-   */
-  static async updateConversation(conversation: ResearchSession): Promise<void> {
-    await this.saveConversation(conversation);
+    await writeData(AGENT_CONVERSATIONS_FILE, sessions);
   }
 
   /**
    * Update conversation status
    */
-  static async updateStatus(conversationId: string, status: SessionStatus): Promise<void> {
-    const conversation = await this.getConversationById(conversationId);
-    if (!conversation) {
-      throw new Error(`Conversation not found: ${conversationId}`);
+  static async updateStatus(sessionId: string, status: SessionStatus): Promise<void> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
-    conversation.status = status;
-    await this.saveConversation(conversation);
+    session.status = status;
+    await this.saveSession(session);
   }
 
   /**
    * Add message to conversation
    */
   static async addMessage(
-    conversationId: string,
-    messageData: Omit<Message, "id" | "timestamp">
+    sessionId: string,
+    messageData: Omit<Message, "id">
   ): Promise<Message> {
-    const conversation = await this.getConversationById(conversationId);
-    if (!conversation) {
-      throw new Error(`Conversation not found: ${conversationId}`);
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
     const message: Message = {
       ...messageData,
       id: uuidv4(),
-      timestamp: new Date().toISOString(),
     };
 
-    conversation.messages.push(message);
-    await this.saveConversation(conversation);
+    session.messages.push(message);
+    await this.saveSession(session);
     
     return message;
   }
@@ -185,127 +167,127 @@ export class ResearchSessionOperations {
    * Update task state
    */
   static async updateResearchState(
-    conversationId: string,
-    updates: Partial<Omit<ResearchState, "id" | "session_id" | "created_at">>
+    sessionId: string,
+    updates: Partial<Omit<ResearchState, "id" | "session_id">>
   ): Promise<void> {
-    const conversation = await this.getConversationById(conversationId);
-    if (!conversation) {
-      throw new Error(`Conversation not found: ${conversationId}`);
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
     // Update task state
-    Object.assign(conversation.research_state, updates);
+    Object.assign(session.research_state, updates);
 
-    await this.saveConversation(conversation);
+    await this.saveSession(session);
   }
 
   /**
    * Update character progress
    */
   static async updateGenerationOutput(
-    conversationId: string,
+    sessionId: string,
     updates: Partial<GenerationOutput>
   ): Promise<void> {
-    const conversation = await this.getConversationById(conversationId);
-    if (!conversation) {
-      throw new Error(`Conversation not found: ${conversationId}`);
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
     // Update character progress
-    Object.assign(conversation.generation_output, updates);
+    Object.assign(session.generation_output, updates);
 
-    await this.saveConversation(conversation);
+    await this.saveSession(session);
   }
 
   /**
    * Add knowledge entries to the knowledge base
    */
   static async addKnowledgeEntries(
-    conversationId: string,
+    sessionId: string,
     entries: KnowledgeEntry[]
   ): Promise<void> {
-    const conversation = await this.getConversationById(conversationId);
-    if (!conversation) {
-      throw new Error(`Conversation not found: ${conversationId}`);
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
-    conversation.research_state.knowledge_base.push(...entries);
+    session.research_state.knowledge_base.push(...entries);
 
-    await this.saveConversation(conversation);
+    await this.saveSession(session);
   }
 
   /**
    * Add user questions to the questions array
    */
   static async addUserInteractions(
-    conversationId: string,
+    sessionId: string,
     questions: UserInteraction[]
   ): Promise<void> {
-    const conversation = await this.getConversationById(conversationId);
-    if (!conversation) {
-      throw new Error(`Conversation not found: ${conversationId}`);
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
-    conversation.research_state.user_interactions.push(...questions);
+    session.research_state.user_interactions.push(...questions);
 
-    await this.saveConversation(conversation);
+    await this.saveSession(session);
   }
 
   /**
    * Increment iteration counter
    */
-  static async incrementIteration(conversationId: string): Promise<number> {
-    const conversation = await this.getConversationById(conversationId);
-    if (!conversation) {
-      throw new Error(`Conversation not found: ${conversationId}`);
+  static async incrementIteration(sessionId: string): Promise<number> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
-    conversation.execution_info.current_iteration++;
-    await this.saveConversation(conversation);
+    session.execution_info.current_iteration++;
+    await this.saveSession(session);
     
-    return conversation.execution_info.current_iteration;
+    return session.execution_info.current_iteration;
   }
 
   /**
    * Record token usage
    */
-  static async recordTokenUsage(conversationId: string, tokensUsed: number): Promise<void> {
-    const conversation = await this.getConversationById(conversationId);
-    if (!conversation) {
-      throw new Error(`Conversation not found: ${conversationId}`);
+  static async recordTokenUsage(sessionId: string, tokensUsed: number): Promise<void> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
-    conversation.execution_info.total_tokens_used += tokensUsed;
-    await this.saveConversation(conversation);
+    session.execution_info.total_tokens_used += tokensUsed;
+    await this.saveSession(session);
   }
 
   /**
    * Record error
    */
-  static async recordError(conversationId: string, error: string): Promise<void> {
-    const conversation = await this.getConversationById(conversationId);
-    if (!conversation) {
-      throw new Error(`Conversation not found: ${conversationId}`);
+  static async recordError(sessionId: string, error: string): Promise<void> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
     }
 
-    conversation.execution_info.error_count++;
-    conversation.execution_info.last_error = error;
-    await this.saveConversation(conversation);
+    session.execution_info.error_count++;
+    session.execution_info.last_error = error;
+    await this.saveSession(session);
   }
 
   /**
    * Delete conversation
    */
-  static async deleteConversation(conversationId: string): Promise<void> {
-    const conversations = await this.getAllConversations();
-    const filteredConversations = conversations.filter(c => c.id !== conversationId);
-    await writeData(AGENT_CONVERSATIONS_FILE, filteredConversations);
+  static async deleteSession(sessionId: string): Promise<void> {
+    const sessions = await this.getAllSessions();
+    const filteredSessions = sessions.filter(s => s.id !== sessionId);
+    await writeData(AGENT_CONVERSATIONS_FILE, filteredSessions);
   }
 
   /**
    * Get conversation summary for display
    */
-  static async getConversationSummary(conversationId: string): Promise<{
+  static async getSessionSummary(sessionId: string): Promise<{
     title: string;
     status: SessionStatus;
     messageCount: number;
@@ -314,10 +296,10 @@ export class ResearchSessionOperations {
     completionPercentage: number;
     knowledgeBaseSize: number;
   } | null> {
-    const conversation = await this.getConversationById(conversationId);
-    if (!conversation) return null;
+    const session = await this.getSessionById(sessionId);
+    if (!session) return null;
 
-    const completion = conversation.research_state.progress;
+    const completion = session.research_state.progress;
     const averageCompletion = (
       completion.search_coverage + 
       completion.information_quality + 
@@ -326,13 +308,13 @@ export class ResearchSessionOperations {
     ) / 4;
 
     return {
-      title: conversation.title,
-      status: conversation.status,
-      messageCount: conversation.messages.length,
-      hasCharacter: !!conversation.generation_output.character_data,
-      hasWorldbook: !!conversation.generation_output.worldbook_data && conversation.generation_output.worldbook_data.length > 0,
+      title: session.title,
+      status: session.status,
+      messageCount: session.messages.length,
+      hasCharacter: !!session.generation_output.character_data,
+      hasWorldbook: !!session.generation_output.worldbook_data && session.generation_output.worldbook_data.length > 0,
       completionPercentage: Math.round(averageCompletion),
-      knowledgeBaseSize: conversation.research_state.knowledge_base.length,
+      knowledgeBaseSize: session.research_state.knowledge_base.length,
     };
   }
 } 

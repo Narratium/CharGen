@@ -3,7 +3,8 @@ import {
   ExecutionContext, 
   ExecutionResult 
 } from "../../models/agent-model";
-import { BaseSimpleTool, ToolParameter, DetailedToolInfo } from "../base-tool";
+import { ResearchSessionOperations } from "../../data/agent/agent-conversation-operations";
+import { BaseSimpleTool, ToolParameter } from "../base-tool";
 
 /**
  * Character Tool - Pure Execution Unit
@@ -24,16 +25,7 @@ export class CharacterTool extends BaseSimpleTool {
     }
   ];
 
-  getToolInfo(): DetailedToolInfo {
-    return {
-      type: ToolType.CHARACTER,
-      name: this.name,
-      description: this.description,
-      parameters: this.parameters
-    };
-  }
-
-  protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<any> {
+  protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<ExecutionResult> {
     const characterDataString = parameters.character_data;
     
     console.log(`👤 Character tool processing with pre-generated data`);
@@ -49,64 +41,9 @@ export class CharacterTool extends BaseSimpleTool {
       throw new Error("Failed to parse character_data JSON string");
     }
 
-    // Calculate quality metrics based on the generated data
-    const qualityMetrics = this.calculateCharacterQuality(characterData, context);
-
-    console.log(`✅ Character data processed - Quality: ${Math.round(qualityMetrics.overall_quality)}%`);
-
-    return {
+    return this.createSuccessResult({
       character_data: characterData,
-      quality_metrics: qualityMetrics,
-      GenerationOutputUpdate: {
-        character_data: characterData,
-        quality_metrics: {
-          completeness: qualityMetrics.overall_quality,
-          consistency: qualityMetrics.consistency,
-          creativity: qualityMetrics.creativity,
-          user_satisfaction: context.research_state.progress.user_satisfaction
-        }
-      }
-    };
+    });
   }
 
-  /**
-   * Calculate character quality metrics based on generated data
-   */
-  private calculateCharacterQuality(characterData: any, context: ExecutionContext): any {
-    const metrics = {
-      completeness: 0,
-      consistency: 0,
-      creativity: 0,
-      overall_quality: 0
-    };
-
-    if (!characterData) {
-      return metrics;
-    }
-
-    // Completeness: Check required fields
-    const requiredFields = ['name', 'description', 'personality', 'scenario', 'first_mes'];
-    const presentFields = requiredFields.filter(field => 
-      characterData[field] && typeof characterData[field] === 'string' && characterData[field].length > 0
-    );
-    metrics.completeness = (presentFields.length / requiredFields.length) * 100;
-
-    // Consistency: Based on knowledge base usage and character coherence
-    const hasBackground = characterData.background && Object.keys(characterData.background).length > 0;
-    const hasDialogue = characterData.mes_example && characterData.mes_example.length > 50;
-    metrics.consistency = (hasBackground ? 50 : 0) + (hasDialogue ? 50 : 0);
-
-    // Creativity: Based on content richness and detail
-    const totalLength = Object.values(characterData).map(v => typeof v === 'string' ? v : JSON.stringify(v)).join('').length;
-    metrics.creativity = Math.min((totalLength / 2000) * 100, 100); // 2000 chars as good target
-
-    // Overall quality
-    metrics.overall_quality = (
-      metrics.completeness * 0.4 + 
-      metrics.consistency * 0.3 + 
-      metrics.creativity * 0.3
-    );
-
-    return metrics;
-  }
-} 
+}

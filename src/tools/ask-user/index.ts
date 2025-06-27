@@ -34,7 +34,7 @@ export class AskUserTool extends BaseSimpleTool {
     };
   }
 
-  protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<any> {
+  protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<ExecutionResult> {
     const questionText = parameters.question;
     
     if (!questionText || typeof questionText !== 'string') {
@@ -48,15 +48,16 @@ export class AskUserTool extends BaseSimpleTool {
         id: uuidv4(),
         question: questionText,
         is_initial: false,
-        timestamp: new Date().toISOString(),
         status: 'pending',
     };
 
-    console.log(`✅ User question formatted for engine.`);
-
-    return {
-      message: questionText, // This will be shown to the user by the engine
-      interaction_updates: [userInteraction] // This will be saved to the research state
-    };
+    return this.createSuccessResult(
+      {
+        message: questionText,
+        question_id: userInteraction.id
+      },
+      {
+        interaction_updates: [userInteraction]
+    });
   }
 } 

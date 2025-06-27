@@ -4,7 +4,7 @@ import {
   ExecutionResult, 
   ToolDecision 
 } from "../models/agent-model";
-import { SimpleTool, DetailedToolInfo } from "./base-tool";
+import { SimpleTool} from "./base-tool";
 import { SearchTool } from "./search";
 import { AskUserTool } from "./ask-user";
 import { CharacterTool } from "./character";
@@ -50,7 +50,6 @@ export class ToolRegistry {
       return {
         success: false,
         error: `No tool found for type: ${decision.tool}`,
-        should_continue: true,
       };
     }
 
@@ -70,80 +69,8 @@ export class ToolRegistry {
       return {
         success: false,
         error: error instanceof Error ? error.message : String(error),
-        should_continue: true,
       };
     }
-  }
-
-  /**
-   * Get tool by type
-   */
-  static getTool(toolType: ToolType): SimpleTool | undefined {
-    this.initialize();
-    return this.tools.get(toolType);
-  }
-
-  /**
-   * Get all available tools
-   */
-  static getAllTools(): SimpleTool[] {
-    this.initialize();
-    return Array.from(this.tools.values());
-  }
-
-  /**
-   * Get tool information for LLM prompts
-   */
-  static getToolsInfo(): Array<{ type: string; name: string; description: string }> {
-    this.initialize();
-    return this.getAllTools().map(tool => ({
-      type: tool.toolType,
-      name: tool.name,
-      description: tool.description,
-    }));
-  }
-
-  /**
-   * Check if a tool type is available
-   */
-  static hasToolType(toolType: ToolType): boolean {
-    this.initialize();
-    return this.tools.has(toolType);
-  }
-
-  /**
-   * Register a custom tool
-   */
-  static registerTool(tool: SimpleTool): void {
-    this.initialize();
-    this.tools.set(tool.toolType, tool);
-    console.log(`🔧 Registered custom tool: ${tool.name}`);
-  }
-
-  /**
-   * Unregister a tool
-   */
-  static unregisterTool(toolType: ToolType): boolean {
-    this.initialize();
-    const removed = this.tools.delete(toolType);
-    if (removed) {
-      console.log(`🗑️ Unregistered tool: ${toolType}`);
-    }
-    return removed;
-  }
-
-  /**
-   * Get registry statistics
-   */
-  static getStats(): {
-    totalTools: number;
-    toolTypes: string[];
-  } {
-    this.initialize();
-    return {
-      totalTools: this.tools.size,
-      toolTypes: Array.from(this.tools.keys()),
-    };
   }
 
   /**

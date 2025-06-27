@@ -46,7 +46,6 @@ export interface KnowledgeEntry {
   content: string;
   url?: string;
   relevance_score: number;
-  timestamp: string;
 }
 
 /**
@@ -57,7 +56,6 @@ export interface UserInteraction {
   question: string;
   is_initial: boolean;
   parent_id?: string;
-  timestamp: string;
   status: "pending" | "answered" | "clarifying";
 }
 
@@ -115,10 +113,9 @@ export interface ExecutionResult {
   success: boolean;
   result?: any;
   error?: string;
+  tokens_used?: number;
   knowledge_updates?: KnowledgeEntry[];
   interaction_updates?: UserInteraction[];
-  should_continue: boolean;
-  tokens_used?: number;
 }
 
 // ============================================================================
@@ -175,7 +172,6 @@ export interface Message {
       completed: number;
     };
   };
-  timestamp: string;
 }
 
 /**
@@ -197,13 +193,6 @@ export interface GenerationOutput {
   };
   
   worldbook_data?: WorldbookEntry[];
-  
-  quality_metrics?: {
-    completeness: number;
-    consistency: number;
-    creativity: number;
-    user_satisfaction: number;
-  };
 }
 
 export interface WorldbookEntry {
@@ -252,7 +241,6 @@ export interface ResearchSession {
   execution_info: {
     current_iteration: number;
     max_iterations: number;
-    start_time: string;
     error_count: number;
     last_error?: string;
     total_tokens_used: number;
