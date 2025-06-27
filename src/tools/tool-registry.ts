@@ -4,10 +4,11 @@ import {
   ExecutionResult, 
   ToolDecision 
 } from "../models/agent-model";
-import { SimpleTool } from "./base-tool";
+import { SimpleTool, DetailedToolInfo } from "./base-tool";
 import { SearchTool } from "./search";
 import { AskUserTool } from "./ask-user";
 import { OutputTool } from "./output";
+import { ReflectTool } from "./reflect";
 
 /**
  * Simplified Tool Registry - Real-time Decision Architecture
@@ -27,9 +28,10 @@ export class ToolRegistry {
     this.tools.set(ToolType.SEARCH, new SearchTool());
     this.tools.set(ToolType.ASK_USER, new AskUserTool());
     this.tools.set(ToolType.OUTPUT, new OutputTool());
+    this.tools.set(ToolType.REFLECT, new ReflectTool());
 
     this.initialized = true;
-    console.log("🔧 Tool Registry initialized with 3 tools");
+    console.log("🔧 Tool Registry initialized with 4 tools");
   }
 
   /**

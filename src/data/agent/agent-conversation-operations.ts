@@ -31,24 +31,21 @@ export class ResearchSessionOperations {
       id: uuidv4(),
       session_id: conversationId,
       main_objective: initialUserRequest,
-      current_focus: "Understanding user requirements and gathering initial information",
       progress: {
         search_coverage: 0,
         information_quality: 0,
         answer_confidence: 0,
         user_satisfaction: 0,
       },
-      active_tasks: [
-        "Analyze user requirements",
-        "Identify information needs",
-        "Begin character concept development"
-      ],
+      // Enhanced task management - will be populated by task decomposition
+      task_queue: [], // Empty initially - will be filled by initializeWithTaskDecomposition
       completed_tasks: [],
       knowledge_gaps: [
         "Character background details",
         "World setting information", 
         "User preferences and constraints"
       ],
+      sub_questions: [], // Will be populated by task decomposition
       knowledge_base: [],
       user_interactions: [{
         id: uuidv4(),
@@ -57,6 +54,9 @@ export class ResearchSessionOperations {
         timestamp: now,
         status: "pending",
       }],
+      // Reflection tracking
+      last_reflection: "", // Will be set during initialization
+      reflection_trigger: null,
       created_at: now,
       updated_at: now,
     };
@@ -325,7 +325,6 @@ export class ResearchSessionOperations {
     lastActivity: string;
     completionPercentage: number;
     knowledgeBaseSize: number;
-    currentFocus: string;
   } | null> {
     const conversation = await this.getConversationById(conversationId);
     if (!conversation) return null;
@@ -347,7 +346,6 @@ export class ResearchSessionOperations {
       lastActivity: conversation.execution_info.last_activity,
       completionPercentage: Math.round(averageCompletion),
       knowledgeBaseSize: conversation.research_state.knowledge_base.length,
-      currentFocus: conversation.research_state.current_focus,
     };
   }
 } 

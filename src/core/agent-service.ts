@@ -96,10 +96,8 @@ export class AgentService {
     conversation: ResearchSession | null;
     status: SessionStatus;
     progress: {
-      activeTasks: number;
       completedTasks: number;
       totalIterations: number;
-      currentFocus: string;
       knowledgeBaseSize: number;
       UserInteractions: number;
     };
@@ -113,10 +111,8 @@ export class AgentService {
           conversation: null,
           status: SessionStatus.FAILED,
           progress: {
-            activeTasks: 0,
             completedTasks: 0,
             totalIterations: 0,
-            currentFocus: "Conversation not found",
             knowledgeBaseSize: 0,
             UserInteractions: 0,
           },
@@ -133,10 +129,8 @@ export class AgentService {
         conversation,
         status: conversation.status,
         progress: {
-          activeTasks: conversation.research_state.active_tasks.length,
           completedTasks: conversation.research_state.completed_tasks.length,
           totalIterations: conversation.execution_info.current_iteration,
-          currentFocus: conversation.research_state.current_focus,
           knowledgeBaseSize: conversation.research_state.knowledge_base.length,
           UserInteractions: conversation.research_state.user_interactions.length,
         },
@@ -156,10 +150,8 @@ export class AgentService {
         conversation: null,
         status: SessionStatus.FAILED,
         progress: {
-          activeTasks: 0,
           completedTasks: 0,
           totalIterations: 0,
-          currentFocus: "Error occurred",
           knowledgeBaseSize: 0,
           UserInteractions: 0,
         },
@@ -236,8 +228,6 @@ export class AgentService {
    */
   async getResearchState(conversationId: string): Promise<{
     mainObjective: string;
-    currentFocus: string;
-    activeTasks: string[];
     completedTasks: string[];
     knowledgeGaps: string[];
     completionStatus: any;
@@ -249,8 +239,6 @@ export class AgentService {
       if (!conversation) {
         return {
           mainObjective: "",
-          currentFocus: "",
-          activeTasks: [],
           completedTasks: [],
           knowledgeGaps: [],
           completionStatus: {},
@@ -261,8 +249,6 @@ export class AgentService {
       
       return {
         mainObjective: conversation.research_state.main_objective,
-        currentFocus: conversation.research_state.current_focus,
-        activeTasks: conversation.research_state.active_tasks,
         completedTasks: conversation.research_state.completed_tasks,
         knowledgeGaps: conversation.research_state.knowledge_gaps,
         completionStatus: conversation.research_state.progress,
@@ -274,8 +260,6 @@ export class AgentService {
       console.error("Failed to get task state:", error);
       return {
         mainObjective: "",
-        currentFocus: "",
-        activeTasks: [],
         completedTasks: [],
         knowledgeGaps: [],
         completionStatus: {},
@@ -501,7 +485,6 @@ export class AgentService {
     lastActivity: string;
     completionPercentage: number;
     knowledgeBaseSize: number;
-    currentFocus: string;
   } | null> {
     try {
       return await ResearchSessionOperations.getConversationSummary(conversationId);

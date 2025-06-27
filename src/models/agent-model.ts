@@ -8,7 +8,8 @@
 export enum ToolType {
   SEARCH = "SEARCH",     // Search and gather information
   ASK_USER = "ASK_USER", // Get user input
-  OUTPUT = "OUTPUT"      // Generate final output
+  OUTPUT = "OUTPUT",     // Generate final output
+  REFLECT = "REFLECT"    // Reflect on progress and update tasks
 }
 
 // Session execution status
@@ -60,6 +61,21 @@ export interface UserInteraction {
 }
 
 /**
+ * Task entry for tracking specific work items
+ */
+export interface TaskEntry {
+  id: string;
+  description: string;
+  priority: number;
+  status: "pending" | "active" | "completed" | "obsolete";
+  created_at: string;
+  updated_at: string;
+  parent_task_id?: string;
+  dependencies?: string[];
+  reasoning?: string; // Why this task was created/updated
+}
+
+/**
  * Research state - similar to DeepResearch's context management
  */
 export interface ResearchState {
@@ -68,7 +84,6 @@ export interface ResearchState {
   
   // Current research objective
   main_objective: string;
-  current_focus: string;
   
   // Progress tracking (0-100 scale)
   progress: {
@@ -78,14 +93,19 @@ export interface ResearchState {
     user_satisfaction: number;    // Based on user feedback
   };
   
-  // Dynamic research status
-  active_tasks: string[];         // Current work items
+  // Enhanced task management - inspired by DeepResearch decomposition
+  task_queue: TaskEntry[];        // All tasks (pending, active, completed)
   completed_tasks: string[];      // Finished work items
   knowledge_gaps: string[];       // What we still need to research
+  sub_questions: string[];        // Derived questions to investigate
   
   // Research artifacts
   knowledge_base: KnowledgeEntry[];
   user_interactions: UserInteraction[];
+  
+  // Reflection tracking
+  last_reflection: string;        // When we last reflected on progress
+  reflection_trigger: "auto" | "manual" | "stuck" | "initialization" | null; // Why reflection was triggered
   
   created_at: string;
   updated_at: string;
@@ -147,6 +167,16 @@ export interface Message {
     reasoning?: string;
     knowledge_added?: number;
     interactions_added?: number;
+    // Additional metadata for task decomposition and reflection
+    tasks_created?: number;
+    sub_questions_generated?: number;
+    knowledge_gaps_identified?: number;
+    reflection_triggered?: boolean;
+    task_updates?: {
+      added: number;
+      updated: number;
+      completed: number;
+    };
   };
   timestamp: string;
 }

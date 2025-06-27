@@ -18,15 +18,26 @@ import { v4 as uuidv4 } from "uuid";
 // ============================================================================
 
 /**
- * Tool parameter definition
+ * Tool parameter definition for intelligent parameter selection
  */
 export interface ToolParameter {
   name: string;
   type: "string" | "number" | "boolean" | "array" | "object";
-  description: string;
   required: boolean;
-  default?: any;
+  description: string;
   options?: string[]; // For enum-like parameters
+  default?: any;
+}
+
+/**
+ * Detailed tool information including parameter schema
+ */
+export interface DetailedToolInfo {
+  type: ToolType;
+  name: string;
+  description: string;
+  parameters: ToolParameter[];
+  examples?: string[];
 }
 
 /**
@@ -191,20 +202,34 @@ export abstract class BaseSimpleTool implements SimpleTool {
   }
 
   /**
-   * Build current task context summary
+   * Build current task context summary including task queue
    */
   protected buildTaskContextSummary(context: ExecutionContext): string {
     const state = context.research_state;
+    
+    // Build task queue summary
+    const pendingTasks = state.task_queue?.filter(t => t.status === "pending") || [];
+    const activeTasks = state.task_queue?.filter(t => t.status === "active") || [];
+    const completedTasks = state.task_queue?.filter(t => t.status === "completed") || [];
+    
     return `
 Main Objective: ${state.main_objective}
-Current Focus: ${state.current_focus}
-Active Tasks: ${state.active_tasks.join(", ")}
-Knowledge Gaps: ${state.knowledge_gaps.join(", ")}
+
+Task Queue Status:
+- Pending Tasks (${pendingTasks.length}): ${pendingTasks.map(t => t.description).join(", ")}
+- Active Tasks (${activeTasks.length}): ${activeTasks.map(t => t.description).join(", ")}
+- Completed Tasks (${completedTasks.length}): ${completedTasks.map(t => t.description).join(", ")}
+
+Sub-questions: ${state.sub_questions?.join(", ") || "None"}
+Knowledge Gaps: ${state.knowledge_gaps?.join(", ") || "None"}
+
 Progress Status:
 - Search Coverage: ${state.progress.search_coverage}%
 - Information Quality: ${state.progress.information_quality}%
 - Answer Confidence: ${state.progress.answer_confidence}%
 - User Satisfaction: ${state.progress.user_satisfaction}%
+
+Last Reflection: ${state.last_reflection || "Never"}
 `.trim();
   }
 

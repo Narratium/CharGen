@@ -21,6 +21,7 @@ type UserInputCallback = (message?: string) => Promise<string>;
 /**
  * Agent Engine - Real-time Decision Architecture
  * Inspired by Jina AI DeepResearch: Keep searching, reading, reasoning until answer found
+ * Enhanced with task decomposition and reflection capabilities
  */
 export class AgentEngine {
   private conversationId: string;
@@ -47,9 +48,12 @@ export class AgentEngine {
 
       await ResearchSessionOperations.updateStatus(this.conversationId, SessionStatus.THINKING);
       
-      // Initialize the model
+      // Initialize the model and perform task decomposition
       const context = await this.buildExecutionContext();
       this.model = this.createLLM(context.llm_config);
+      
+      // Initialize with task decomposition - inspired by DeepResearch
+      await this.initializeWithTaskDecomposition(context);
       
       // Main execution loop - real-time decision making
       return await this.realTimeExecutionLoop();
@@ -61,6 +65,154 @@ export class AgentEngine {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
       };
+    }
+  }
+
+  /**
+   * Initialize session with task decomposition
+   * Inspired by DeepResearch's approach to breaking down complex objectives
+   */
+  private async initializeWithTaskDecomposition(context: ExecutionContext): Promise<void> {
+    console.log("🚀 Initializing session with task decomposition...");
+    
+    // Check if already initialized
+    if (context.research_state.task_queue && context.research_state.task_queue.length > 0) {
+      console.log("📋 Task queue already initialized, skipping decomposition");
+      return;
+    }
+
+    const prompt = ChatPromptTemplate.fromTemplate(`
+You are an expert task planner for character card and worldbook generation. 
+Analyze the user's objective and decompose it into a structured task queue.
+
+USER OBJECTIVE: {main_objective}
+
+USER CONTEXT: {user_context}
+
+DECOMPOSITION GUIDELINES:
+1. Break down the main objective into 5-8 concrete, actionable tasks
+2. Each task should be specific and measurable
+3. Tasks should follow a logical progression for character/worldbook creation
+4. Consider research, analysis, and generation phases
+5. Include validation and refinement tasks
+
+For character card generation, typical phases include:
+- Character concept research
+- Personality development
+- Background and setting research
+- Dialogue and interaction analysis
+- Character card generation
+- Quality review and refinement
+
+For worldbook creation, consider:
+- World concept and theme research
+- Lore and history development
+- Character relationship mapping
+- Location and setting details
+- Cultural and social aspects
+- Worldbook entry generation
+
+Return a structured task decomposition in JSON format:
+{{
+  "initial_tasks": [
+    {{
+      "id": "task_1",
+      "description": "specific task description",
+      "priority": 1-10,
+      "reasoning": "why this task is important",
+      "expected_outcome": "what should be achieved"
+    }}
+  ],
+  "sub_questions": [
+    "specific research question 1",
+    "specific research question 2"
+  ],
+  "knowledge_gaps": [
+    "information gap 1",
+    "information gap 2"
+  ],
+  "decomposition_reasoning": "explanation of the task breakdown approach"
+}}
+    `);
+
+    try {
+      const response = await this.model.invoke([
+        await prompt.format({
+          main_objective: context.research_state.main_objective,
+          user_context: this.buildUserContextSummary(context)
+        }),
+      ]);
+
+      const decomposition = this.parseJSONResponse(response.content);
+      
+      // Create task entries from decomposition
+      const taskQueue = decomposition.initial_tasks.map((task: any, index: number) => ({
+        id: `init_task_${Date.now()}_${index}`,
+        description: task.description,
+        priority: task.priority || (5 + index), // Default priority with sequence
+        status: "pending" as const,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        reasoning: task.reasoning || "Initial task decomposition"
+      }));
+
+      // Update research state with initial decomposition
+      const stateUpdate = {
+        task_queue: taskQueue,
+        sub_questions: decomposition.sub_questions || [],
+        knowledge_gaps: decomposition.knowledge_gaps || [],
+        last_reflection: new Date().toISOString(),
+        reflection_trigger: "initialization" as const,
+        updated_at: new Date().toISOString()
+      };
+
+      await ResearchSessionOperations.updateResearchState(this.conversationId, stateUpdate);
+      
+      console.log(`✅ Task decomposition complete: ${taskQueue.length} tasks created`);
+      console.log(`📝 Sub-questions: ${decomposition.sub_questions?.length || 0}`);
+      console.log(`❓ Knowledge gaps: ${decomposition.knowledge_gaps?.length || 0}`);
+
+      // Add initialization message
+      await ResearchSessionOperations.addMessage(this.conversationId, {
+        role: "agent",
+        content: `Task decomposition complete: ${taskQueue.length} initial tasks identified. ${decomposition.decomposition_reasoning}`,
+        type: "agent_thinking",
+        metadata: {
+          tasks_created: taskQueue.length,
+          sub_questions_generated: decomposition.sub_questions?.length || 0,
+          knowledge_gaps_identified: decomposition.knowledge_gaps?.length || 0
+        },
+      });
+
+    } catch (error) {
+      console.error("❌ Task decomposition failed:", error);
+      
+      // Fallback to basic task structure
+      const fallbackTasks = [
+        {
+          id: `fallback_task_${Date.now()}_1`,
+          description: "Research character background and personality traits",
+          priority: 8,
+          status: "pending" as const,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          reasoning: "Fallback task - decomposition failed"
+        },
+        {
+          id: `fallback_task_${Date.now()}_2`,
+          description: "Generate character card with basic information",
+          priority: 6,
+          status: "pending" as const,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          reasoning: "Fallback task - decomposition failed"
+        }
+      ];
+
+      await ResearchSessionOperations.updateResearchState(this.conversationId, {
+        task_queue: fallbackTasks,
+        updated_at: new Date().toISOString()
+      });
     }
   }
 
@@ -143,6 +295,24 @@ export class AgentEngine {
         }
       }
 
+      // If REFLECT tool was used, update task queue and research state
+      if (decision.tool === ToolType.REFLECT && result.success && result.result?.ResearchStateUpdate) {
+        console.log("🔄 Updating research state from reflection...");
+        await ResearchSessionOperations.updateResearchState(
+          this.conversationId, 
+          result.result.ResearchStateUpdate
+        );
+        
+        // Log reflection results
+        if (result.result.task_updates) {
+          console.log(`📋 Task updates: +${result.result.task_updates.added} new, ~${result.result.task_updates.updated} modified`);
+        }
+        
+        if (result.result.new_sub_questions?.length > 0) {
+          console.log(`❓ New sub-questions: ${result.result.new_sub_questions.length}`);
+        }
+      }
+
       // Update knowledge base if needed
       if (result.knowledge_updates && result.knowledge_updates.length > 0) {
         await this.updateKnowledgeBase(result.knowledge_updates);
@@ -182,10 +352,14 @@ export class AgentEngine {
   /**
    * Core planning module - real-time decision making
    * Inspired by DeepResearch: analyze current state and decide next action
+   * Enhanced with reflection capabilities and task queue management
    */
   private async makeRealTimeDecision(context: ExecutionContext): Promise<ToolDecision | null> {
     // Get detailed tool information including parameters
     const availableTools = ToolRegistry.getDetailedToolsInfo();
+    
+    // Check if reflection is needed
+    const shouldReflect = this.shouldTriggerReflection(context);
     
     const prompt = ChatPromptTemplate.fromTemplate(`
 You are an intelligent agent that helps generate character cards and worldbooks. 
@@ -196,9 +370,13 @@ Available Tools:
 
 Current State:
 Main Objective: {main_objective}
-Current Focus: {current_focus}
-Active Tasks: {active_tasks}
+
+Task Queue Status:
+{task_queue_status}
+
+Sub-questions: {sub_questions}
 Knowledge Gaps: {knowledge_gaps}
+
 Completion Status:
 - Search Coverage: {search_coverage}%
 - Information Quality: {information_quality}%
@@ -211,15 +389,37 @@ Recent Conversation:
 Knowledge Base Entries: {knowledge_count}
 User Questions: {user_questions}
 
-Based on the current state, decide what to do next. Consider:
-1. If there are knowledge gaps and search coverage < 80%, use SEARCH with specific query
-2. If information is unclear or user requirements need clarification, use ASK_USER
-3. If answer confidence > 70% and information quality > 60%, use OUTPUT
-4. If task is essentially complete, return null
+Reflection Status:
+- Last Reflection: {last_reflection}
+- Should Reflect: {should_reflect}
+- Reflection Trigger: {reflection_trigger}
+
+DECISION GUIDELINES:
+1. **REFLECT**: Use when {should_reflect} is true, or when:
+   - Progress seems stuck (no improvement in 3+ iterations)
+   - Task queue needs updating based on new information
+   - Major knowledge gaps identified
+   - User requirements have changed
+
+2. **SEARCH**: Use when:
+   - Knowledge gaps exist and search coverage < 80%
+   - Sub-questions need answers
+   - Specific information is missing
+
+3. **ASK_USER**: Use when:
+   - Information is unclear or user requirements need clarification
+   - User input would significantly improve direction
+
+4. **OUTPUT**: Use when:
+   - Answer confidence > 70% and information quality > 60%
+   - Task queue shows sufficient completion
+   - Ready to generate character/worldbook content
+
+5. **NULL**: Return when task is essentially complete
 
 Return your decision in JSON format:
 {{
-  "tool": "SEARCH|ASK_USER|OUTPUT|null",
+  "tool": "REFLECT|SEARCH|ASK_USER|OUTPUT|null",
   "parameters": {{}},
   "reasoning": "why this tool is needed now",
   "priority": 1-10
@@ -231,8 +431,8 @@ Return your decision in JSON format:
         await prompt.format({
           available_tools: JSON.stringify(availableTools, null, 2),
           main_objective: context.research_state.main_objective,
-          current_focus: context.research_state.current_focus || "Initial planning",
-          active_tasks: context.research_state.active_tasks?.join(", ") || "None",
+          task_queue_status: this.buildTaskQueueSummary(context),
+          sub_questions: context.research_state.sub_questions?.join(", ") || "None",
           knowledge_gaps: context.research_state.knowledge_gaps?.join(", ") || "Unknown",
           search_coverage: context.research_state.progress?.search_coverage || 0,
           information_quality: context.research_state.progress?.information_quality || 0,
@@ -241,6 +441,9 @@ Return your decision in JSON format:
           recent_conversation: this.buildRecentConversationSummary(context.message_history),
           knowledge_count: context.research_state.knowledge_base?.length || 0,
           user_questions: JSON.stringify(context.research_state.user_interactions || []),
+          last_reflection: context.research_state.last_reflection || "Never",
+          should_reflect: shouldReflect,
+          reflection_trigger: this.getReflectionTriggerReason(context)
         }),
       ]);
 
@@ -261,6 +464,114 @@ Return your decision in JSON format:
       console.error("Error in makeRealTimeDecision:", error);
       return null;
     }
+  }
+
+  /**
+   * Determine if reflection should be triggered
+   */
+  private shouldTriggerReflection(context: ExecutionContext): boolean {
+    const state = context.research_state;
+    const now = new Date();
+    
+    // Never reflected before
+    if (!state.last_reflection) {
+      return false; // Skip initial reflection since we just decomposed
+    }
+    
+    const lastReflection = new Date(state.last_reflection);
+    const timeSinceReflection = now.getTime() - lastReflection.getTime();
+    const minutesSinceReflection = timeSinceReflection / (1000 * 60);
+    
+    // Time-based trigger (every 10 minutes of activity)
+    if (minutesSinceReflection > 10) {
+      return true;
+    }
+    
+    // Progress-based triggers
+    const progress = state.progress;
+    
+    // Low progress after some time
+    if (minutesSinceReflection > 5 && 
+        progress.answer_confidence < 40 && 
+        progress.information_quality < 50) {
+      return true;
+    }
+    
+    // Many pending tasks without progress
+    const pendingTasks = state.task_queue?.filter(t => t.status === "pending").length || 0;
+    const completedTasks = state.task_queue?.filter(t => t.status === "completed").length || 0;
+    
+    if (pendingTasks > 5 && completedTasks === 0 && minutesSinceReflection > 3) {
+      return true;
+    }
+    
+    // Knowledge gaps accumulating
+    if (state.knowledge_gaps && state.knowledge_gaps.length > 5 && minutesSinceReflection > 5) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Get the reason why reflection should be triggered
+   */
+  private getReflectionTriggerReason(context: ExecutionContext): string {
+    const state = context.research_state;
+    
+    if (!state.last_reflection) {
+      return "initialization";
+    }
+    
+    const now = new Date();
+    const lastReflection = new Date(state.last_reflection);
+    const minutesSinceReflection = (now.getTime() - lastReflection.getTime()) / (1000 * 60);
+    
+    if (minutesSinceReflection > 10) {
+      return "auto";
+    }
+    
+    const progress = state.progress;
+    if (progress.answer_confidence < 40 && progress.information_quality < 50) {
+      return "stuck";
+    }
+    
+    const pendingTasks = state.task_queue?.filter(t => t.status === "pending").length || 0;
+    if (pendingTasks > 5) {
+      return "task_overflow";
+    }
+    
+    if (state.knowledge_gaps && state.knowledge_gaps.length > 5) {
+      return "knowledge_gaps";
+    }
+    
+    return "auto";
+  }
+
+  /**
+   * Build task queue summary for decision making
+   */
+  private buildTaskQueueSummary(context: ExecutionContext): string {
+    const queue = context.research_state.task_queue || [];
+    const pending = queue.filter(t => t.status === "pending");
+    const active = queue.filter(t => t.status === "active");
+    const completed = queue.filter(t => t.status === "completed");
+    
+    const summary = [`Total Tasks: ${queue.length}`];
+    
+    if (pending.length > 0) {
+      summary.push(`Pending (${pending.length}): ${pending.slice(0, 3).map(t => t.description).join(", ")}${pending.length > 3 ? "..." : ""}`);
+    }
+    
+    if (active.length > 0) {
+      summary.push(`Active (${active.length}): ${active.map(t => t.description).join(", ")}`);
+    }
+    
+    if (completed.length > 0) {
+      summary.push(`Completed (${completed.length}): ${completed.slice(-2).map(t => t.description).join(", ")}`);
+    }
+    
+    return summary.join("\n");
   }
 
   /**
@@ -367,13 +678,7 @@ Return evaluation in JSON format:
 
     // Mark current focus as completed and update with new focus
     const updatedResearchState = {
-      completed_tasks: [...conversation.research_state.completed_tasks, conversation.research_state.current_focus],
-      current_focus: "Improve output quality based on evaluation",
-      active_tasks: [
-        "Enhance character details",
-        "Improve worldbook entries", 
-        "Address missing elements"
-      ],
+      completed_tasks: [...conversation.research_state.completed_tasks],
       updated_at: new Date().toISOString(),
     };
 
