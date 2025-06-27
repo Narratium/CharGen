@@ -41,8 +41,6 @@ export class AskUserTool extends BaseSimpleTool {
         throw new Error("ASK_USER tool requires a 'question' parameter of type string.");
     }
     
-    console.log(`❓ Formatting user question: "${questionText}"`);
-    
     // Create user interaction entry to log the question
     const userInteraction: UserInteraction = {
         id: uuidv4(),
@@ -56,8 +54,7 @@ export class AskUserTool extends BaseSimpleTool {
         message: questionText,
         question_id: userInteraction.id
       },
-      {
-        interaction_updates: [userInteraction]
-    });
+      { interaction_updates: [userInteraction] }
+    );
   }
 } 

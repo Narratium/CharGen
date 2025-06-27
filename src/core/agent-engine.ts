@@ -236,6 +236,7 @@ Return a structured task decomposition in JSON format:
       // Real-time planning: What should we do next?
       const decision = await this.selectNextDecision(context);
       
+      
       if (!decision) {
         console.log("🎯 No more actions needed - task complete");
         break;
@@ -243,6 +244,7 @@ Return a structured task decomposition in JSON format:
 
       // Execute the decided tool
       const result = await this.executeDecision(decision, context);
+      console.log("🔄 Execution result:", result);
       usedTokens += result.tokens_used || 0;
 
       // Handle ASK_USER tool - special case for user interaction flow control

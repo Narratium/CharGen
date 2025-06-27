@@ -15,23 +15,15 @@ program
   .command('generate')
   .alias('gen')
   .description('Generate a character card and worldbook')
-  .option('-i, --interactive', 'Interactive mode with prompts')
   .option('-o, --output <dir>', 'Output directory', './output')
   .option('-m, --model <model>', 'AI model to use')
   .option('-k, --api-key <key>', 'API key for the AI service')
   .option('-u, --base-url <url>', 'Base URL for AI service')
   .option('-t, --type <type>', 'AI service type (openai|ollama)', 'openai')
   .action(async (options) => {
-    console.log(chalk.blue.bold('🎭 Character & Worldbook Generator\n'));
-    
     try {
       const generator = new CharacterGeneratorCLI();
-      
-      if (options.interactive) {
-        await generator.runInteractive(options);
-      } else {
         await generator.runDirect(options);
-      }
     } catch (error) {
       console.error(chalk.red('❌ Error:'), error instanceof Error ? error.message : error);
       process.exit(1);
@@ -52,6 +44,14 @@ program
   .action(async () => {
     const generator = new CharacterGeneratorCLI();
     await generator.listGenerations();
+  });
+
+program
+  .command('clear')
+  .description('Clear all generation history')
+  .action(async () => {
+    const generator = new CharacterGeneratorCLI();
+    await generator.clearHistory();
   });
 
 program

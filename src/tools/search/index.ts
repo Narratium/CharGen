@@ -40,8 +40,6 @@ export class SearchTool extends BaseSimpleTool {
       throw new Error("Search query is required");
     }
 
-    console.log(`🔍 Searching for: "${query}" (focus: ${focus})`);
-
     // Simulate web search - in real implementation, this would call actual search API
     const searchResults = await this.performWebSearch(query, focus);
     
@@ -54,8 +52,6 @@ export class SearchTool extends BaseSimpleTool {
         result.relevance
       )
     );
-
-    console.log(`✅ Search completed: ${knowledgeEntries.length} results found`);
 
     return this.createSuccessResult(
       {

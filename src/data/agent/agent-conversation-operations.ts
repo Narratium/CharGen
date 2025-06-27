@@ -280,8 +280,15 @@ export class ResearchSessionOperations {
    */
   static async deleteSession(sessionId: string): Promise<void> {
     const sessions = await this.getAllSessions();
-    const filteredSessions = sessions.filter(s => s.id !== sessionId);
-    await writeData(AGENT_CONVERSATIONS_FILE, filteredSessions);
+    const updatedSessions = sessions.filter(s => s.id !== sessionId);
+    await writeData(AGENT_CONVERSATIONS_FILE, updatedSessions);
+  }
+
+  /**
+   * Clear all sessions from the data file
+   */
+  static async clearAll(): Promise<void> {
+    await writeData(AGENT_CONVERSATIONS_FILE, []);
   }
 
   /**

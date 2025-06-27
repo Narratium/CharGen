@@ -44,8 +44,6 @@ export class WorldbookTool extends BaseSimpleTool {
   protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<ExecutionResult> {
     const worldbookEntry = parameters.worldbook_entry;
     
-    console.log(`📚 Worldbook tool processing a single pre-generated entry`);
-
     if (!worldbookEntry || typeof worldbookEntry !== 'object') {
       throw new Error("No worldbook entry object provided by planner");
     }
@@ -67,10 +65,7 @@ export class WorldbookTool extends BaseSimpleTool {
       useProbability: worldbookEntry.useProbability !== false
     };
 
-    console.log(`✅ Worldbook data processed and saved - 1 entry`);
-
     return this.createSuccessResult({
-      entry_count: 1,
       worldbook_data: [validatedEntry],
     });
   }

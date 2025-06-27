@@ -12,7 +12,6 @@ interface CLIOptions {
   apiKey?: string;
   baseUrl?: string;
   type?: 'openai' | 'ollama';
-  interactive?: boolean;
 }
 
 interface Config {
@@ -57,143 +56,28 @@ export class CharacterGeneratorCLI {
   }
 
   /**
-   * Run in interactive mode
-   */
-  async runInteractive(options: CLIOptions): Promise<void> {
-    console.log(chalk.cyan('🎯 Starting interactive character generation...\n'));
-
-    // Get user input
-    const answers = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'title',
-        message: 'Character generation title:',
-        default: 'My Character',
-      },
-      {
-        type: 'input',
-        name: 'description',
-        message: 'Describe the character you want to create:',
-        validate: (input: string) => input.trim().length > 0 || 'Please provide a character description',
-      },
-      {
-        type: 'list',
-        name: 'llmType',
-        message: 'Choose AI service:',
-        choices: [
-          { name: 'OpenAI (GPT models)', value: 'openai' },
-          { name: 'Ollama (Local models)', value: 'ollama' },
-        ],
-        default: options.type || this.config.defaultType || 'openai',
-      },
-    ]);
-
-    // Get model-specific configuration
-    let llmConfig;
-    if (answers.llmType === 'openai') {
-      const openaiAnswers = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'model',
-          message: 'OpenAI model:',
-          default: options.model || this.config.defaultModel || 'gpt-4',
-        },
-        {
-          type: 'password',
-          name: 'apiKey',
-          message: 'OpenAI API key:',
-          default: options.apiKey || this.config.defaultApiKey,
-          validate: (input: string) => input.trim().length > 0 || 'API key is required',
-        },
-        {
-          type: 'input',
-          name: 'baseUrl',
-          message: 'Base URL (optional):',
-          default: options.baseUrl || this.config.defaultBaseUrl,
-        },
-      ]);
-
-      llmConfig = {
-        llm_type: 'openai' as const,
-        model_name: openaiAnswers.model,
-        api_key: openaiAnswers.apiKey,
-        base_url: openaiAnswers.baseUrl || undefined,
-        temperature: this.config.temperature || 0.7,
-        max_tokens: this.config.maxTokens || 4000,
-      };
-    } else {
-      const ollamaAnswers = await inquirer.prompt([
-        {
-          type: 'input',
-          name: 'model',
-          message: 'Ollama model:',
-          default: options.model || this.config.defaultModel || 'llama2',
-        },
-        {
-          type: 'input',
-          name: 'baseUrl',
-          message: 'Ollama base URL:',
-          default: options.baseUrl || this.config.defaultBaseUrl || 'http://localhost:11434',
-        },
-      ]);
-
-      llmConfig = {
-        llm_type: 'ollama' as const,
-        model_name: ollamaAnswers.model,
-        api_key: '', // Not needed for Ollama
-        base_url: ollamaAnswers.baseUrl,
-        temperature: this.config.temperature || 0.7,
-        max_tokens: this.config.maxTokens || 4000,
-      };
-    }
-
-    // Start generation
-    await this.startGeneration({
-      title: answers.title,
-      description: answers.description,
-      llmConfig,
-      outputDir: options.output || './output',
-    });
-  }
-
-  /**
-   * Run with direct parameters
+   * Run the generator with simplified interface
    */
   async runDirect(options: CLIOptions): Promise<void> {
-    // Get required parameters
-    const title = await this.promptIfMissing('Character title:', 'My Character');
-    const description = await this.promptIfMissing('Character description:', '');
-    
-    if (!description) {
-      throw new Error('Character description is required');
-    }
+    console.log(chalk.cyan('🎭 Character & Worldbook Generator\n'));
 
-    const llmType = options.type || this.config.defaultType || 'openai';
-    const model = options.model || this.config.defaultModel || (llmType === 'openai' ? 'gpt-4' : 'llama2');
+    // Single story question  
+    const storyAnswer = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'story',
+        message: 'What kind of story would you like to create?',
+        validate: (input: string) => input.trim().length > 0 || 'Please describe the story you want to create',
+      }
+    ]);
     
-    let apiKey = options.apiKey || this.config.defaultApiKey;
-    if (llmType === 'openai' && !apiKey) {
-      const answer = await inquirer.prompt([{
-        type: 'password',
-        name: 'apiKey',
-        message: 'OpenAI API key:',
-        validate: (input: string) => input.trim().length > 0 || 'API key is required',
-      }]);
-      apiKey = answer.apiKey;
-    }
+    const story = storyAnswer.story;
 
-    const llmConfig = {
-      llm_type: llmType,
-      model_name: model,
-      api_key: apiKey || '',
-      base_url: options.baseUrl || this.config.defaultBaseUrl,
-      temperature: this.config.temperature || 0.7,
-      max_tokens: this.config.maxTokens || 4000,
-    };
+    // Use saved configuration
+    const llmConfig = await this.getLLMConfigFromSaved(options);
 
     await this.startGeneration({
-      title,
-      description,
+      story,
       llmConfig,
       outputDir: options.output || './output',
     });
@@ -203,14 +87,12 @@ export class CharacterGeneratorCLI {
    * Start the generation process
    */
   private async startGeneration(params: {
-    title: string;
-    description: string;
+    story: string;
     llmConfig: any;
     outputDir: string;
   }): Promise<void> {
     console.log(chalk.blue('\n🎯 Generation Configuration:'));
-    console.log(chalk.gray(`  Title: ${params.title}`));
-    console.log(chalk.gray(`  Description: ${params.description}`));
+    console.log(chalk.gray(`  Story: ${params.story}`));
     console.log(chalk.gray(`  AI Model: ${params.llmConfig.llm_type} - ${params.llmConfig.model_name}`));
     console.log(chalk.gray(`  Output: ${params.outputDir}`));
     console.log('');
@@ -221,27 +103,26 @@ export class CharacterGeneratorCLI {
       // Create user input callback function
       const userInputCallback = async (message?: string): Promise<string> => {
         spinner.stop(); // Stop spinner before user input
-        console.log(chalk.yellow('\n💬 The AI needs more information from you:'));
+        console.log(chalk.yellow('\n💬 Need more information:'));
         if (message) {
-          console.log(chalk.gray(`Message: ${message}`));
+          console.log(chalk.gray(`${message}`));
         }
         
         const answer = await inquirer.prompt([{
           type: 'input',
           name: 'input',
-          message: 'Please provide additional details:',
+          message: 'Please provide more details:',
           validate: (input: string) => input.trim().length > 0 || 'Please provide input',
         }]);
         
-        spinner.start('Continuing generation...'); // Restart spinner
+        spinner.start('Continuing...'); // Restart spinner
         return answer.input;
       };
 
       // Start the generation with user input callback
       console.log('🚀 [CLI] Starting agent service...');
       const result = await this.agentService.startGeneration(
-        params.title,
-        params.description,
+        params.story,
         params.llmConfig,
         userInputCallback // Pass the callback
       );
@@ -474,6 +355,69 @@ export class CharacterGeneratorCLI {
     }
     
     console.log(chalk.green('✅ Exported to:'), chalk.cyan(outputFile));
+  }
+
+  /**
+   * Clear all generation history
+   */
+  async clearHistory(): Promise<void> {
+    const { confirm } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirm',
+        message: 'Are you sure you want to delete all generation history? This action cannot be undone.',
+        default: false,
+      },
+    ]);
+
+    if (confirm) {
+      const spinner = ora('Clearing history...').start();
+      try {
+        await this.agentService.clearAllSessions();
+        spinner.succeed('All generation history has been cleared.');
+      } catch (error) {
+        spinner.fail('Failed to clear history.');
+        console.error(chalk.red('Error:'), error);
+      }
+    } else {
+      console.log(chalk.gray('Operation cancelled.'));
+    }
+  }
+
+  /**
+   * Get LLM configuration from saved settings
+   */
+  private async getLLMConfigFromSaved(options: CLIOptions): Promise<any> {
+    // Command line options take priority
+    const llmType = options.type || this.config.defaultType;
+    const model = options.model || this.config.defaultModel;
+    const apiKey = options.apiKey || this.config.defaultApiKey;
+    const baseUrl = options.baseUrl || this.config.defaultBaseUrl;
+
+    // Check if we have required configuration
+    if (!llmType || !model) {
+      console.log(chalk.yellow('⚠️  No LLM configuration found.'));
+      console.log(chalk.gray('Please run the following command to configure:'));
+      console.log(chalk.cyan('  char-gen config'));
+      throw new Error('LLM configuration required. Please run "char-gen config" first.');
+    }
+
+    // Check API key for OpenAI
+    if (llmType === 'openai' && !apiKey) {
+      console.log(chalk.yellow('⚠️  OpenAI API key not configured.'));
+      console.log(chalk.gray('Please run the following command to configure:'));
+      console.log(chalk.cyan('  char-gen config'));
+      throw new Error('OpenAI API key required. Please run "char-gen config" first.');
+    }
+
+    return {
+      llm_type: llmType,
+      model_name: model,
+      api_key: apiKey || '',
+      base_url: baseUrl || (llmType === 'ollama' ? 'http://localhost:11434' : undefined),
+      temperature: this.config.temperature || 0.7,
+      max_tokens: this.config.maxTokens || 4000,
+    };
   }
 
   /**

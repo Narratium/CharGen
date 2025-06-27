@@ -25,11 +25,9 @@ async function initializeStorage(): Promise<void> {
     const filePath = path.join(APP_DATA_DIR, fileName);
     if (!(await fs.pathExists(filePath))) {
       await fs.writeJson(filePath, initialValue, { spaces: 2 });
-      console.log(`Created storage file: ${fileName}`);
     }
   }
 
-  console.log('Storage initialized in project directory:', APP_DATA_DIR);
 }
 
 /**

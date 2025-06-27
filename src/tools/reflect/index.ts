@@ -45,8 +45,6 @@ export class ReflectTool extends BaseSimpleTool {
     const newTasks = parameters.new_tasks || [];
     const shouldDecompose = parameters.decompose_tasks !== false;
     
-    console.log(`🤔 Reflecting on task queue: ${action}`);
-
     const currentQueue = context.research_state.task_queue || [];
     const updatedQueue = [...currentQueue];
     
@@ -116,8 +114,6 @@ export class ReflectTool extends BaseSimpleTool {
         }
       }
     }
-
-    console.log(`✅ Reflection complete and saved: ${addedCount} tasks added, ${decomposedCount} tasks decomposed`);
 
     return this.createSuccessResult({
       action,

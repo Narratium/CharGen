@@ -33,8 +33,7 @@ export class AgentService {
    * Start a new character generation conversation with user input callback
    */
   async startGeneration(
-    title: string,
-    userRequest: string,
+    initialUserRequest: string,
     llmConfig: {
       model_name: string;
       api_key: string;
@@ -51,9 +50,9 @@ export class AgentService {
     error?: string;
   }> {
     try {
-      // Create new conversation with updated interface
+      // Create new conversation with fixed title and story as user request
       const session = await ResearchSessionOperations.createSession(
-        title,
+        "Character & Worldbook Generation", // Fixed title
         {
           model_name: llmConfig.model_name,
           api_key: llmConfig.api_key,
@@ -62,7 +61,7 @@ export class AgentService {
           temperature: llmConfig.temperature || 0.7,
           max_tokens: llmConfig.max_tokens,
         },
-        userRequest
+        initialUserRequest // Story description as user request
       );
       
       // Create agent engine with user input callback
@@ -185,6 +184,23 @@ export class AgentService {
     } catch (error) {
       console.error("Failed to delete conversation:", error);
       return false;
+    }
+  }
+
+  /**
+   * Clear all sessions from storage and memory
+   */
+  async clearAllSessions(): Promise<void> {
+    try {
+      // Clear all engines from memory
+      this.engines.clear();
+      
+      // Clear all sessions from storage
+      await ResearchSessionOperations.clearAll();
+      console.log('All sessions cleared from storage.');
+    } catch (error) {
+      console.error("Failed to clear all sessions:", error);
+      throw error; // Re-throw to be caught by CLI
     }
   }
 
