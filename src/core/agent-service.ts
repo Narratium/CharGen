@@ -195,7 +195,6 @@ export class AgentService {
   async getMessages(conversationId: string): Promise<{
     messages: any[];
     messageCount: number;
-    lastActivity: string;
   }> {
     try {
       const conversation = await ResearchSessionOperations.getConversationById(conversationId);
@@ -203,14 +202,12 @@ export class AgentService {
         return {
           messages: [],
           messageCount: 0,
-          lastActivity: "",
         };
       }
       
       return {
         messages: conversation.messages,
         messageCount: conversation.messages.length,
-        lastActivity: conversation.execution_info.last_activity,
       };
       
     } catch (error) {
@@ -218,7 +215,6 @@ export class AgentService {
       return {
         messages: [],
         messageCount: 0,
-        lastActivity: "",
       };
     }
   }
@@ -482,7 +478,6 @@ export class AgentService {
     messageCount: number;
     hasCharacter: boolean;
     hasWorldbook: boolean;
-    lastActivity: string;
     completionPercentage: number;
     knowledgeBaseSize: number;
   } | null> {

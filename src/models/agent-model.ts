@@ -68,8 +68,6 @@ export interface TaskEntry {
   description: string;
   priority: number;
   status: "pending" | "active" | "completed" | "obsolete";
-  created_at: string;
-  updated_at: string;
   parent_task_id?: string;
   dependencies?: string[];
   reasoning?: string; // Why this task was created/updated
@@ -107,8 +105,6 @@ export interface ResearchState {
   last_reflection: string;        // When we last reflected on progress
   reflection_trigger: "auto" | "manual" | "stuck" | "initialization" | null; // Why reflection was triggered
   
-  created_at: string;
-  updated_at: string;
 }
 
 /**
@@ -258,13 +254,10 @@ export interface ResearchSession {
     current_iteration: number;
     max_iterations: number;
     start_time: string;
-    last_activity: string;
     error_count: number;
     last_error?: string;
     total_tokens_used: number;
     token_budget: number;
   };
   
-  created_at: string;
-  updated_at: string;
 }

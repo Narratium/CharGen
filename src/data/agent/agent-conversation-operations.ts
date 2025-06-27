@@ -57,8 +57,6 @@ export class ResearchSessionOperations {
       // Reflection tracking
       last_reflection: "", // Will be set during initialization
       reflection_trigger: null,
-      created_at: now,
-      updated_at: now,
     };
 
     // Create initial character progress
@@ -92,13 +90,10 @@ export class ResearchSessionOperations {
         current_iteration: 0,
         max_iterations: 50,
         start_time: now,
-        last_activity: now,
         error_count: 0,
         total_tokens_used: 0,
         token_budget: 100000, // 100K tokens default budget
       },
-      created_at: now,
-      updated_at: now,
     };
 
     await this.saveConversation(conversation);
@@ -133,9 +128,6 @@ export class ResearchSessionOperations {
     const conversations = await this.getAllConversations();
     const existingIndex = conversations.findIndex(c => c.id === conversation.id);
     
-    conversation.updated_at = new Date().toISOString();
-    conversation.execution_info.last_activity = conversation.updated_at;
-
     if (existingIndex >= 0) {
       conversations[existingIndex] = conversation;
     } else {
@@ -203,7 +195,6 @@ export class ResearchSessionOperations {
 
     // Update task state
     Object.assign(conversation.research_state, updates);
-    conversation.research_state.updated_at = new Date().toISOString();
 
     await this.saveConversation(conversation);
   }
@@ -239,7 +230,6 @@ export class ResearchSessionOperations {
     }
 
     conversation.research_state.knowledge_base.push(...entries);
-    conversation.research_state.updated_at = new Date().toISOString();
 
     await this.saveConversation(conversation);
   }
@@ -257,7 +247,6 @@ export class ResearchSessionOperations {
     }
 
     conversation.research_state.user_interactions.push(...questions);
-    conversation.research_state.updated_at = new Date().toISOString();
 
     await this.saveConversation(conversation);
   }
@@ -322,7 +311,6 @@ export class ResearchSessionOperations {
     messageCount: number;
     hasCharacter: boolean;
     hasWorldbook: boolean;
-    lastActivity: string;
     completionPercentage: number;
     knowledgeBaseSize: number;
   } | null> {
@@ -343,7 +331,6 @@ export class ResearchSessionOperations {
       messageCount: conversation.messages.length,
       hasCharacter: !!conversation.generation_output.character_data,
       hasWorldbook: !!conversation.generation_output.worldbook_data && conversation.generation_output.worldbook_data.length > 0,
-      lastActivity: conversation.execution_info.last_activity,
       completionPercentage: Math.round(averageCompletion),
       knowledgeBaseSize: conversation.research_state.knowledge_base.length,
     };

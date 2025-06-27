@@ -177,8 +177,6 @@ Return your thinking and task updates in JSON format:
           description: newTask.description,
           priority: newTask.priority || 5,
           status: "pending",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
           reasoning: newTask.reasoning || "Added during reflection"
         };
         newQueue.push(task);
@@ -198,7 +196,6 @@ Return your thinking and task updates in JSON format:
           // Mark original task as decomposed
           originalTask.status = "obsolete";
           originalTask.reasoning = "Decomposed into sub-tasks during reflection";
-          originalTask.updated_at = new Date().toISOString();
           
           // Add sub-tasks
           for (const subTask of decomposition.sub_tasks) {
@@ -207,8 +204,6 @@ Return your thinking and task updates in JSON format:
               description: subTask.description,
               priority: subTask.priority || originalTask.priority,
               status: "pending",
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
               parent_task_id: originalTask.id,
               reasoning: subTask.reasoning || "Sub-task from decomposition"
             };

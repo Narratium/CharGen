@@ -151,8 +151,6 @@ Return a structured task decomposition in JSON format:
         description: task.description,
         priority: task.priority || (5 + index), // Default priority with sequence
         status: "pending" as const,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
         reasoning: task.reasoning || "Initial task decomposition"
       }));
 
@@ -163,7 +161,6 @@ Return a structured task decomposition in JSON format:
         knowledge_gaps: decomposition.knowledge_gaps || [],
         last_reflection: new Date().toISOString(),
         reflection_trigger: "initialization" as const,
-        updated_at: new Date().toISOString()
       };
 
       await ResearchSessionOperations.updateResearchState(this.conversationId, stateUpdate);
@@ -194,8 +191,6 @@ Return a structured task decomposition in JSON format:
           description: "Research character background and personality traits",
           priority: 8,
           status: "pending" as const,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
           reasoning: "Fallback task - decomposition failed"
         },
         {
@@ -203,15 +198,12 @@ Return a structured task decomposition in JSON format:
           description: "Generate character card with basic information",
           priority: 6,
           status: "pending" as const,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
           reasoning: "Fallback task - decomposition failed"
         }
       ];
 
       await ResearchSessionOperations.updateResearchState(this.conversationId, {
         task_queue: fallbackTasks,
-        updated_at: new Date().toISOString()
       });
     }
   }
@@ -804,7 +796,6 @@ Return evaluation in JSON format:
     // Update the entire task state
     await ResearchSessionOperations.updateResearchState(this.conversationId, {
       progress: conversation.research_state.progress,
-      updated_at: new Date().toISOString(),
     });
   }
 
