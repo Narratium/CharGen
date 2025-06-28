@@ -38,7 +38,7 @@ export class AskUserTool extends BaseSimpleTool {
     const questionText = parameters.question;
     
     if (!questionText || typeof questionText !== 'string') {
-        throw new Error("ASK_USER tool requires a 'question' parameter of type string.");
+      return this.createFailureResult("ASK_USER tool requires a 'question' parameter of type string.");
     }
     
     // Create user interaction entry to log the question
@@ -50,10 +50,6 @@ export class AskUserTool extends BaseSimpleTool {
     };
 
     return this.createSuccessResult(
-      {
-        message: questionText,
-        question_id: userInteraction.id
-      },
       { interaction_updates: [userInteraction] }
     );
   }

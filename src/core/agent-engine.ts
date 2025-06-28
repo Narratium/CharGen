@@ -74,7 +74,7 @@ export class AgentEngine {
    * Initialize session with task decomposition
    * Inspired by DeepResearch's approach to breaking down complex objectives
    */
-  private async initialize  (context: ExecutionContext): Promise<void> {
+  private async initialize (context: ExecutionContext): Promise<void> {
     console.log("🚀 Initializing session with task decomposition...");
     
     // Check if already initialized
@@ -88,8 +88,6 @@ You are an expert task planner for character card and worldbook generation.
 Analyze the user's objective and decompose it into a structured task queue.
 
 USER OBJECTIVE: {main_objective}
-
-USER CONTEXT: {user_context}
 
 DECOMPOSITION GUIDELINES:
 1. Break down the main objective into 5-8 concrete, actionable tasks
@@ -114,99 +112,79 @@ For worldbook creation, consider:
 - Cultural and social aspects
 - Worldbook entry generation
 
-Return a structured task decomposition in JSON format:
-{{
-  "initial_tasks": [
-    {{
-      "id": "task_1",
-      "description": "specific task description",
-      "priority": 1-10,
-      "reasoning": "why this task is important",
-      "expected_outcome": "what should be achieved"
-    }}
-  ],
-  "sub_questions": [
-    "specific research question 1",
-    "specific research question 2"
-  ],
-  "knowledge_gaps": [
-    "information gap 1",
-    "information gap 2"
-  ],
-  "decomposition_reasoning": "explanation of the task breakdown approach"
-}}
+Respond using the following XML format:
+<task_decomposition>
+  <initial_tasks>
+    <task>
+      <description>specific task description</description>
+      <reasoning>why this task is important</reasoning>
+      <expected_outcome>what should be achieved</expected_outcome>
+    </task>
+    <!-- Add more tasks as needed -->
+  </initial_tasks>
+  <knowledge_gaps>
+    <gap>information gap 1</gap>
+    <gap>information gap 2</gap>
+    <!-- Add more gaps as needed -->
+  </knowledge_gaps>
+  <decomposition_reasoning>explanation of the task breakdown approach</decomposition_reasoning>
+</task_decomposition>
     `);
 
     try {
       const response = await this.model.invoke([
         await prompt.format({
-          main_objective: context.research_state.main_objective,
-          user_context: this.buildUserContextSummary(context)
+          main_objective: context.research_state.main_objective
         }),
       ]);
 
-      const decomposition = this.parseJSONResponse(response.content);
+      const content = response.content as string;
       
-      // Create task entries from decomposition
-      const taskQueue = decomposition.initial_tasks.map((task: any, index: number) => ({
-        id: `init_task_${Date.now()}_${index}`,
-        description: task.description,
-        priority: task.priority || (5 + index), // Default priority with sequence
-        status: "pending" as const,
-        reasoning: task.reasoning || "Initial task decomposition"
-      }));
+      // Parse XML response directly
+      const taskMatches = [...content.matchAll(/<task>([\s\S]*?)<\/task>/g)];
+      const taskQueue = taskMatches.map((match, index) => {
+        const taskContent = match[1];
+        const description = taskContent.match(/<description>([\s\S]*?)<\/description>/)?.[1]?.trim() || `Task ${index + 1}`;
+        const reasoning = taskContent.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1]?.trim() || "Initial task decomposition";
+        
+        return {
+          id: `init_task_${Date.now()}_${index}`,
+          description,
+          reasoning
+        };
+      });
+
+      // Parse knowledge gaps
+      const gapMatches = [...content.matchAll(/<gap>([\s\S]*?)<\/gap>/g)];
+      const knowledgeGaps = gapMatches.map(match => match[1]?.trim()).filter(gap => gap);
+
+      // Parse decomposition reasoning
+      const decompositionReasoning = content.match(/<decomposition_reasoning>([\s\S]*?)<\/decomposition_reasoning>/)?.[1]?.trim() || "Task decomposition completed";
 
       // Update research state with initial decomposition
       const stateUpdate = {
         task_queue: taskQueue,
-        sub_questions: decomposition.sub_questions || [],
-        knowledge_gaps: decomposition.knowledge_gaps || [],
-        last_reflection: new Date().toISOString(),
-        reflection_trigger: "initialization" as const,
+        knowledge_gaps: knowledgeGaps,
       };
 
       await ResearchSessionOperations.updateResearchState(this.conversationId, stateUpdate);
       
       console.log(`✅ Task decomposition complete: ${taskQueue.length} tasks created`);
-      console.log(`📝 Sub-questions: ${decomposition.sub_questions?.length || 0}`);
-      console.log(`❓ Knowledge gaps: ${decomposition.knowledge_gaps?.length || 0}`);
+      console.log(`❓ Knowledge gaps: ${knowledgeGaps.length}`);
 
       // Add initialization message
       await ResearchSessionOperations.addMessage(this.conversationId, {
         role: "agent",
-        content: `Task decomposition complete: ${taskQueue.length} initial tasks identified. ${decomposition.decomposition_reasoning}`,
+        content: `Task decomposition complete: ${taskQueue.length} initial tasks identified. ${decompositionReasoning}`,
         type: "agent_thinking",
         metadata: {
           tasks_created: taskQueue.length,
-          sub_questions_generated: decomposition.sub_questions?.length || 0,
-          knowledge_gaps_identified: decomposition.knowledge_gaps?.length || 0
+          knowledge_gaps_identified: knowledgeGaps.length
         },
       });
 
     } catch (error) {
       console.error("❌ Task decomposition failed:", error);
-      
-      // Fallback to basic task structure
-      const fallbackTasks = [
-        {
-          id: `fallback_task_${Date.now()}_1`,
-          description: "Research character background and personality traits",
-          priority: 8,
-          status: "pending" as const,
-          reasoning: "Fallback task - decomposition failed"
-        },
-        {
-          id: `fallback_task_${Date.now()}_2`,
-          description: "Generate character card with basic information",
-          priority: 6,
-          status: "pending" as const,
-          reasoning: "Fallback task - decomposition failed"
-        }
-      ];
-
-      await ResearchSessionOperations.updateResearchState(this.conversationId, {
-        task_queue: fallbackTasks,
-      });
     }
   }
 
@@ -239,14 +217,51 @@ Return a structured task decomposition in JSON format:
       
       
       if (!decision) {
-        console.log("🎯 No more actions needed - task complete");
-        break;
+        console.log("🎯 No more decisions available");
+        continue; // Continue to end of loop where task queue check happens
       }
 
       // Execute the decided tool
       const result = await this.executeDecision(decision, context);
       console.log("🔄 Execution result:", result);
-      usedTokens += result.tokens_used || 0;
+      
+      // Handle tool execution failure with LLM analysis
+      if (!result.success) {
+        console.error(`❌ Tool ${decision.tool} failed: ${result.error}`);
+        await this.analyzeToolFailure(decision, result, context);
+        continue; // Continue to next iteration despite tool failure
+      }
+
+      // Handle SEARCH tool - update knowledge base with search results
+      if (decision.tool === ToolType.SEARCH && result.success) {
+        console.log(`✅ SEARCH execution completed with ${result.result?.results_count || 0} knowledge entries`);
+        
+        if (result.result?.search_methods && result.result.search_methods.length > 0) {
+          console.log(`🔍 Search methods used: ${result.result.search_methods.join(", ")}`);
+        }
+        
+        if (result.result?.sources && result.result.sources.length > 0) {
+          console.log(`📚 Top sources: ${result.result.sources.slice(0, 3).join(", ")}`);
+        }
+        
+        // The SearchTool creates knowledge entries but we need to save them to the research state
+        // Get the current session to update knowledge base
+        const session = await ResearchSessionOperations.getSessionById(this.conversationId);
+        if (session && result.result?.knowledge_entries && result.result.knowledge_entries.length > 0) {
+          const updatedKnowledgeBase = [
+            ...(session.research_state.knowledge_base || []),
+            ...result.result.knowledge_entries
+          ];
+          
+          await ResearchSessionOperations.updateResearchState(this.conversationId, {
+            knowledge_base: updatedKnowledgeBase,
+          });
+          
+          console.log(`📊 Knowledge base updated: added ${result.result.knowledge_entries.length} new entries (total: ${updatedKnowledgeBase.length})`);
+        }
+        
+        continue;
+      }
 
       // Handle ASK_USER tool - special case for user interaction flow control
       if (decision.tool === ToolType.ASK_USER && result.success) {
@@ -270,7 +285,7 @@ Return a structured task decomposition in JSON format:
         continue;
       }
 
-      // Handle CHARACTER or WORLDBOOK tool - data updates and completion evaluation
+      // Handle CHARACTER or WORLDBOOK tool - data updates and task completion evaluation
       if ((decision.tool === ToolType.CHARACTER || decision.tool === ToolType.WORLDBOOK) && result.success) {
         console.log(`✅ ${decision.tool} execution completed with generated content`);
         
@@ -289,18 +304,8 @@ Return a structured task decomposition in JSON format:
           });
         }
         
-        // Check if we should continue or if task is complete
-        // Get the latest complete generation output from the session
-        const session = await ResearchSessionOperations.getSessionById(this.conversationId);
-        if (session?.generation_output) {
-          const isComplete = await this.evaluateGenerationProgress(session.generation_output);
-          if (isComplete) {
-            console.log("✅ Generation task completed successfully");
-            break;
-          } else {
-            console.log("🔄 Generation needs improvement or additional work, continuing...");
-          }
-        }
+        // Check if current task has been completed using LLM analysis
+        await this.evaluateTaskCompletion(context);
       }
 
       // Handle REFLECT tool - update research state and log results
@@ -311,8 +316,6 @@ Return a structured task decomposition in JSON format:
         if (result.result.updated_task_queue) {
           await ResearchSessionOperations.updateResearchState(this.conversationId, {
             task_queue: result.result.updated_task_queue,
-            last_reflection: new Date().toISOString(),
-            reflection_trigger: "manual"
           });
         }
         
@@ -324,40 +327,45 @@ Return a structured task decomposition in JSON format:
           console.log(`🔄 Decomposed ${result.result.decomposed_count} complex tasks`);
         }
       }
-      if (result.tokens_used) {
-        await ResearchSessionOperations.recordTokenUsage(this.conversationId, result.tokens_used);
-      }
 
-      // Update knowledge base if tool provided knowledge updates
-      if (result.knowledge_updates && result.knowledge_updates.length > 0) {
-        await ResearchSessionOperations.addKnowledgeEntries(this.conversationId, result.knowledge_updates);
-      }
 
-      // Update user interactions if tool provided interaction updates  
-      if (result.interaction_updates && result.interaction_updates.length > 0) {
-        await ResearchSessionOperations.addUserInteractions(this.conversationId, result.interaction_updates);
+      // Check if task queue is empty at the end of each iteration
+      const currentContext = await this.buildExecutionContext();
+      if (!currentContext.research_state.task_queue || currentContext.research_state.task_queue.length === 0) {
+        console.log("📋 Task queue is empty, checking final generation completion...");
+        const session = await ResearchSessionOperations.getSessionById(this.conversationId);
+        if (session?.generation_output) {
+          const isComplete = await this.evaluateGenerationProgress(session.generation_output);
+          if (isComplete) {
+            console.log("✅ Final generation evaluation: Complete");
+            await ResearchSessionOperations.updateStatus(this.conversationId, SessionStatus.COMPLETED);
+            return {
+              success: true,
+              result: await this.generateFinalResult(),
+            };
+          } else {
+            console.log("❓ Final generation evaluation: Incomplete, adding completion task");
+            // Add basic completion task if needed
+            await ResearchSessionOperations.updateResearchState(this.conversationId, {
+              task_queue: [{
+                id: `completion_task_${Date.now()}`,
+                description: "Complete and finalize character and worldbook generation",
+                reasoning: "Added for final completion"
+              }]
+            });
+          }
+        }
       }
 
       // Small delay to prevent tight loops
       await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    // Final completion check
-    const finalContext = await this.buildExecutionContext();
-    const completion = finalContext.research_state.progress;
-    
-    if (completion.answer_confidence >= 80 && completion.information_quality >= 70) {
-      await ResearchSessionOperations.updateStatus(this.conversationId, SessionStatus.COMPLETED);
-      return {
-        success: true,
-        result: await this.generateFinalResult(),
-      };
-    } else {
-      return {
-        success: false,
-        error: usedTokens >= tokenBudget ? "Token budget exceeded" : "Maximum iterations reached without completion",
-      };
-    }
+    // If we exit the loop due to limits, return failure
+    return {
+      success: false,
+      error: usedTokens >= tokenBudget ? "Token budget exceeded" : "Maximum iterations reached without completion",
+    };
   }
 
   /**
@@ -365,12 +373,10 @@ Return a structured task decomposition in JSON format:
    * Following DeepResearch: planner generates ALL content, tools just store/process results
    */
   private async selectNextDecision(context: ExecutionContext): Promise<ToolDecision | null> {
+    
     // Get detailed tool information in XML format to inject into the prompt
     const availableTools = ToolRegistry.getDetailedToolsInfo();
-    
-    // Check if reflection is needed
-    const shouldReflect = this.shouldTriggerReflection(context);
-    
+
     const prompt = ChatPromptTemplate.fromTemplate(`
 <prompt>
   <system_role>
@@ -387,11 +393,6 @@ Return a structured task decomposition in JSON format:
     <main_objective>{main_objective}</main_objective>
     <task_queue>{task_queue_status}</task_queue>
     <knowledge_gaps>{knowledge_gaps}</knowledge_gaps>
-    <generation_progress>
-      <search_coverage>{search_coverage}%</search_coverage>
-      <information_quality>{information_quality}%</information_quality>
-      <answer_confidence>{answer_confidence}%</answer_confidence>
-    </generation_progress>
     <conversation_history>{recent_conversation}</conversation_history>
     <knowledge_base>{knowledge_base}</knowledge_base>
     <user_requirements>{user_requirements}</user_requirements>
@@ -400,8 +401,7 @@ Return a structured task decomposition in JSON format:
   <instructions>
     1.  Carefully analyze the <current_state> and the <tools_schema>.
     2.  Determine the single most critical action to perform next to progress towards the <main_objective>.
-    3.  If the project is drifting or stuck, consider using the REFLECT tool. Priority: {should_reflect}.
-    4.  Construct your response meticulously following the <output_specification>.
+    3.  Construct your response meticulously following the <output_specification>.
   </instructions>
 
   <output_specification>
@@ -433,29 +433,53 @@ Return a structured task decomposition in JSON format:
           main_objective: context.research_state.main_objective,
           task_queue_status: this.buildTaskQueueSummary(context),
           knowledge_gaps: context.research_state.knowledge_gaps?.join(", ") || "Unknown",
-          search_coverage: context.research_state.progress?.search_coverage || 0,
-          information_quality: context.research_state.progress?.information_quality || 0,
-          answer_confidence: context.research_state.progress?.answer_confidence || 0,
-          user_satisfaction: context.research_state.progress?.user_satisfaction || 0,
+
           recent_conversation: this.buildRecentConversationSummary(context.message_history),
           knowledge_base: this.buildKnowledgeBaseSummary(context.research_state.knowledge_base),
           user_requirements: this.buildUserInteractionsSummary(context.research_state.user_interactions),
-          last_reflection: context.research_state.last_reflection || "Never",
-          should_reflect: shouldReflect
         }),
       ]);
 
       const content = response.content as string;
-      const decision = this.parseXMLResponse(content);
-
-      if (decision.action === "null" || !decision.action) {
+      
+      // Parse XML response directly
+      const think = content.match(/<think>([\s\S]*?)<\/think>/)?.[1].trim() ?? 'No reasoning provided';
+      const action = content.match(/<action>([\s\S]*?)<\/action>/)?.[1].trim() ?? 'null';
+      
+      if (action === "null" || !action) {
         return null;
       }
 
+      // Parse parameters
+      const paramsMatch = content.match(/<parameters>([\s\S]*?)<\/parameters>/);
+      const parameters: Record<string, any> = {};
+
+      if (paramsMatch && paramsMatch[1]) {
+        const paramsString = paramsMatch[1].trim();
+        const paramRegex = /<(\w+)>([\s\S]*?)<\/(\1)>/g;
+        let match;
+
+        while ((match = paramRegex.exec(paramsString)) !== null) {
+          const key = match[1];
+          let value = match[2].trim();
+
+          const cdataMatch = value.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
+          if (cdataMatch) {
+            try {
+              parameters[key] = JSON.parse(cdataMatch[1]);
+            } catch (e) {
+              parameters[key] = cdataMatch[1];
+            }
+          } else {
+            parameters[key] = value;
+          }
+        }
+      }
+
       return {
-        tool: decision.action as ToolType,
-        parameters: decision.parameters,
-        reasoning: decision.think,
+        tool: action as ToolType,
+        parameters: parameters,
+        reasoning: think,
         priority: 5,
       };
     } catch (error) {
@@ -464,124 +488,142 @@ Return a structured task decomposition in JSON format:
     }
   }
 
+
+
   /**
-   * Parses the XML response from the LLM to extract action, parameters, and reasoning.
+   * Analyze tool failure using LLM and record the analysis
    */
-  private parseXMLResponse(xmlString: string): { think: string, action: string, parameters: Record<string, any> } {
-    const think = xmlString.match(/<think>([\s\S]*?)<\/think>/)?.[1].trim() ?? 'No reasoning provided';
-    const action = xmlString.match(/<action>([\s\S]*?)<\/action>/)?.[1].trim() ?? 'null';
-    
-    const paramsMatch = xmlString.match(/<parameters>([\s\S]*?)<\/parameters>/);
-    const parameters: Record<string, any> = {};
+  private async analyzeToolFailure(
+    decision: ToolDecision, 
+    result: ExecutionResult, 
+    context: ExecutionContext
+  ): Promise<void> {
+    try {
+      // Get tool information to understand expected parameters
+      const toolInfo = ToolRegistry.getDetailedToolsInfo();
+      
+      const prompt = ChatPromptTemplate.fromTemplate(`
+You are analyzing a tool execution failure to understand what went wrong and provide actionable insights.
 
-    if (paramsMatch && paramsMatch[1]) {
-        const paramsString = paramsMatch[1].trim();
-        const paramRegex = /<(\w+)>([\s\S]*?)<\/(\1)>/g;
-        let match;
+FAILED TOOL: {tool_name}
+EXPECTED PARAMETERS: {expected_parameters}
+ACTUAL PARAMETERS PROVIDED: {actual_parameters}
+ERROR MESSAGE: {error_message}
+TOOL REASONING: {tool_reasoning}
 
-        while ((match = paramRegex.exec(paramsString)) !== null) {
-            const key = match[1];
-            let value = match[2].trim();
+RECENT MESSAGE HISTORY:
+{message_history}
 
-            const cdataMatch = value.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
-            if (cdataMatch) {
-                try {
-                    // It's a JSON string in CDATA, parse it
-                    parameters[key] = JSON.parse(cdataMatch[1]);
-                } catch (e) {
-                    // Fallback to raw string if JSON parsing fails
-                    parameters[key] = cdataMatch[1];
-                }
-            } else {
-                // It's a simple string value
-                parameters[key] = value;
-            }
-        }
+CURRENT CONTEXT:
+- Current Task: {current_task}
+- Main Objective: {main_objective}
+
+ANALYSIS INSTRUCTIONS:
+1. Identify the root cause of the failure (parameter mismatch, missing data, logic error, etc.)
+2. Explain why the LLM planner provided incorrect parameters
+3. Suggest what should have been provided instead
+4. Recommend how to prevent similar failures in the future
+
+Provide your analysis in the following XML format:
+<failure_analysis>
+  <root_cause>Brief description of what caused the failure</root_cause>
+  <parameter_analysis>Analysis of parameter issues - what was expected vs what was provided</parameter_analysis>
+  <planner_issue>Why the LLM planner made this mistake</planner_issue>
+  <correct_approach>What should have been done instead</correct_approach>
+  <prevention>How to prevent similar failures</prevention>
+  <impact>Impact on the current session and task progress</impact>
+</failure_analysis>
+      `);
+
+      const response = await this.model.invoke([
+        await prompt.format({
+          tool_name: decision.tool,
+          expected_parameters: this.extractToolParameters(toolInfo, decision.tool),
+          actual_parameters: JSON.stringify(decision.parameters, null, 2),
+          error_message: result.error || "Unknown error",
+          tool_reasoning: decision.reasoning || "No reasoning provided",
+          message_history: this.buildRecentConversationSummary(context.message_history.slice(-5)),
+          current_task: context.research_state.task_queue?.[0]?.description || "No current task",
+          main_objective: context.research_state.main_objective
+        }),
+      ]);
+
+      const content = response.content as string;
+      
+      // Parse the analysis
+      const rootCause = content.match(/<root_cause>([\s\S]*?)<\/root_cause>/)?.[1]?.trim() || 'Analysis failed';
+      const parameterAnalysis = content.match(/<parameter_analysis>([\s\S]*?)<\/parameter_analysis>/)?.[1]?.trim() || '';
+      const plannerIssue = content.match(/<planner_issue>([\s\S]*?)<\/planner_issue>/)?.[1]?.trim() || '';
+      const correctApproach = content.match(/<correct_approach>([\s\S]*?)<\/correct_approach>/)?.[1]?.trim() || '';
+      const prevention = content.match(/<prevention>([\s\S]*?)<\/prevention>/)?.[1]?.trim() || '';
+      const impact = content.match(/<impact>([\s\S]*?)<\/impact>/)?.[1]?.trim() || '';
+
+      // Create comprehensive failure analysis message
+      const analysisContent = `TOOL FAILURE ANALYSIS - ${decision.tool}
+
+Root Cause: ${rootCause}
+
+Parameter Analysis: ${parameterAnalysis}
+
+Planner Issue: ${plannerIssue}
+
+Correct Approach: ${correctApproach}
+
+Prevention: ${prevention}
+
+Impact: ${impact}
+
+Technical Details:
+- Expected Parameters: ${this.extractToolParameters(toolInfo, decision.tool)}
+- Actual Parameters: ${JSON.stringify(decision.parameters, null, 2)}
+- Error: ${result.error}`;
+
+      // Record the failure analysis
+      await ResearchSessionOperations.addMessage(this.conversationId, {
+        role: "agent",
+        content: analysisContent,
+        type: "tool_failure",
+        metadata: {
+          tool_used: decision.tool,
+          reasoning: decision.reasoning,
+        },
+      });
+
+      console.log(`🔍 Tool failure analysis completed for ${decision.tool}`);
+
+    } catch (error) {
+      console.error("❌ Failed to analyze tool failure:", error);
+      
+      // Fallback: Simple error recording
+      await ResearchSessionOperations.addMessage(this.conversationId, {
+        role: "agent",
+        content: `Tool execution failed: ${decision.tool} - ${result.error}. Analysis failed: ${error instanceof Error ? error.message : String(error)}`,
+        type: "tool_failure",
+        metadata: {
+          tool_used: decision.tool,
+          reasoning: decision.reasoning,
+        },
+      });
     }
-
-    return { think, action, parameters };
   }
 
   /**
-   * Determine if reflection should be triggered
+   * Extract tool parameter definitions for a specific tool
    */
-  private shouldTriggerReflection(context: ExecutionContext): boolean {
-    const state = context.research_state;
-    const now = new Date();
-    
-    // Never reflected before
-    if (!state.last_reflection) {
-      return false; // Skip initial reflection since we just decomposed
+  private extractToolParameters(toolsXml: string, toolType: ToolType): string {
+    try {
+      // Parse the XML to find the specific tool's parameters
+      const toolRegex = new RegExp(`<tool>\\s*<type>${toolType}</type>[\\s\\S]*?<parameters>([\\s\\S]*?)</parameters>[\\s\\S]*?</tool>`);
+      const match = toolsXml.match(toolRegex);
+      
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+      
+      return `Parameters not found for tool ${toolType}`;
+    } catch (error) {
+      return `Error extracting parameters for ${toolType}: ${error instanceof Error ? error.message : String(error)}`;
     }
-    
-    const lastReflection = new Date(state.last_reflection);
-    const timeSinceReflection = now.getTime() - lastReflection.getTime();
-    const minutesSinceReflection = timeSinceReflection / (1000 * 60);
-    
-    // Time-based trigger (every 10 minutes of activity)
-    if (minutesSinceReflection > 10) {
-      return true;
-    }
-    
-    // Progress-based triggers
-    const progress = state.progress;
-    
-    // Low progress after some time
-    if (minutesSinceReflection > 5 && 
-        progress.answer_confidence < 40 && 
-        progress.information_quality < 50) {
-      return true;
-    }
-    
-    // Many pending tasks without progress
-    const pendingTasks = state.task_queue?.filter(t => t.status === "pending").length || 0;
-    const completedTasks = state.task_queue?.filter(t => t.status === "completed").length || 0;
-    
-    if (pendingTasks > 5 && completedTasks === 0 && minutesSinceReflection > 3) {
-      return true;
-    }
-    
-    // Knowledge gaps accumulating
-    if (state.knowledge_gaps && state.knowledge_gaps.length > 5 && minutesSinceReflection > 5) {
-      return true;
-    }
-    
-    return false;
-  }
-
-  /**
-   * Get the reason why reflection should be triggered
-   */
-  private getReflectionTriggerReason(context: ExecutionContext): string {
-    const state = context.research_state;
-    
-    if (!state.last_reflection) {
-      return "initialization";
-    }
-    
-    const now = new Date();
-    const lastReflection = new Date(state.last_reflection);
-    const minutesSinceReflection = (now.getTime() - lastReflection.getTime()) / (1000 * 60);
-    
-    if (minutesSinceReflection > 10) {
-      return "auto";
-    }
-    
-    const progress = state.progress;
-    if (progress.answer_confidence < 40 && progress.information_quality < 50) {
-      return "stuck";
-    }
-    
-    const pendingTasks = state.task_queue?.filter(t => t.status === "pending").length || 0;
-    if (pendingTasks > 5) {
-      return "task_overflow";
-    }
-    
-    if (state.knowledge_gaps && state.knowledge_gaps.length > 5) {
-      return "knowledge_gaps";
-    }
-    
-    return "auto";
   }
 
   /**
@@ -589,25 +631,110 @@ Return a structured task decomposition in JSON format:
    */
   private buildTaskQueueSummary(context: ExecutionContext): string {
     const queue = context.research_state.task_queue || [];
-    const pending = queue.filter(t => t.status === "pending");
-    const active = queue.filter(t => t.status === "active");
-    const completed = queue.filter(t => t.status === "completed");
+    const completed = context.research_state.completed_tasks || [];
     
-    const summary = [`Total Tasks: ${queue.length}`];
-    
-    if (pending.length > 0) {
-      summary.push(`Pending (${pending.length}): ${pending.slice(0, 3).map(t => t.description).join(", ")}${pending.length > 3 ? "..." : ""}`);
+    if (queue.length === 0) {
+      return `No tasks in queue. Completed tasks: ${completed.length}`;
     }
     
-    if (active.length > 0) {
-      summary.push(`Active (${active.length}): ${active.map(t => t.description).join(", ")}`);
+    const summary = [`Pending Tasks: ${queue.length}`];
+    
+    if (queue.length > 0) {
+      summary.push(`Current Task: ${queue[0].description}`);
+    }
+    
+    if (queue.length > 1) {
+      const nextTasks = queue.slice(1, 4).map(t => t.description);
+      summary.push(`Next Tasks: ${nextTasks.join(", ")}${queue.length > 4 ? "..." : ""}`);
     }
     
     if (completed.length > 0) {
-      summary.push(`Completed (${completed.length}): ${completed.slice(-2).map(t => t.description).join(", ")}`);
+      const recentCompleted = completed.slice(-2);
+      summary.push(`Recently Completed: ${recentCompleted.join(", ")}`);
     }
     
     return summary.join("\n");
+  }
+
+  /**
+   * Evaluate if current task has been completed using LLM analysis
+   */
+  private async evaluateTaskCompletion(context: ExecutionContext): Promise<void> {
+    if (!context.research_state.task_queue || context.research_state.task_queue.length === 0) {
+      return; // No tasks to evaluate
+    }
+
+    const currentTask = context.research_state.task_queue[0]; // First task in queue
+    const session = await ResearchSessionOperations.getSessionById(this.conversationId);
+    
+    if (!session) return;
+
+    const prompt = ChatPromptTemplate.fromTemplate(`
+You are evaluating whether a specific task has been completed based on the current generation output.
+
+TASK TO EVALUATE: {task_description}
+
+CURRENT GENERATION OUTPUT:
+Character Data: {character_data}
+Worldbook Data: {worldbook_data}
+
+INSTRUCTIONS:
+Analyze whether the specified task has been sufficiently completed based on the current generation output.
+Consider the task description and determine if the current output satisfies the task requirements.
+
+Respond in XML format:
+<evaluation>
+  <completed>true/false</completed>
+  <reasoning>Detailed explanation of why the task is or isn't complete</reasoning>
+</evaluation>
+    `);
+
+    try {
+      const response = await this.model.invoke([
+        await prompt.format({
+          task_description: currentTask.description,
+          character_data: JSON.stringify(session.generation_output.character_data || {}, null, 2),
+          worldbook_data: JSON.stringify(session.generation_output.worldbook_data || [], null, 2)
+        }),
+      ]);
+
+      const content = response.content as string;
+      const completedMatch = content.match(/<completed>(.*?)<\/completed>/);
+      const reasoningMatch = content.match(/<reasoning>(.*?)<\/reasoning>/s);
+      
+      const isCompleted = completedMatch?.[1]?.trim().toLowerCase() === 'true';
+      const reasoning = reasoningMatch?.[1]?.trim() || 'No reasoning provided';
+
+      if (isCompleted) {
+        console.log(`✅ Task completed: ${currentTask.description}`);
+        console.log(`📝 Reasoning: ${reasoning}`);
+        
+        // Move task from queue to completed_tasks
+        const updatedQueue = context.research_state.task_queue.slice(1); // Remove first task
+        const updatedCompleted = [...context.research_state.completed_tasks, currentTask.description];
+        
+        await ResearchSessionOperations.updateResearchState(this.conversationId, {
+          task_queue: updatedQueue,
+          completed_tasks: updatedCompleted
+        });
+
+        await ResearchSessionOperations.addMessage(this.conversationId, {
+          role: "agent",
+          content: `Task completed: ${currentTask.description}. ${reasoning}`,
+          type: "agent_thinking",
+          metadata: {
+            task_completed: currentTask.description,
+            reasoning: reasoning
+          },
+        });
+      } else {
+        console.log(`⏳ Task still in progress: ${currentTask.description}`);
+        console.log(`📝 Reasoning: ${reasoning}`);
+      }
+
+    } catch (error) {
+      console.error("❌ Error evaluating task completion:", error);
+    }
   }
 
   /**
@@ -729,7 +856,22 @@ Return a structured task decomposition in JSON format:
         generation_output: JSON.stringify(generationOutput, null, 2)
       });
 
-      const evaluation = this.parseQualityEvaluationXMLResponse(response);
+      // Parse XML response directly
+      const reasoning = response.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1].trim() ?? 'No reasoning provided';
+      const character_quality_score = parseInt(response.match(/<character_quality_score>(\d+)<\/character_quality_score>/)?.[1] ?? '0', 10);
+      const worldbook_quality_score = parseInt(response.match(/<worldbook_quality_score>(\d+)<\/worldbook_quality_score>/)?.[1] ?? '0', 10);
+      const overall_quality_score = parseInt(response.match(/<overall_quality_score>(\d+)<\/overall_quality_score>/)?.[1] ?? '0', 10);
+      const is_sufficient = response.match(/<is_sufficient>(true|false)<\/is_sufficient>/)?.[1] === 'true';
+
+      const improvement_suggestions: string[] = [];
+      const suggestionsMatch = response.match(/<improvement_suggestions>([\s\S]*?)<\/improvement_suggestions>/)?.[1] ?? '';
+      const suggestionRegex = /<suggestion>([\s\S]*?)<\/suggestion>/g;
+      let match;
+      while ((match = suggestionRegex.exec(suggestionsMatch)) !== null) {
+          improvement_suggestions.push(match[1].trim());
+      }
+
+      const evaluation = { reasoning, character_quality_score, worldbook_quality_score, overall_quality_score, is_sufficient, improvement_suggestions };
       
       // Update completion status based on evaluation
       await this.updateCompletionStatus({
@@ -783,61 +925,8 @@ Return a structured task decomposition in JSON format:
     return { isValid: true };
   }
 
-  /**
-   * Parses the XML evaluation response from the LLM.
-   */
-  private parseEvaluationXMLResponse(xmlString: string): {
-    reasoning: string;
-    quality_score: number;
-    completeness_score: number;
-    alignment_score: number;
-    is_sufficient: boolean;
-    next_steps: string[];
-  } {
-    const reasoning = xmlString.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1].trim() ?? 'No reasoning provided';
-    const quality_score = parseInt(xmlString.match(/<quality_score>(\d+)<\/quality_score>/)?.[1] ?? '0', 10);
-    const completeness_score = parseInt(xmlString.match(/<completeness_score>(\d+)<\/completeness_score>/)?.[1] ?? '0', 10);
-    const alignment_score = parseInt(xmlString.match(/<alignment_score>(\d+)<\/alignment_score>/)?.[1] ?? '0', 10);
-    const is_sufficient = xmlString.match(/<is_sufficient>(true|false)<\/is_sufficient>/)?.[1] === 'true';
 
-    const next_steps: string[] = [];
-    const stepsMatch = xmlString.match(/<next_steps>([\s\S]*?)<\/next_steps>/)?.[1] ?? '';
-    const stepRegex = /<step>([\s\S]*?)<\/step>/g;
-    let match;
-    while ((match = stepRegex.exec(stepsMatch)) !== null) {
-        next_steps.push(match[1].trim());
-    }
 
-    return { reasoning, quality_score, completeness_score, alignment_score, is_sufficient, next_steps };
-  }
-
-  /**
-   * Parses the XML quality evaluation response from the LLM for GenerationOutput assessment.
-   */
-  private parseQualityEvaluationXMLResponse(xmlString: string): {
-    reasoning: string;
-    character_quality_score: number;
-    worldbook_quality_score: number;
-    overall_quality_score: number;
-    is_sufficient: boolean;
-    improvement_suggestions: string[];
-  } {
-    const reasoning = xmlString.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1].trim() ?? 'No reasoning provided';
-    const character_quality_score = parseInt(xmlString.match(/<character_quality_score>(\d+)<\/character_quality_score>/)?.[1] ?? '0', 10);
-    const worldbook_quality_score = parseInt(xmlString.match(/<worldbook_quality_score>(\d+)<\/worldbook_quality_score>/)?.[1] ?? '0', 10);
-    const overall_quality_score = parseInt(xmlString.match(/<overall_quality_score>(\d+)<\/overall_quality_score>/)?.[1] ?? '0', 10);
-    const is_sufficient = xmlString.match(/<is_sufficient>(true|false)<\/is_sufficient>/)?.[1] === 'true';
-
-    const improvement_suggestions: string[] = [];
-    const suggestionsMatch = xmlString.match(/<improvement_suggestions>([\s\S]*?)<\/improvement_suggestions>/)?.[1] ?? '';
-    const suggestionRegex = /<suggestion>([\s\S]*?)<\/suggestion>/g;
-    let match;
-    while ((match = suggestionRegex.exec(suggestionsMatch)) !== null) {
-        improvement_suggestions.push(match[1].trim());
-    }
-
-    return { reasoning, character_quality_score, worldbook_quality_score, overall_quality_score, is_sufficient, improvement_suggestions };
-  }
 
   // ============================================================================
   // HELPER METHODS
@@ -879,31 +968,10 @@ Return a structured task decomposition in JSON format:
     throw new Error(`Unsupported LLM type: ${config.llm_type}`);
   }
 
-  private parseJSONResponse(response: string): any {
-    try {
-      // Extract JSON from response if it's wrapped in markdown or other text
-      const jsonMatch = response.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-      return JSON.parse(response);
-    } catch (error) {
-      console.error("Failed to parse JSON response:", response);
-      throw new Error("Invalid JSON response from LLM");
-    }
-  }
+
 
   private buildRecentConversationSummary(messages: any[]): string {
     return messages.slice(-5).map(m => `${m.role}: ${m.content}`).join("\n");
-  }
-
-  private buildUserContextSummary(context: ExecutionContext): string {
-    const UserInteractions = context.research_state.user_interactions
-      .filter(q => q.is_initial)
-      .map(q => q.question)
-      .join("; ");
-    
-    return `User Questions: ${UserInteractions}\nMain Objective: ${context.research_state.main_objective}`;
   }
 
   private buildKnowledgeBaseSummary(knowledgeBase: KnowledgeEntry[]): string {
@@ -925,18 +993,6 @@ Return a structured task decomposition in JSON format:
     return interactions
       .map(q => `- ${q.is_initial ? '[Initial]' : '[Follow-up]'} ${q.question}`)
       .join("\n");
-  }
-
-  private buildProgressSummary(context: ExecutionContext): string {
-    const progress = context.research_state.progress;
-    return `Search: ${progress.search_coverage}%, Info: ${progress.information_quality}%, Confidence: ${progress.answer_confidence}%, Satisfaction: ${progress.user_satisfaction}%`;
-  }
-
-  private async updateSessionState(result: ExecutionResult): Promise<void> {
-    // Update execution metadata with token usage
-    if (result.tokens_used) {
-      await ResearchSessionOperations.recordTokenUsage(this.conversationId, result.tokens_used);
-    }
   }
 
   private async updateCompletionStatus(updates: Partial<ResearchState["progress"]>): Promise<void> {

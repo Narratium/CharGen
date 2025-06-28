@@ -74,7 +74,7 @@ export class CharacterTool extends BaseSimpleTool {
     const characterUpdates = parameters.character_updates;
 
     if (!characterUpdates || typeof characterUpdates !== 'object') {
-      throw new Error("No character updates provided");
+      return this.createFailureResult("CHARACTER tool requires 'character_updates' parameter as an object.");
     }
     
     return this.createSuccessResult({

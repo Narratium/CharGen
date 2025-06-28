@@ -45,7 +45,12 @@ export class WorldbookTool extends BaseSimpleTool {
     const worldbookEntry = parameters.worldbook_entry;
     
     if (!worldbookEntry || typeof worldbookEntry !== 'object') {
-      throw new Error("No worldbook entry object provided by planner");
+      return this.createFailureResult("WORLDBOOK tool requires 'worldbook_entry' parameter as an object.");
+    }
+
+    // Validate required fields
+    if (!worldbookEntry.content || typeof worldbookEntry.content !== 'string') {
+      return this.createFailureResult("WORLDBOOK entry must have 'content' field as a string.");
     }
 
     // Validate and fix entry structure
@@ -55,7 +60,7 @@ export class WorldbookTool extends BaseSimpleTool {
       key: Array.isArray(worldbookEntry.key) ? worldbookEntry.key : [worldbookEntry.key || "keyword"],
       keysecondary: Array.isArray(worldbookEntry.keysecondary) ? worldbookEntry.keysecondary : [],
       comment: worldbookEntry.comment || "Worldbook entry",
-      content: worldbookEntry.content || "Content not generated",
+      content: worldbookEntry.content,
       constant: worldbookEntry.constant || false,
       selective: worldbookEntry.selective !== false,
       order: worldbookEntry.order || 100,

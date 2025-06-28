@@ -61,14 +61,11 @@ export interface UserInteraction {
 
 /**
  * Task entry for tracking specific work items
+ * Simplified structure - tasks are executed in sequential order
  */
 export interface TaskEntry {
   id: string;
   description: string;
-  priority: number;
-  status: "pending" | "active" | "completed" | "obsolete";
-  parent_task_id?: string;
-  dependencies?: string[];
   reasoning?: string; // Why this task was created/updated
 }
 
@@ -90,19 +87,14 @@ export interface ResearchState {
     user_satisfaction: number;    // Based on user feedback
   };
   
-  // Enhanced task management - inspired by DeepResearch decomposition
-  task_queue: TaskEntry[];        // All tasks (pending, active, completed)
-  completed_tasks: string[];      // Finished work items
+  // Sequential task management
+  task_queue: TaskEntry[];        // Pending tasks in execution order
+  completed_tasks: string[];      // Descriptions of finished tasks
   knowledge_gaps: string[];       // What we still need to research
-  sub_questions: string[];        // Derived questions to investigate
   
   // Research artifacts
   knowledge_base: KnowledgeEntry[];
   user_interactions: UserInteraction[];
-  
-  // Reflection tracking
-  last_reflection: string;        // When we last reflected on progress
-  reflection_trigger: "auto" | "manual" | "stuck" | "initialization" | null; // Why reflection was triggered
   
 }
 
@@ -113,9 +105,6 @@ export interface ExecutionResult {
   success: boolean;
   result?: any;
   error?: string;
-  tokens_used?: number;
-  knowledge_updates?: KnowledgeEntry[];
-  interaction_updates?: UserInteraction[];
 }
 
 // ============================================================================
@@ -155,7 +144,7 @@ export interface Message {
   id: string;
   role: "user" | "agent" | "system";
   content: string;
-  type: "user_input" | "agent_thinking" | "agent_action" | "agent_output" | "system_info" | "quality_evaluation";
+  type: "user_input" | "agent_thinking" | "agent_action" | "agent_output" | "system_info" | "quality_evaluation" | "tool_failure";
   metadata?: {
     tool_used?: ToolType;
     reasoning?: string;
@@ -163,7 +152,6 @@ export interface Message {
     interactions_added?: number;
     // Additional metadata for task decomposition and reflection
     tasks_created?: number;
-    sub_questions_generated?: number;
     knowledge_gaps_identified?: number;
     reflection_triggered?: boolean;
     task_updates?: {
@@ -171,6 +159,7 @@ export interface Message {
       updated: number;
       completed: number;
     };
+    task_completed?: string;
   };
 }
 

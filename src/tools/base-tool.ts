@@ -125,45 +125,14 @@ export abstract class BaseSimpleTool implements SimpleTool {
   }
 
   /**
-   * Add message to conversation
-   */
-  protected async addMessage(
-    conversationId: string,
-    role: "agent" | "system",
-    content: string,
-    messageType: "agent_thinking" | "agent_action" | "agent_output" | "system_info" = "agent_action",
-    metadata?: Record<string, any>
-  ): Promise<void> {
-    const { ResearchSessionOperations } = await import("../data/agent/agent-conversation-operations");
-    await ResearchSessionOperations.addMessage(conversationId, {
-      role,
-      content,
-      type: messageType,
-      metadata: {
-        tool_used: this.toolType,
-        ...metadata,
-      },
-    });
-  }
-
-  /**
    * Create success result
    */
   protected createSuccessResult(
-    result: any,
-    options: {
-      shouldContinue?: boolean;
-      tokensUsed?: number;
-      knowledge_updates?: KnowledgeEntry[];
-      interaction_updates?: UserInteraction[];
-    } = {}
+    result: any
   ): ExecutionResult {
     return {
       success: true,
       result,
-      tokens_used: options.tokensUsed,
-      knowledge_updates: options.knowledge_updates,
-      interaction_updates: options.interaction_updates,
     };  
   }
 
@@ -172,13 +141,8 @@ export abstract class BaseSimpleTool implements SimpleTool {
    */
   protected createFailureResult(
     error: any,
-    options: {
-      shouldContinue?: boolean;
-      customMessage?: string;
-    } = {}
   ): ExecutionResult {
-    const errorMessage = options.customMessage || 
-      (error instanceof Error ? error.message : String(error));
+    const errorMessage = error instanceof Error ? error.message : String(error);
 
     return {
       success: false,

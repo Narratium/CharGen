@@ -201,6 +201,28 @@ Configuration is stored in `~/.character-generator/config.json`:
 }
 ```
 
+### Search Configuration (Optional)
+
+The built-in search tool uses **free services** and requires no additional configuration:
+
+- **DuckDuckGo Search**: Privacy-focused web search (free)
+- **Wikipedia Search**: Encyclopedia content (free)
+
+For enhanced search capabilities, you can optionally configure premium search services:
+
+```json
+{
+  "search": {
+    "googleApiKey": "your-google-api-key",
+    "googleCxId": "your-custom-search-engine-id",
+    "tavilyApiKey": "your-tavily-api-key",
+    "serpApiKey": "your-serpapi-key"
+  }
+}
+```
+
+**Note**: Premium search services are completely optional. The default free search provides excellent results for character and worldbook generation.
+
 ## Storage
 
 All data is stored locally in `~/.character-generator/`:

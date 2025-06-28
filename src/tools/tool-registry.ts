@@ -5,7 +5,7 @@ import {
   ToolDecision 
 } from "../models/agent-model";
 import { SimpleTool} from "./base-tool";
-// import { SearchTool } from "./search";
+import { SearchTool } from "./search";
 import { AskUserTool } from "./ask-user";
 import { CharacterTool } from "./character";
 import { WorldbookTool } from "./worldbook";
@@ -26,14 +26,14 @@ export class ToolRegistry {
     if (this.initialized) return;
 
     // Register simplified tools
-    // this.tools.set(ToolType.SEARCH, new SearchTool());
+    this.tools.set(ToolType.SEARCH, new SearchTool());
     this.tools.set(ToolType.ASK_USER, new AskUserTool());
     this.tools.set(ToolType.CHARACTER, new CharacterTool());
     this.tools.set(ToolType.WORLDBOOK, new WorldbookTool());
     this.tools.set(ToolType.REFLECT, new ReflectTool());
 
     this.initialized = true;
-    console.log("🔧 Tool Registry initialized with 5 tools");
+    console.log("🔧 Tool Registry initialized with 5 tools (including enhanced search)");
   }
 
   /**

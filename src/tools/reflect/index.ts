@@ -45,6 +45,16 @@ export class ReflectTool extends BaseSimpleTool {
     const newTasks = parameters.new_tasks || [];
     const shouldDecompose = parameters.decompose_tasks !== false;
     
+    // Validate action parameter
+    if (action && !["add_tasks", "decompose_tasks", "auto"].includes(action)) {
+      return this.createFailureResult(`REFLECT tool: Invalid action '${action}'. Must be one of: add_tasks, decompose_tasks, auto`);
+    }
+    
+    // Validate new_tasks if provided
+    if (newTasks.length > 0 && !Array.isArray(newTasks)) {
+      return this.createFailureResult("REFLECT tool: 'new_tasks' parameter must be an array.");
+    }
+    
     const currentQueue = context.research_state.task_queue || [];
     const updatedQueue = [...currentQueue];
     
@@ -57,8 +67,6 @@ export class ReflectTool extends BaseSimpleTool {
         const newTask: TaskEntry = {
           id: `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           description: taskDesc,
-          priority: 5,
-          status: "pending",
           reasoning: "Added during reflection"
         };
         updatedQueue.push(newTask);
@@ -73,8 +81,6 @@ export class ReflectTool extends BaseSimpleTool {
         const newTask: TaskEntry = {
           id: `auto_task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           description: taskDesc,
-          priority: 6,
-          status: "pending",
           reasoning: "Auto-generated during reflection"
         };
         updatedQueue.push(newTask);
@@ -85,26 +91,23 @@ export class ReflectTool extends BaseSimpleTool {
     // Decompose complex tasks if requested
     if (shouldDecompose) {
       const complexTasks = updatedQueue.filter(t => 
-        t.status === "pending" && 
-        t.description.length > 100 && 
-        !t.parent_task_id
+        t.description.length > 100
       );
 
       for (const complexTask of complexTasks) {
         const subTasks = this.decomposeComplexTask(complexTask);
         if (subTasks.length > 1) {
-          // Mark parent as decomposed
-          complexTask.status = "obsolete";
-          complexTask.reasoning = "Decomposed into sub-tasks";
+          // Remove the complex task from queue
+          const taskIndex = updatedQueue.findIndex(t => t.id === complexTask.id);
+          if (taskIndex !== -1) {
+            updatedQueue.splice(taskIndex, 1);
+          }
           
           // Add sub-tasks
           for (const subTaskDesc of subTasks) {
             const subTask: TaskEntry = {
               id: `subtask_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
               description: subTaskDesc,
-              priority: complexTask.priority,
-              status: "pending",
-              parent_task_id: complexTask.id,
               reasoning: "Sub-task from decomposition"
             };
             updatedQueue.push(subTask);

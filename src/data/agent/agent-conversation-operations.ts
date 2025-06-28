@@ -36,12 +36,10 @@ export class ResearchSessionOperations {
         answer_confidence: 0,
         user_satisfaction: 0,
       },
-      // Enhanced task management - will be populated by task decomposition
-      task_queue: [], // Empty initially - will be filled by initializeWithTaskDecomposition
+      // Sequential task management - will be populated by task decomposition
+      task_queue: [], // Empty initially - will be filled by task decomposition
       completed_tasks: [],
-      knowledge_gaps: [
-      ],
-      sub_questions: [], // Will be populated by task decomposition
+      knowledge_gaps: [],
       knowledge_base: [],
       user_interactions: [{
         id: uuidv4(),
@@ -49,9 +47,6 @@ export class ResearchSessionOperations {
         is_initial: true,
         status: "pending",
       }],
-      // Reflection tracking
-      last_reflection: "", // Will be set during initialization
-      reflection_trigger: null,
     };
 
     // Create initial character progress
