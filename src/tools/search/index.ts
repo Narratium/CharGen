@@ -50,22 +50,22 @@ export class SearchTool extends BaseSimpleTool {
       
       // Always use comprehensive search with multiple sources
       const searchResults = await this.performComprehensiveSearch(query);
-      
-      // Create knowledge entries from search results
-      const knowledgeEntries = searchResults.map(result => 
-        this.createKnowledgeEntry(
-          result.source,
-          result.content,
+    
+    // Create knowledge entries from search results
+    const knowledgeEntries = searchResults.map(result => 
+      this.createKnowledgeEntry(
+        result.source,
+        result.content,
           result.url || result.metadata?.source || "Unknown",
           result.relevance || 75
-        )
-      );
+      )
+    );
 
       console.log(`✅ Search completed: ${knowledgeEntries.length} knowledge entries created from ${searchResults.length} sources`);
 
-      return this.createSuccessResult(
-        {
-          query,
+    return this.createSuccessResult(
+      {
+        query,
           results_count: knowledgeEntries.length,
           sources: searchResults.map(r => r.source).slice(0, 5), // Top 5 sources
           search_methods: searchResults.map(r => r.type).filter((v, i, a) => a.indexOf(v) === i), // Unique search methods used
@@ -217,7 +217,7 @@ export class SearchTool extends BaseSimpleTool {
         snippet: resultsString.substring(0, 300),
         link: "unknown"
       }];
-    }
+  }
   }
 
 

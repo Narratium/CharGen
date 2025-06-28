@@ -88,7 +88,6 @@ export interface ResearchState {
   // Sequential task management
   task_queue: TaskEntry[];        // Pending tasks in execution order
   completed_tasks: string[];      // Descriptions of finished tasks
-  knowledge_gaps: string[];       // What we still need to research
   
   // Research artifacts
   knowledge_base: KnowledgeEntry[];
@@ -143,22 +142,6 @@ export interface Message {
   role: "user" | "agent" | "system";
   content: string;
   type: "user_input" | "agent_thinking" | "agent_action" | "agent_output" | "system_info" | "quality_evaluation" | "tool_failure";
-  metadata?: {
-    tool_used?: ToolType;
-    reasoning?: string;
-    knowledge_added?: number;
-    interactions_added?: number;
-    // Additional metadata for task decomposition and reflection
-    tasks_created?: number;
-    knowledge_gaps_identified?: number;
-    reflection_triggered?: boolean;
-    task_updates?: {
-      added: number;
-      updated: number;
-      completed: number;
-    };
-    task_completed?: string;
-  };
 }
 
 /**

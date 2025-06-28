@@ -16,6 +16,99 @@ import { ChatOllama } from "@langchain/ollama";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
 
+// ============================================================================
+// BACKGROUND KNOWLEDGE - CHARACTER CARDS AND WORLDBOOKS
+// ============================================================================
+
+/**
+ * Core background knowledge about character cards and worldbooks for AI roleplay
+ * This information is essential for understanding the generation targets
+ */
+const CORE_KNOWLEDGE_SECTION = `
+## BACKGROUND KNOWLEDGE: CHARACTER CARDS & WORLDBOOKS
+
+### CHARACTER CARDS OVERVIEW
+A character card is a structured data format that defines AI roleplay scenarios. Character cards can represent either individual characters or entire world-based scenarios and stories, serving as the foundation for persistent conversations and defining how the AI should behave and interact.
+
+#### Character Card Core Fields:
+- **name**: Primary identifier - can be a character name or scenario title
+- **description**: Physical/visual details for characters, or world setting description for scenarios
+- **personality**: Behavioral traits for characters, or narrative style/tone for world scenarios
+- **scenario**: Context and circumstances - character's situation or world's current state/events
+- **first_mes**: Opening message that establishes the roleplay situation
+- **mes_example**: Example dialogue demonstrating the expected interaction style and format
+- **creator_notes**: Usage guidelines, compatibility information, and creator insights
+- **avatar**: Visual representation - character portrait or scenario artwork
+- **alternate_greetings**: Multiple opening scenarios or character introduction variations
+- **tags**: Categorization for discovery - genre, themes, character types, world elements
+
+#### Character Card Types & Applications:
+1. **Individual Characters**: Focused on a specific person with defined personality, background, and traits
+2. **World Scenarios**: Broader settings featuring multiple characters, locations, and ongoing storylines
+3. **Hybrid Approaches**: Character-centric cards that include rich world elements and supporting cast
+
+#### Character Card Design Principles:
+1. **Clear Identity**: Whether character or world-focused, establish a distinctive identity and voice
+2. **Consistency**: Maintain coherent tone, style, and logical consistency throughout all fields
+3. **Engaging Content**: Create compelling scenarios that invite meaningful interaction and exploration
+4. **Contextual Clarity**: Provide sufficient background for users to understand and engage with the scenario
+5. **Professional Quality**: Meet standards for AI roleplay applications with polished, well-crafted content
+
+### WORLDBOOKS (LOREBOOKS) OVERVIEW
+Worldbooks are dynamic knowledge systems that provide contextual information to enhance AI roleplay. They function as intelligent databases that inject relevant background information when specific keywords are detected, supporting both character-focused and world-based scenarios.
+
+#### Worldbook Core Concepts:
+- **Keyword Activation**: Entries trigger when associated keywords appear in conversation
+- **Dynamic Insertion**: Only relevant information is injected based on context, preserving token efficiency
+- **Context Enhancement**: Provides background lore, character relationships, world rules, and scenario details
+- **Token Efficiency**: Conserves prompt space by loading only needed information at appropriate moments
+- **Recursive Activation**: Entries can trigger other entries, creating complex information networks
+
+#### Worldbook Entry Structure:
+- **key**: Primary trigger keywords that activate the entry
+- **keysecondary**: Secondary keywords for conditional or refined activation logic
+- **content**: The actual information inserted into the prompt when triggered
+- **comment**: Internal organizational notes for creators and maintainers
+- **order**: Priority level determining insertion sequence when multiple entries activate
+- **constant**: Controls whether entry remains permanently active regardless of keywords
+- **selective**: Enables advanced keyword logic with AND/OR/NOT operations for precise activation
+
+#### Worldbook Best Practices:
+1. **Quality over Quantity**: Focus on creating meaningful, well-crafted entries rather than numerous shallow ones
+2. **Comprehensive Coverage**: Include character relationships, world information, rules, and contextual details
+3. **Strategic Keywords**: Use discoverable, relevant keywords that naturally appear in conversations
+4. **Content Depth**: Provide useful, detailed information that genuinely enhances storytelling and immersion
+5. **Scenario Integration**: Ensure entries complement and enhance the character card's scenario and tone
+6. **Token Management**: Balance information richness with efficient token usage for optimal performance
+
+### INTEGRATION PRINCIPLES
+Character cards and worldbooks work together to create rich, immersive roleplay experiences across different scenario types:
+- **Scenario Foundation**: Character cards establish the core identity, tone, and context
+- **Dynamic Enhancement**: Worldbooks provide adaptive background information that enriches interactions
+- **Contextual Flow**: Worldbook entries activate naturally based on conversation direction and topics
+- **Narrative Coherence**: All elements work together to maintain consistent storytelling and world logic
+- **User Experience**: The combination should feel seamless and enhance rather than complicate interactions
+- **Flexible Application**: System supports both character-focused and world-building approaches effectively
+
+This knowledge is fundamental to creating professional-quality AI roleplay content that meets industry standards for engagement, consistency, technical excellence, and supports diverse storytelling approaches.
+`;
+
+/**
+ * Creates a standardized prompt template with core background knowledge
+ * This should be used for all major LLM calls in the system
+ */
+function createStandardPromptTemplate(specificPrompt: string): ChatPromptTemplate {
+  const fullPrompt = `${CORE_KNOWLEDGE_SECTION}
+
+${specificPrompt}`;
+  
+  return ChatPromptTemplate.fromTemplate(fullPrompt);
+}
+
+// ============================================================================
+// AGENT ENGINE
+// ============================================================================
+
 // Define user input callback type
 type UserInputCallback = (message?: string) => Promise<string>;
 
@@ -83,7 +176,7 @@ export class AgentEngine {
       return;
     }
 
-    const prompt = ChatPromptTemplate.fromTemplate(`
+    const prompt = createStandardPromptTemplate(`
 You are an expert task planner for character card and worldbook generation. 
 Analyze the user's objective and decompose it into a structured task queue.
 
@@ -122,11 +215,6 @@ Respond using the following XML format:
     </task>
     <!-- Add more tasks as needed -->
   </initial_tasks>
-  <knowledge_gaps>
-    <gap>information gap 1</gap>
-    <gap>information gap 2</gap>
-    <!-- Add more gaps as needed -->
-  </knowledge_gaps>
   <decomposition_reasoning>explanation of the task breakdown approach</decomposition_reasoning>
 </task_decomposition>
     `);
@@ -148,7 +236,7 @@ Respond using the following XML format:
         const reasoning = taskContent.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1]?.trim() || "Initial task decomposition";
         
         return {
-          id: `init_task_${Date.now()}_${index}`,
+        id: `init_task_${Date.now()}_${index}`,
           description,
           reasoning
         };
@@ -164,23 +252,17 @@ Respond using the following XML format:
       // Update research state with initial decomposition
       const stateUpdate = {
         task_queue: taskQueue,
-        knowledge_gaps: knowledgeGaps,
       };
 
       await ResearchSessionOperations.updateResearchState(this.conversationId, stateUpdate);
       
       console.log(`✅ Task decomposition complete: ${taskQueue.length} tasks created`);
-      console.log(`❓ Knowledge gaps: ${knowledgeGaps.length}`);
 
       // Add initialization message
       await ResearchSessionOperations.addMessage(this.conversationId, {
         role: "agent",
         content: `Task decomposition complete: ${taskQueue.length} initial tasks identified. ${decompositionReasoning}`,
         type: "agent_thinking",
-        metadata: {
-          tasks_created: taskQueue.length,
-          knowledge_gaps_identified: knowledgeGaps.length
-        },
       });
 
     } catch (error) {
@@ -233,31 +315,11 @@ Respond using the following XML format:
       }
 
       // Handle SEARCH tool - update knowledge base with search results
-      if (decision.tool === ToolType.SEARCH && result.success) {
-        console.log(`✅ SEARCH execution completed with ${result.result?.results_count || 0} knowledge entries`);
-        
-        if (result.result?.search_methods && result.result.search_methods.length > 0) {
-          console.log(`🔍 Search methods used: ${result.result.search_methods.join(", ")}`);
-        }
-        
-        if (result.result?.sources && result.result.sources.length > 0) {
-          console.log(`📚 Top sources: ${result.result.sources.slice(0, 3).join(", ")}`);
-        }
-        
-        // The SearchTool creates knowledge entries but we need to save them to the research state
-        // Get the current session to update knowledge base
-        const session = await ResearchSessionOperations.getSessionById(this.conversationId);
-        if (session && result.result?.knowledge_entries && result.result.knowledge_entries.length > 0) {
-          const updatedKnowledgeBase = [
-            ...(session.research_state.knowledge_base || []),
-            ...result.result.knowledge_entries
-          ];
-          
-          await ResearchSessionOperations.updateResearchState(this.conversationId, {
-            knowledge_base: updatedKnowledgeBase,
-          });
-          
-          console.log(`📊 Knowledge base updated: added ${result.result.knowledge_entries.length} new entries (total: ${updatedKnowledgeBase.length})`);
+      if (decision.tool === ToolType.SEARCH && result.success) {        
+        // Add knowledge entries from search results
+        if (result.result?.knowledge_entries && result.result.knowledge_entries.length > 0) {
+          await ResearchSessionOperations.addKnowledgeEntries(this.conversationId, result.result.knowledge_entries);
+          console.log(`📊 Knowledge base updated: added ${result.result.knowledge_entries.length} new entries`);
         }
         
         continue;
@@ -308,23 +370,14 @@ Respond using the following XML format:
         await this.evaluateTaskCompletion(context);
       }
 
-      // Handle REFLECT tool - update research state and log results
+      // Handle REFLECT tool - add new tasks to the current queue
       if (decision.tool === ToolType.REFLECT && result.success) {
         console.log("🔄 Reflection completed");
         
-        // Update research state with new task queue from reflection
-        if (result.result.updated_task_queue) {
-          await ResearchSessionOperations.updateResearchState(this.conversationId, {
-            task_queue: result.result.updated_task_queue,
-          });
-        }
-        
-        if (result.result.added_count > 0) {
-          console.log(`📋 Added ${result.result.added_count} new tasks`);
-        }
-        
-        if (result.result.decomposed_count > 0) {
-          console.log(`🔄 Decomposed ${result.result.decomposed_count} complex tasks`);
+        // Efficiently add new tasks without fetching the entire session
+        if (result.result.new_tasks && result.result.new_tasks.length > 0) {
+          await ResearchSessionOperations.addTasksToQueue(this.conversationId, result.result.new_tasks);
+          console.log(`📋 Added ${result.result.tasks_count} new tasks to queue`);
         }
       }
 
@@ -362,10 +415,10 @@ Respond using the following XML format:
     }
 
     // If we exit the loop due to limits, return failure
-    return {
-      success: false,
-      error: usedTokens >= tokenBudget ? "Token budget exceeded" : "Maximum iterations reached without completion",
-    };
+      return {
+        success: false,
+        error: usedTokens >= tokenBudget ? "Token budget exceeded" : "Maximum iterations reached without completion",
+      };
   }
 
   /**
@@ -376,8 +429,8 @@ Respond using the following XML format:
     
     // Get detailed tool information in XML format to inject into the prompt
     const availableTools = ToolRegistry.getDetailedToolsInfo();
-
-    const prompt = ChatPromptTemplate.fromTemplate(`
+    
+    const prompt = createStandardPromptTemplate(`
 <prompt>
   <system_role>
     You are a master planning agent for a character and world-building assistant.
@@ -389,19 +442,38 @@ Respond using the following XML format:
     {available_tools}
   </tools_schema>
 
-  <current_state>
-    <main_objective>{main_objective}</main_objective>
-    <task_queue>{task_queue_status}</task_queue>
-    <knowledge_gaps>{knowledge_gaps}</knowledge_gaps>
-    <conversation_history>{recent_conversation}</conversation_history>
-    <knowledge_base>{knowledge_base}</knowledge_base>
-    <user_requirements>{user_requirements}</user_requirements>
-  </current_state>
+  <main_objective>
+    {main_objective}
+  </main_objective>
+
+  <completed_tasks>
+    {completed_tasks}
+  </completed_tasks>
+
+  <existing_knowledge>
+    {knowledge_base}
+  </existing_knowledge>
+
+  <conversation_context>
+    {recent_conversation}
+  </conversation_context>
+
+  <current_task_queue>
+    {task_queue_status}
+  </current_task_queue>
+
+  <user_requirements>
+    {user_requirements}
+  </user_requirements>
 
   <instructions>
-    1.  Carefully analyze the <current_state> and the <tools_schema>.
-    2.  Determine the single most critical action to perform next to progress towards the <main_objective>.
-    3.  Construct your response meticulously following the <output_specification>.
+    1.  Analyze the <main_objective> and assess current progress based on <completed_tasks>.
+    2.  Review <existing_knowledge> to understand what information is already available.
+    3.  Consider recent <conversation_context> for additional context and user feedback.
+    4.  Examine <current_task_queue> to understand what tasks remain to be completed.
+    5.  Reference <user_requirements> for specific user needs and preferences.
+    7.  Based on this analysis, determine the single most critical action from <tools_schema> to progress towards the <main_objective>.
+    8.  Construct your response meticulously following the <output_specification>.
   </instructions>
 
   <output_specification>
@@ -431,11 +503,10 @@ Respond using the following XML format:
         await prompt.format({
           available_tools: availableTools,
           main_objective: context.research_state.main_objective,
-          task_queue_status: this.buildTaskQueueSummary(context),
-          knowledge_gaps: context.research_state.knowledge_gaps?.join(", ") || "Unknown",
-
-          recent_conversation: this.buildRecentConversationSummary(context.message_history),
+          completed_tasks: this.buildCompletedTasksSummary(context),
           knowledge_base: this.buildKnowledgeBaseSummary(context.research_state.knowledge_base),
+          recent_conversation: this.buildRecentConversationSummary(context.message_history),
+          task_queue_status: this.buildTaskQueueSummary(context),
           user_requirements: this.buildUserInteractionsSummary(context.research_state.user_interactions),
         }),
       ]);
@@ -447,34 +518,34 @@ Respond using the following XML format:
       const action = content.match(/<action>([\s\S]*?)<\/action>/)?.[1].trim() ?? 'null';
       
       if (action === "null" || !action) {
-        return null;
+      return null;
       }
 
       // Parse parameters
       const paramsMatch = content.match(/<parameters>([\s\S]*?)<\/parameters>/);
-      const parameters: Record<string, any> = {};
+    const parameters: Record<string, any> = {};
 
-      if (paramsMatch && paramsMatch[1]) {
+    if (paramsMatch && paramsMatch[1]) {
         const paramsString = paramsMatch[1].trim();
         const paramRegex = /<(\w+)>([\s\S]*?)<\/(\1)>/g;
         let match;
 
         while ((match = paramRegex.exec(paramsString)) !== null) {
-          const key = match[1];
-          let value = match[2].trim();
+            const key = match[1];
+            let value = match[2].trim();
 
-          const cdataMatch = value.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
-          if (cdataMatch) {
-            try {
-              parameters[key] = JSON.parse(cdataMatch[1]);
-            } catch (e) {
-              parameters[key] = cdataMatch[1];
+            const cdataMatch = value.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
+            if (cdataMatch) {
+                try {
+                    parameters[key] = JSON.parse(cdataMatch[1]);
+                } catch (e) {
+                    parameters[key] = cdataMatch[1];
+                }
+            } else {
+                parameters[key] = value;
             }
-          } else {
-            parameters[key] = value;
-          }
         }
-      }
+    }
 
       return {
         tool: action as ToolType,
@@ -488,8 +559,6 @@ Respond using the following XML format:
     }
   }
 
-
-
   /**
    * Analyze tool failure using LLM and record the analysis
    */
@@ -502,7 +571,7 @@ Respond using the following XML format:
       // Get tool information to understand expected parameters
       const toolInfo = ToolRegistry.getDetailedToolsInfo();
       
-      const prompt = ChatPromptTemplate.fromTemplate(`
+      const prompt = createStandardPromptTemplate(`
 You are analyzing a tool execution failure to understand what went wrong and provide actionable insights.
 
 FAILED TOOL: {tool_name}
@@ -583,10 +652,6 @@ Technical Details:
         role: "agent",
         content: analysisContent,
         type: "tool_failure",
-        metadata: {
-          tool_used: decision.tool,
-          reasoning: decision.reasoning,
-        },
       });
 
       console.log(`🔍 Tool failure analysis completed for ${decision.tool}`);
@@ -599,10 +664,6 @@ Technical Details:
         role: "agent",
         content: `Tool execution failed: ${decision.tool} - ${result.error}. Analysis failed: ${error instanceof Error ? error.message : String(error)}`,
         type: "tool_failure",
-        metadata: {
-          tool_used: decision.tool,
-          reasoning: decision.reasoning,
-        },
       });
     }
   }
@@ -630,30 +691,46 @@ Technical Details:
    * Build task queue summary for decision making
    */
   private buildTaskQueueSummary(context: ExecutionContext): string {
-    const queue = context.research_state.task_queue || [];
-    const completed = context.research_state.completed_tasks || [];
-    
-    if (queue.length === 0) {
-      return `No tasks in queue. Completed tasks: ${completed.length}`;
+    if (!context.research_state.task_queue || context.research_state.task_queue.length === 0) {
+      return "No pending tasks in queue";
     }
-    
-    const summary = [`Pending Tasks: ${queue.length}`];
-    
-    if (queue.length > 0) {
-      summary.push(`Current Task: ${queue[0].description}`);
+
+    const currentTask = context.research_state.task_queue[0];
+    const remainingCount = context.research_state.task_queue.length - 1;
+
+    let summary = `Current Task: ${currentTask.description}`;
+    if (currentTask.reasoning) {
+      summary += ` (${currentTask.reasoning})`;
     }
-    
-    if (queue.length > 1) {
-      const nextTasks = queue.slice(1, 4).map(t => t.description);
-      summary.push(`Next Tasks: ${nextTasks.join(", ")}${queue.length > 4 ? "..." : ""}`);
+
+    if (remainingCount > 0) {
+      summary += `\nRemaining Tasks: ${remainingCount} tasks in queue`;
+      // Show next 2 upcoming tasks for context
+      const upcomingTasks = context.research_state.task_queue.slice(1, 3);
+      upcomingTasks.forEach((task, index) => {
+        summary += `\n${index + 2}. ${task.description}`;
+      });
     }
-    
-    if (completed.length > 0) {
-      const recentCompleted = completed.slice(-2);
-      summary.push(`Recently Completed: ${recentCompleted.join(", ")}`);
+
+    return summary;
+  }
+
+  private buildCompletedTasksSummary(context: ExecutionContext): string {
+    if (!context.research_state.completed_tasks || context.research_state.completed_tasks.length === 0) {
+      return "No tasks completed yet";
     }
+
+    const completedTasks = context.research_state.completed_tasks;
+    let summary = `Total Completed: ${completedTasks.length} tasks\n\n`;
     
-    return summary.join("\n");
+    // Show the most recent completed tasks (up to 5)
+    const recentCompleted = completedTasks.slice(-5);
+    summary += "Recently Completed Tasks:\n";
+    recentCompleted.forEach((task, index) => {
+      summary += `${recentCompleted.length - index}. ${task}\n`;
+    });
+
+    return summary.trim();
   }
 
   /**
@@ -669,7 +746,7 @@ Technical Details:
     
     if (!session) return;
 
-    const prompt = ChatPromptTemplate.fromTemplate(`
+    const prompt = createStandardPromptTemplate(`
 You are evaluating whether a specific task has been completed based on the current generation output.
 
 TASK TO EVALUATE: {task_description}
@@ -742,23 +819,13 @@ Respond in XML format:
         console.log(`✅ Task completed: ${currentTask.description}`);
         console.log(`📝 Reasoning: ${reasoning}`);
         
-        // Move task from queue to completed_tasks
-        const updatedQueue = context.research_state.task_queue.slice(1); // Remove first task
-        const updatedCompleted = [...context.research_state.completed_tasks, currentTask.description];
-        
-        await ResearchSessionOperations.updateResearchState(this.conversationId, {
-          task_queue: updatedQueue,
-          completed_tasks: updatedCompleted
-        });
+        // Complete the current task and move it to completed tasks
+        await ResearchSessionOperations.completeCurrentTask(this.conversationId);
 
         await ResearchSessionOperations.addMessage(this.conversationId, {
           role: "agent",
           content: `Task completed: ${currentTask.description}. ${reasoning}`,
           type: "agent_thinking",
-          metadata: {
-            task_completed: currentTask.description,
-            reasoning: reasoning
-          },
         });
       } else {
         console.log(`⏳ Task still in progress: ${currentTask.description}`);
@@ -784,10 +851,6 @@ Respond in XML format:
       role: "agent",
       content: `Executing: ${decision.tool} - ${decision.reasoning}`,
       type: "agent_action",
-      metadata: {
-        tool_used: decision.tool,
-        reasoning: decision.reasoning,
-      },
     });
 
     try {
@@ -810,7 +873,7 @@ Respond in XML format:
     const basicValidation = this.performBasicValidation(generationOutput);
     if (!basicValidation.isValid) {
       const improvementMsg = `Basic validation failed: ${basicValidation.reason}`;
-      
+
       await ResearchSessionOperations.addMessage(this.conversationId, {
         role: "agent",
         content: improvementMsg,
@@ -824,7 +887,7 @@ Respond in XML format:
     console.log("✅ Basic validation passed, proceeding with LLM quality assessment");
 
     // If basic validation passes, use LLM for quality assessment
-    const prompt = ChatPromptTemplate.fromTemplate(`
+    const prompt = createStandardPromptTemplate(`
 <prompt>
   <system_role>
     You are an expert quality assurance agent for character and worldbook generation. Your task is to evaluate the GenerationOutput and determine if it meets high-quality standards for completion.
@@ -914,12 +977,12 @@ Respond in XML format:
       } else {
         // Generation needs improvement - return suggestions
         const improvementMsg = `Quality assessment indicates improvements needed (Overall: ${overall_quality_score}%):\n${reasoning}\n\nSpecific suggestions:\n${improvement_suggestions.map(s => `- ${s}`).join('\n')}`;
-        
-        await ResearchSessionOperations.addMessage(this.conversationId, {
-          role: "agent",
+
+      await ResearchSessionOperations.addMessage(this.conversationId, {
+        role: "agent",
           content: improvementMsg,
-          type: "quality_evaluation",
-        });
+        type: "quality_evaluation",
+      }); 
 
         return improvementMsg;
       }
@@ -1038,19 +1101,13 @@ Respond in XML format:
   }
 
   private async updateCompletionStatus(updates: Partial<ResearchState["progress"]>): Promise<void> {
-    const session = await ResearchSessionOperations.getSessionById(this.conversationId);
-    if (!session) return;
-
-    // Update the completion status
-    Object.assign(session.research_state.progress, updates);
-    
-    // Update the entire task state
-    await ResearchSessionOperations.updateResearchState(this.conversationId, {
-      progress: session.research_state.progress,
-    });
+    // Update progress status
+    await ResearchSessionOperations.updateProgressStatus(this.conversationId, updates);
   }
 
   private async generateFinalResult(): Promise<any> {
+    // For final result generation, we do need the complete session data
+    // This is acceptable since it only happens once at the very end
     const session = await ResearchSessionOperations.getSessionById(this.conversationId);
     if (!session) return null;
 

@@ -240,7 +240,6 @@ export class AgentService {
   async getResearchState(sessionId: string): Promise<{
     mainObjective: string;
     completedTasks: string[];
-    knowledgeGaps: string[];
     completionStatus: any;
     knowledgeBase: any[];
     UserInteractions: any[];
@@ -251,7 +250,6 @@ export class AgentService {
         return {
           mainObjective: "",
           completedTasks: [],
-          knowledgeGaps: [],
           completionStatus: {},
           knowledgeBase: [],
           UserInteractions: [],
@@ -261,7 +259,6 @@ export class AgentService {
       return {
         mainObjective: session.research_state.main_objective,
         completedTasks: session.research_state.completed_tasks,
-        knowledgeGaps: session.research_state.knowledge_gaps,
         completionStatus: session.research_state.progress,
         knowledgeBase: session.research_state.knowledge_base,
         UserInteractions: session.research_state.user_interactions,
@@ -272,7 +269,6 @@ export class AgentService {
       return {
         mainObjective: "",
         completedTasks: [],
-        knowledgeGaps: [],
         completionStatus: {},
         knowledgeBase: [],
         UserInteractions: [],

@@ -37,7 +37,6 @@ export class ResearchSessionOperations {
       // Sequential task management - will be populated by task decomposition
       task_queue: [], // Empty initially - will be filled by task decomposition
       completed_tasks: [],
-      knowledge_gaps: [],
       knowledge_base: [],
       user_interactions: [{
         id: uuidv4(),
@@ -311,5 +310,86 @@ export class ResearchSessionOperations {
       completionPercentage: Math.round(averageCompletion),
       knowledgeBaseSize: session.research_state.knowledge_base.length,
     };
+  }
+
+  /**
+   * Add new tasks to the task queue efficiently
+   */
+  static async addTasksToQueue(
+    sessionId: string,
+    newTasks: string[]
+  ): Promise<void> {
+    const sessions = await this.getAllSessions();
+    const sessionIndex = sessions.findIndex(s => s.id === sessionId);
+    
+    if (sessionIndex === -1) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const session = sessions[sessionIndex];
+    const currentQueue = session.research_state.task_queue || [];
+    
+    // Create new TaskEntry objects for the new tasks
+    const newTaskEntries = newTasks.map((taskDesc, index) => ({
+      id: `reflect_task_${Date.now()}_${index}`,
+      description: taskDesc,
+      reasoning: "Added during reflection"
+    }));
+    
+    // Add new tasks to the end of current queue
+    session.research_state.task_queue = [...currentQueue, ...newTaskEntries];
+    
+    // Save only the updated session
+    await writeData(AGENT_CONVERSATIONS_FILE, sessions);
+  }
+  
+  /**
+   * Complete current task efficiently by moving it to completed_tasks
+   */
+  static async completeCurrentTask(
+    sessionId: string,
+  ): Promise<void> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const taskQueue = session.research_state.task_queue || [];
+    
+    if (taskQueue.length > 0) {
+      const completedTask = taskQueue[0];
+      const remainingTasks = taskQueue.slice(1);
+      
+      // Add task to completed list
+      const completedTasks = session.research_state.completed_tasks || [];
+      const updatedCompletedTasks = [...completedTasks, completedTask.description];
+      
+      await this.updateResearchState(sessionId, {
+        task_queue: remainingTasks,
+        completed_tasks: updatedCompletedTasks
+      });
+    }
+  }
+
+  /**
+   * Update progress status efficiently
+   */
+  static async updateProgressStatus(
+    sessionId: string,
+    progressUpdates: Partial<ResearchState["progress"]>
+  ): Promise<void> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const updatedProgress = {
+      ...session.research_state.progress,
+      ...progressUpdates
+    };
+    
+    await this.updateResearchState(sessionId, {
+      progress: updatedProgress
+    });
   }
 } 
