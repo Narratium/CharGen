@@ -289,10 +289,8 @@ export class AgentService {
     completionPercentage: number;
     characterData?: any;
     worldbookData?: any[];
-    searchCoverage: number;
     informationQuality: number;
     answerConfidence: number;
-    userSatisfaction: number;
   }> {
     try {
       const session = await ResearchSessionOperations.getSessionById(sessionId);
@@ -301,10 +299,8 @@ export class AgentService {
           hasCharacter: false,
           hasWorldbook: false,
           completionPercentage: 0,
-          searchCoverage: 0,
           informationQuality: 0,
           answerConfidence: 0,
-          userSatisfaction: 0,
         };
       }
       
@@ -314,11 +310,9 @@ export class AgentService {
       // Calculate completion percentage from completion status
       const completion = session.research_state.progress;
       const completionPercentage = (
-        completion.search_coverage + 
         completion.information_quality + 
-        completion.answer_confidence + 
-        completion.user_satisfaction
-      ) / 4;
+        completion.answer_confidence
+      ) / 2;
       
       return {
         hasCharacter,
@@ -326,10 +320,8 @@ export class AgentService {
         completionPercentage: Math.round(completionPercentage),
         characterData: session.generation_output.character_data,
         worldbookData: session.generation_output.worldbook_data,
-        searchCoverage: completion.search_coverage,
         informationQuality: completion.information_quality,
         answerConfidence: completion.answer_confidence,
-        userSatisfaction: completion.user_satisfaction,
       };
       
     } catch (error) {
@@ -338,10 +330,8 @@ export class AgentService {
         hasCharacter: false,
         hasWorldbook: false,
         completionPercentage: 0,
-        searchCoverage: 0,
         informationQuality: 0,
         answerConfidence: 0,
-        userSatisfaction: 0,
       };
     }
   }

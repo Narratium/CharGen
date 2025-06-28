@@ -81,10 +81,8 @@ export interface ResearchState {
   
   // Progress tracking (0-100 scale)
   progress: {
-    search_coverage: number;      // How much we've searched
-    information_quality: number;  // Quality of gathered info
     answer_confidence: number;    // Confidence in current answer
-    user_satisfaction: number;    // Based on user feedback
+    information_quality: number;  // Quality of gathered info
   };
   
   // Sequential task management

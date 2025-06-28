@@ -335,8 +335,8 @@ Respond using the following XML format:
         console.log("📋 Task queue is empty, checking final generation completion...");
         const session = await ResearchSessionOperations.getSessionById(this.conversationId);
         if (session?.generation_output) {
-          const isComplete = await this.evaluateGenerationProgress(session.generation_output);
-          if (isComplete) {
+          const evaluationResult = await this.evaluateGenerationProgress(session.generation_output);
+          if (evaluationResult === null) {
             console.log("✅ Final generation evaluation: Complete");
             await ResearchSessionOperations.updateStatus(this.conversationId, SessionStatus.COMPLETED);
             return {
@@ -679,13 +679,36 @@ Character Data: {character_data}
 Worldbook Data: {worldbook_data}
 
 INSTRUCTIONS:
-Analyze whether the specified task has been sufficiently completed based on the current generation output.
-Consider the task description and determine if the current output satisfies the task requirements.
+1. TASK COMPLETION EVALUATION:
+   Analyze whether the specified task has been sufficiently completed based on the current generation output.
+   Consider the task description and determine if the current output satisfies the task requirements.
+   Focus ONLY on whether this specific task is done, not on overall quality.
+
+2. GLOBAL OUTPUT EVALUATION (SEPARATE FROM TASK COMPLETION):
+   Additionally, provide global evaluation scores for the overall generation output:
+   
+   - answer_confidence (0-100): How confident we are in the current generation's ability to fulfill the user's original request
+     * 0-30: Very poor, major elements missing or incorrect
+     * 31-50: Below average, significant improvements needed
+     * 51-70: Average quality, some areas need work
+     * 71-85: Good quality, minor refinements needed
+     * 86-100: Excellent quality, meets or exceeds expectations
+   
+   - information_quality (0-100): Quality and completeness of the generated content (character + worldbook)
+     * 0-30: Very low quality, incomplete or inconsistent content
+     * 31-50: Below average, lacks depth or has issues
+     * 51-70: Average quality, adequate but could be improved
+     * 71-85: Good quality, well-developed and consistent
+     * 86-100: Excellent quality, rich, detailed, and highly coherent
+
+IMPORTANT: The answer_confidence and information_quality scores are GLOBAL EVALUATIONS of the entire generation output and DO NOT influence whether the current task is considered complete. Task completion is determined solely by whether the specific task requirements have been met.
 
 Respond in XML format:
 <evaluation>
   <completed>true/false</completed>
-  <reasoning>Detailed explanation of why the task is or isn't complete</reasoning>
+  <reasoning>Detailed explanation of why the current task is or isn't complete based on task requirements</reasoning>
+  <answer_confidence>Confidence score 0-100 in the overall generation's ability to fulfill user request</answer_confidence>
+  <information_quality>Quality score 0-100 of the overall generated content (character + worldbook)</information_quality>
 </evaluation>
     `);
 
@@ -701,9 +724,19 @@ Respond in XML format:
       const content = response.content as string;
       const completedMatch = content.match(/<completed>(.*?)<\/completed>/);
       const reasoningMatch = content.match(/<reasoning>(.*?)<\/reasoning>/s);
+      const confidenceMatch = content.match(/<answer_confidence>(\d+)<\/answer_confidence>/);
+      const qualityMatch = content.match(/<information_quality>(\d+)<\/information_quality>/);
       
       const isCompleted = completedMatch?.[1]?.trim().toLowerCase() === 'true';
       const reasoning = reasoningMatch?.[1]?.trim() || 'No reasoning provided';
+      const answerConfidence = parseInt(confidenceMatch?.[1] || '0', 10);
+      const informationQuality = parseInt(qualityMatch?.[1] || '0', 10);
+
+      // Update progress data based on task evaluation
+      await this.updateCompletionStatus({
+        answer_confidence: answerConfidence,
+        information_quality: informationQuality,
+      });
 
       if (isCompleted) {
         console.log(`✅ Task completed: ${currentTask.description}`);
@@ -770,20 +803,22 @@ Respond in XML format:
 
   /**
    * Evaluate generation progress - assess if GenerationOutput meets completion standards
+   * Returns null if satisfied, or improvement suggestions string if not satisfied
    */
-  private async evaluateGenerationProgress(generationOutput: GenerationOutput): Promise<boolean> {
+  private async evaluateGenerationProgress(generationOutput: GenerationOutput): Promise<string | null> {
     // First, perform basic validation checks
     const basicValidation = this.performBasicValidation(generationOutput);
     if (!basicValidation.isValid) {
-
+      const improvementMsg = `Basic validation failed: ${basicValidation.reason}`;
+      
       await ResearchSessionOperations.addMessage(this.conversationId, {
         role: "agent",
-        content: `Basic validation failed: ${basicValidation.reason}`,
+        content: improvementMsg,
         type: "quality_evaluation",
       });
 
       console.log(`❌ Basic validation failed: ${basicValidation.reason}`);
-      return false;
+      return improvementMsg;
     }
 
     console.log("✅ Basic validation passed, proceeding with LLM quality assessment");
@@ -871,28 +906,35 @@ Respond in XML format:
           improvement_suggestions.push(match[1].trim());
       }
 
-      const evaluation = { reasoning, character_quality_score, worldbook_quality_score, overall_quality_score, is_sufficient, improvement_suggestions };
+      console.log(`📊 Quality Assessment - Character: ${character_quality_score}%, Worldbook: ${worldbook_quality_score}%, Overall: ${overall_quality_score}%`);
       
-      // Update completion status based on evaluation
-      await this.updateCompletionStatus({
-        answer_confidence: evaluation.overall_quality_score,
-        information_quality: evaluation.worldbook_quality_score,
-        user_satisfaction: evaluation.character_quality_score,
-      });
+      if (is_sufficient) {
+        // Generation meets completion standards
+        return null;
+      } else {
+        // Generation needs improvement - return suggestions
+        const improvementMsg = `Quality assessment indicates improvements needed (Overall: ${overall_quality_score}%):\n${reasoning}\n\nSpecific suggestions:\n${improvement_suggestions.map(s => `- ${s}`).join('\n')}`;
+        
+        await ResearchSessionOperations.addMessage(this.conversationId, {
+          role: "agent",
+          content: improvementMsg,
+          type: "quality_evaluation",
+        });
 
-      await ResearchSessionOperations.addMessage(this.conversationId, {
-        role: "agent",
-        content: `Quality evaluation: ${JSON.stringify(evaluation)}`,
-        type: "quality_evaluation",
-      }); 
-
-      console.log(`📊 Quality Assessment - Character: ${evaluation.character_quality_score}%, Worldbook: ${evaluation.worldbook_quality_score}%, Overall: ${evaluation.overall_quality_score}%`);
-      
-      return evaluation.is_sufficient;
+        return improvementMsg;
+      }
 
     } catch (error) {
       console.error("❌ Generation evaluation failed:", error);
-      return false;
+      const errorMsg = `Generation evaluation failed: ${error instanceof Error ? error.message : String(error)}`;
+      
+      await ResearchSessionOperations.addMessage(this.conversationId, {
+        role: "agent",
+        content: errorMsg,
+        type: "quality_evaluation",
+      });
+
+      return errorMsg;
     }
   }
 

@@ -166,7 +166,7 @@ export class CharacterGeneratorCLI {
         console.log(chalk.gray(`  Messages: ${summary.messageCount}`));
         console.log(chalk.gray(`  Knowledge Base: ${summary.knowledgeBaseSize} entries`));
         console.log(chalk.gray(`  Completion: ${summary.completionPercentage}%`));
-        console.log(chalk.gray(`  Search Coverage: ${progress.searchCoverage}%`));
+        console.log(chalk.gray(`  Information Quality: ${progress.informationQuality}%`));
         console.log(chalk.gray(`  Answer Confidence: ${progress.answerConfidence}%`));
       }
     } catch (error) {
