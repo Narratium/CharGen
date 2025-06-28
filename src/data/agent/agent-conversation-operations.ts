@@ -31,10 +31,8 @@ export class ResearchSessionOperations {
       session_id: conversationId,
       main_objective: initialUserRequest,
       progress: {
-        search_coverage: 0,
         information_quality: 0,
         answer_confidence: 0,
-        user_satisfaction: 0,
       },
       // Sequential task management - will be populated by task decomposition
       task_queue: [], // Empty initially - will be filled by task decomposition
@@ -300,11 +298,9 @@ export class ResearchSessionOperations {
 
     const completion = session.research_state.progress;
     const averageCompletion = (
-      completion.search_coverage + 
       completion.information_quality + 
-      completion.answer_confidence + 
-      completion.user_satisfaction
-    ) / 4;
+      completion.answer_confidence
+    ) / 2;
 
     return {
       title: session.title,
