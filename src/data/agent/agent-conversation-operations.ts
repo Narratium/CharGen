@@ -192,7 +192,7 @@ export class ResearchSessionOperations {
       }
     } else {
       // No character_data to merge, apply updates normally
-      Object.assign(session.generation_output, updates);
+    Object.assign(session.generation_output, updates);
     }
 
     await this.saveSession(session);

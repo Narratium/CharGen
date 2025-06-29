@@ -278,7 +278,7 @@ Respond using the following XML format:
         });
         
         return {
-          id: `init_task_${Date.now()}_${index}`,
+        id: `init_task_${Date.now()}_${index}`,
           description,
           reasoning,
           sub_problems
@@ -457,7 +457,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
           await ResearchSessionOperations.addTasksToQueue(this.conversationId, result.result.new_tasks);
           console.log(`📋 Added ${result.result.tasks_count} new tasks to queue`);
         }
-
+        
         await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
         continue;
       }
@@ -1111,7 +1111,7 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
 
       await ResearchSessionOperations.addMessage(this.conversationId, {
         role: "agent",
-        content: improvementMsg,
+          content: improvementMsg,
         type: "quality_evaluation",
       }); 
 

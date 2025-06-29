@@ -96,12 +96,12 @@ export class ReflectTool extends BaseSimpleTool {
       
       if (newTasks.length === 0) {
         return this.createFailureResult("REFLECT tool: No valid <task> elements found in new_tasks parameter.");
-      }
-      
-      return this.createSuccessResult({
-        new_tasks: newTasks,
-        tasks_count: newTasks.length
-      });
+    }
+
+    return this.createSuccessResult({
+      new_tasks: newTasks,
+      tasks_count: newTasks.length
+    });
       
     } catch (error) {
       return this.createFailureResult(`REFLECT tool: Failed to parse XML task structure - ${error instanceof Error ? error.message : String(error)}`);
