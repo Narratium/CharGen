@@ -50,7 +50,9 @@ export class AskUserTool extends BaseSimpleTool {
     };
 
     return this.createSuccessResult(
-      { interaction_updates: [userInteraction] }
+      { 
+        message: questionText,
+      }
     );
   }
 } 

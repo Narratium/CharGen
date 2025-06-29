@@ -82,97 +82,65 @@ export class SearchTool extends BaseSimpleTool {
    * Perform web search using DuckDuckGo
    */
   private async performWebSearch(query: string): Promise<any[]> {
-    try {
-      const webResults = await this.duckDuckGoSearch.invoke(query);
-      
-      // Parse DuckDuckGo results (they come as a string)
-      const results = this.parseDuckDuckGoResults(webResults);
-      
-      return results.map(result => ({
-        source: `Web: ${result.title}`,
-        content: result.snippet,
-        url: result.link,
-        type: "web",
-        relevance: 80
-      }));
-    } catch (error) {
-      console.warn("Web search failed:", error);
-      return [];
-    }
+    const webResults = await this.duckDuckGoSearch.invoke(query);
+    
+    // Parse DuckDuckGo results (they come as a string)
+    const results = this.parseDuckDuckGoResults(webResults);
+    
+    return results.map(result => ({
+      source: `Web: ${result.title}`,
+      content: result.snippet,
+      url: result.link,
+      type: "web",
+      relevance: 80
+    }));
   }
 
   /**
    * Perform Wikipedia search for encyclopedic content
    */
   private async performWikipediaSearch(query: string): Promise<any[]> {
-    try {
-      const wikiResult = await this.wikipediaSearch.invoke(query);
-      
-      if (wikiResult && wikiResult.trim()) {
-        return [{
-          source: `Wikipedia: ${query}`,
-          content: wikiResult,
-          url: `https://en.wikipedia.org/wiki/${encodeURIComponent(query.replace(/\s+/g, '_'))}`,
-          type: "wiki",
-          relevance: 90
-        }];
-      }
-      
-      return [];
-    } catch (error) {
-      console.warn("Wikipedia search failed:", error);
-      return [];
+    const wikiResult = await this.wikipediaSearch.invoke(query);
+    
+    if (wikiResult && wikiResult.trim()) {
+      return [{
+        source: `Wikipedia: ${query}`,
+        content: wikiResult,
+        url: `https://en.wikipedia.org/wiki/${encodeURIComponent(query.replace(/\s+/g, '_'))}`,
+        type: "wiki",
+        relevance: 90
+      }];
     }
+    
+    return [];
   }
 
   /**
    * Perform comprehensive search using multiple sources simultaneously
    * This method automatically uses all available search methods for maximum coverage
+   * If any search method fails, the error will propagate up and cause the tool to fail
    */
   private async performComprehensiveSearch(query: string): Promise<any[]> {
-    const results: any[] = [];
-    
     console.log(`📚 Wikipedia search for: "${query}"`);
     console.log(`🌐 Web search for: "${query}"`);
     
-    // Execute multiple searches in parallel for better performance
-    const searchPromises = [
-      this.performWikipediaSearch(query).catch(error => {
-        console.warn("Wikipedia search failed:", error);
-        return [];
-      }),
-      this.performWebSearch(query).catch(error => {
-        console.warn("Web search failed:", error);
-        return [];
-      })
-    ];
+    // Execute multiple searches in parallel - let errors propagate naturally
+    const [wikiResults, webResults] = await Promise.all([
+      this.performWikipediaSearch(query),
+      this.performWebSearch(query)
+    ]);
     
-    try {
-      const [wikiResults, webResults] = await Promise.all(searchPromises);
-      
-      // Add results with source type information
-      results.push(...wikiResults);
-      results.push(...webResults);
-      
-      // Sort by relevance score (highest first)
-      results.sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
-      
-      console.log(`📊 Search summary: ${wikiResults.length} Wikipedia + ${webResults.length} Web = ${results.length} total results`);
-      
-    } catch (error) {
-      console.warn("Parallel search execution failed:", error);
-    }
+    // Combine results
+    const results = [...wikiResults, ...webResults];
     
-    // Fallback: create a minimal result if all searches failed
+    // Sort by relevance score (highest first)
+    results.sort((a, b) => (b.relevance || 0) - (a.relevance || 0));
+    
+    console.log(`📊 Search summary: ${wikiResults.length} Wikipedia + ${webResults.length} Web = ${results.length} total results`);
+    
+    // If no results found from any source, this is a legitimate failure
     if (results.length === 0) {
-      console.warn("All search methods failed, creating fallback result");
-      results.push({
-        source: `Fallback: ${query}`,
-        content: `Search information for "${query}". This query relates to research for character and worldbook development. Additional context may be needed through alternative sources.`,
-        url: "internal://fallback",
-        type: "fallback",
-        relevance: 50
-      });
+      throw new Error('No search results found from any source');
     }
     
     // Limit results to prevent overwhelming the knowledge base
@@ -183,42 +151,36 @@ export class SearchTool extends BaseSimpleTool {
    * Parse DuckDuckGo search results from string format
    */
   private parseDuckDuckGoResults(resultsString: string): Array<{title: string, snippet: string, link: string}> {
-    try {
-      // DuckDuckGo results come as formatted text, parse them
-      const lines = resultsString.split('\n').filter(line => line.trim());
-      const results: Array<{title: string, snippet: string, link: string}> = [];
-      
-      for (let i = 0; i < lines.length; i += 3) {
-        if (i + 2 < lines.length) {
-          const title = lines[i].replace(/^title:\s*/i, '').trim();
-          const link = lines[i + 1].replace(/^link:\s*/i, '').trim();
-          const snippet = lines[i + 2].replace(/^snippet:\s*/i, '').trim();
-          
-          if (title && link && snippet) {
-            results.push({ title, link, snippet });
-          }
+    // DuckDuckGo results come as formatted text, parse them
+    const lines = resultsString.split('\n').filter(line => line.trim());
+    const results: Array<{title: string, snippet: string, link: string}> = [];
+    
+    for (let i = 0; i < lines.length; i += 3) {
+      if (i + 2 < lines.length) {
+        const title = lines[i].replace(/^title:\s*/i, '').trim();
+        const link = lines[i + 1].replace(/^link:\s*/i, '').trim();
+        const snippet = lines[i + 2].replace(/^snippet:\s*/i, '').trim();
+        
+        if (title && link && snippet) {
+          results.push({ title, link, snippet });
         }
       }
-      
-      // If parsing failed, try alternative format
-      if (results.length === 0 && resultsString.includes('http')) {
-        results.push({
-          title: "Search Result",
-          snippet: resultsString.substring(0, 200) + "...",
-          link: resultsString.match(/https?:\/\/[^\s]+/)?.[0] || "unknown"
-        });
-      }
-      
-      return results;
-    } catch (error) {
-      console.warn("Failed to parse DuckDuckGo results:", error);
-      return [{
-        title: "Parsed Result",
-        snippet: resultsString.substring(0, 300),
-        link: "unknown"
-      }];
+    }
+    
+    // If parsing failed, try alternative format
+    if (results.length === 0 && resultsString.includes('http')) {
+      results.push({
+        title: "Search Result",
+        snippet: resultsString.substring(0, 200) + "...",
+        link: resultsString.match(/https?:\/\/[^\s]+/)?.[0] || "unknown"
+      });
+    }
+    
+    // If still no results, throw an error instead of returning fallback
+    if (results.length === 0) {
+      throw new Error(`Failed to parse DuckDuckGo results: ${resultsString.substring(0, 100)}...`);
+    }
+    
+    return results;
   }
-  }
-
-
 } 

@@ -8,6 +8,7 @@ import {
   UserInteraction,
   ResearchState,
   GenerationOutput,
+  Message,
 } from "../models/agent-model";
 import { ResearchSessionOperations } from "../data/agent/agent-conversation-operations";
 import { ToolRegistry } from "../tools/tool-registry";
@@ -333,7 +334,19 @@ Respond using the following XML format:
 
         await ResearchSessionOperations.updateStatus(this.conversationId, SessionStatus.WAITING_USER);
         
-        const userInput = await this.userInputCallback(result.result?.message || "I need more information from you.");
+        const userInput = await this.userInputCallback(result.result?.message);
+
+        await ResearchSessionOperations.addMessage(this.conversationId, {
+          role: "agent",
+          content: result.result?.message,
+          type: "agent_action",
+        });
+        
+        await ResearchSessionOperations.addMessage(this.conversationId, {
+          role: "user",
+          content: userInput,
+          type: "user_input",
+        });
         
         // Add user input and update questions array
         await ResearchSessionOperations.addUserInteractions(this.conversationId, [{
@@ -1075,8 +1088,8 @@ Respond in XML format:
 
 
 
-  private buildRecentConversationSummary(messages: any[]): string {
-    return messages.slice(-5).map(m => `${m.role}: ${m.content}`).join("\n");
+  private buildRecentConversationSummary(messages: Message[]): string {
+    return messages.slice(-5).map(m => `${m.type}: ${m.content}`).join("\n");
   }
 
   private buildKnowledgeBaseSummary(knowledgeBase: KnowledgeEntry[]): string {
