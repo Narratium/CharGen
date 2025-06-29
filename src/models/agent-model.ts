@@ -50,15 +50,13 @@ export interface KnowledgeEntry {
 
 
 /**
- * Task entry for tracking specific work items with sub-task granularity
- * Enhanced structure with sub-tasks for better control and progress tracking
+ * Task entry for tracking specific work items
+ * Simplified structure - tasks are executed in sequential order
  */
 export interface TaskEntry {
   id: string;
   description: string;
   reasoning?: string; // Why this task was created/updated
-  sub_tasks?: string[]; // 2-5 specific sub-tasks that define what needs to be done (optional)
-  completed_sub_tasks?: string[]; // Track which sub-tasks have been completed (optional)
 }
 
 /**

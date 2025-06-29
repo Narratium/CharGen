@@ -5,7 +5,6 @@ import {
   ResearchState,      
   KnowledgeEntry,
   GenerationOutput,
-  TaskEntry,
 } from "../../models/agent-model";
 import { readData, writeData, AGENT_CONVERSATIONS_FILE } from "../local-storage";
 import { v4 as uuidv4 } from "uuid";
@@ -298,12 +297,11 @@ export class ResearchSessionOperations {
     const session = sessions[sessionIndex];
     const currentQueue = session.research_state.task_queue || [];
     
-    // Create new TaskEntry objects for the new tasks (without sub_tasks for reflect-generated tasks)
+    // Create new TaskEntry objects for the new tasks
     const newTaskEntries = newTasks.map((taskDesc, index) => ({
       id: `reflect_task_${Date.now()}_${index}`,
       description: taskDesc,
       reasoning: "Added during reflection"
-      // sub_tasks and completed_sub_tasks are optional and not included for reflect-generated tasks
     }));
     
     // Add new tasks to the end of current queue
@@ -336,75 +334,6 @@ export class ResearchSessionOperations {
       
       await this.saveSession(session);
     }
-  }
-
-  /**
-   * Complete specific sub-tasks for the current task
-   */
-  static async completeSubTasks(
-    sessionId: string,
-    completedSubTasks: string[]
-  ): Promise<void> {
-    const session = await this.getSessionById(sessionId);
-    if (!session) {
-      throw new Error(`Session not found: ${sessionId}`);
-    }
-
-    const taskQueue = session.research_state.task_queue || [];
-    
-    if (taskQueue.length > 0) {
-      const currentTask = taskQueue[0];
-      
-      // Add newly completed sub-tasks to the completed list
-      const existingCompleted = currentTask.completed_sub_tasks || [];
-      const newCompleted = completedSubTasks.filter(subTask => 
-        !existingCompleted.includes(subTask) && currentTask.sub_tasks?.includes(subTask)
-      );
-      
-      currentTask.completed_sub_tasks = [...existingCompleted, ...newCompleted];
-      
-      await this.saveSession(session);
-    }
-  }
-
-  /**
-   * Get current task with sub-task progress
-   */
-  static async getCurrentTaskProgress(sessionId: string): Promise<{
-    task: TaskEntry | null;
-    totalSubTasks: number;
-    completedSubTasks: number;
-    remainingSubTasks: string[];
-  } | null> {
-    const session = await this.getSessionById(sessionId);
-    if (!session) return null;
-
-    const taskQueue = session.research_state.task_queue || [];
-    if (taskQueue.length === 0) return null;
-
-    const currentTask = taskQueue[0];
-    
-    // Handle tasks without sub_tasks
-    if (!currentTask.sub_tasks || currentTask.sub_tasks.length === 0) {
-      return {
-        task: currentTask,
-        totalSubTasks: 0,
-        completedSubTasks: 0,
-        remainingSubTasks: []
-      };
-    }
-
-    const completedSubTasks = currentTask.completed_sub_tasks || [];
-    const remainingSubTasks = currentTask.sub_tasks.filter(subTask => 
-      !completedSubTasks.includes(subTask)
-    );
-
-    return {
-      task: currentTask,
-      totalSubTasks: currentTask.sub_tasks.length,
-      completedSubTasks: completedSubTasks.length,
-      remainingSubTasks
-    };
   }
 
   /**
