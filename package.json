@@ -22,27 +22,28 @@
   "author": "Character Generator",
   "license": "MIT",
   "dependencies": {
-    "@langchain/core": "^0.2.0",
-    "@langchain/openai": "^0.2.0",
-    "@langchain/ollama": "^0.0.4",
     "@langchain/community": "^0.2.0",
-    "commander": "^11.0.0",
-    "inquirer": "^9.0.0",
+    "@langchain/core": "^0.2.0",
+    "@langchain/ollama": "^0.0.4",
+    "@langchain/openai": "^0.2.0",
+    "@langchain/tavily": "^0.1.3",
     "chalk": "^4.1.2",
-    "ora": "^5.4.1",
-    "uuid": "^9.0.0",
+    "commander": "^11.0.0",
+    "duck-duck-scrape": "^2.2.5",
     "fs-extra": "^11.0.0",
-    "duck-duck-scrape": "^2.2.5"
+    "inquirer": "^9.0.0",
+    "ora": "^5.4.1",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
+    "@types/fs-extra": "^11.0.0",
+    "@types/inquirer": "^9.0.0",
     "@types/node": "^20.0.0",
     "@types/uuid": "^9.0.0",
-    "@types/inquirer": "^9.0.0",
-    "@types/fs-extra": "^11.0.0",
-    "typescript": "^5.0.0",
-    "ts-node": "^10.9.0"
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
   },
   "engines": {
     "node": ">=16.0.0"
   }
-} 
+}

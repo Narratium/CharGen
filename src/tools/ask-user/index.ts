@@ -2,10 +2,8 @@ import {
   ToolType, 
   ExecutionContext, 
   ExecutionResult,
-  UserInteraction
 } from "../../models/agent-model";
 import { BaseSimpleTool, ToolParameter, DetailedToolInfo } from "../base-tool";
-import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Ask User Tool - Pure Execution Unit
@@ -14,7 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 export class AskUserTool extends BaseSimpleTool {
   readonly toolType = ToolType.ASK_USER;
   readonly name = "ASK_USER";
-  readonly description = "Presents a question to the user to gather more information.";
+  readonly description = "Ask the user for clarification on core story elements and broad directional questions. USE ONLY when you cannot determine fundamental aspects like: story genre/style (e.g., Cthulhu horror, sweet romance, campus life), character type (single character vs world scenario), or other major creative directions that significantly impact the entire generation. Do NOT use for specific details that can be inferred or creatively determined - only use when uncertain about foundational story elements that require user preference.";
   
   readonly parameters: ToolParameter[] = [
     {
@@ -40,14 +38,6 @@ export class AskUserTool extends BaseSimpleTool {
     if (!questionText || typeof questionText !== 'string') {
       return this.createFailureResult("ASK_USER tool requires a 'question' parameter of type string.");
     }
-    
-    // Create user interaction entry to log the question
-    const userInteraction: UserInteraction = {
-        id: uuidv4(),
-        question: questionText,
-        is_initial: false,
-        status: 'pending',
-    };
 
     return this.createSuccessResult(
       { 

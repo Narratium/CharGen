@@ -21,6 +21,7 @@ interface Config {
   defaultType?: 'openai' | 'ollama';
   temperature?: number;
   maxTokens?: number;
+  tavilyApiKey?: string; // Add Tavily API key support
 }
 
 export class CharacterGeneratorCLI {
@@ -271,6 +272,12 @@ export class CharacterGeneratorCLI {
         default: this.config.maxTokens || 4000,
         validate: (input: number) => input > 0 || 'Max tokens must be positive',
       },
+      {
+        type: 'password',
+        name: 'tavilyApiKey',
+        message: 'Tavily API key (for enhanced search, optional):',
+        default: this.config.tavilyApiKey,
+      },
     ]);
 
     this.config = {
@@ -280,6 +287,7 @@ export class CharacterGeneratorCLI {
       defaultBaseUrl: answers.baseUrl,
       temperature: answers.temperature,
       maxTokens: answers.maxTokens,
+      tavilyApiKey: answers.tavilyApiKey,
     };
 
     await this.saveConfig();
@@ -416,6 +424,7 @@ export class CharacterGeneratorCLI {
       base_url: baseUrl || (llmType === 'ollama' ? 'http://localhost:11434' : undefined),
       temperature: this.config.temperature || 0.7,
       max_tokens: this.config.maxTokens || 4000,
+      tavily_api_key: this.config.tavilyApiKey || '',
     };
   }
 

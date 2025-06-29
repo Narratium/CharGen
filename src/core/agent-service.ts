@@ -41,6 +41,7 @@ export class AgentService {
       llm_type: "openai" | "ollama";
       temperature?: number;
       max_tokens?: number;
+      tavily_api_key?: string;
     },
     userInputCallback?: UserInputCallback,
   ): Promise<{
@@ -60,6 +61,7 @@ export class AgentService {
           llm_type: llmConfig.llm_type,
           temperature: llmConfig.temperature || 0.7,
           max_tokens: llmConfig.max_tokens,
+          tavily_api_key: llmConfig.tavily_api_key,
         },
         initialUserRequest // Story description as user request
       );
@@ -98,7 +100,6 @@ export class AgentService {
       completedTasks: number;
       totalIterations: number;
       knowledgeBaseSize: number;
-      UserInteractions: number;
     };
     hasResult: boolean;
     result?: any;
@@ -113,7 +114,6 @@ export class AgentService {
             completedTasks: 0,
             totalIterations: 0,
             knowledgeBaseSize: 0,
-            UserInteractions: 0,
           },
           hasResult: false,
         };
@@ -131,7 +131,6 @@ export class AgentService {
           completedTasks: session.research_state.completed_tasks.length,
           totalIterations: session.execution_info.current_iteration,
           knowledgeBaseSize: session.research_state.knowledge_base.length,
-          UserInteractions: session.research_state.user_interactions.length,
         },
         hasResult,
         result: hasResult ? {
@@ -151,7 +150,6 @@ export class AgentService {
           completedTasks: 0,
           totalIterations: 0,
           knowledgeBaseSize: 0,
-          UserInteractions: 0,
         },
         hasResult: false,
       };
@@ -240,9 +238,7 @@ export class AgentService {
   async getResearchState(sessionId: string): Promise<{
     mainObjective: string;
     completedTasks: string[];
-    completionStatus: any;
     knowledgeBase: any[];
-    UserInteractions: any[];
   }> {
     try {
       const session = await ResearchSessionOperations.getSessionById(sessionId);
@@ -250,18 +246,14 @@ export class AgentService {
         return {
           mainObjective: "",
           completedTasks: [],
-          completionStatus: {},
           knowledgeBase: [],
-          UserInteractions: [],
         };
       }
       
       return {
         mainObjective: session.research_state.main_objective,
         completedTasks: session.research_state.completed_tasks,
-        completionStatus: session.research_state.progress,
         knowledgeBase: session.research_state.knowledge_base,
-        UserInteractions: session.research_state.user_interactions,
       };
       
     } catch (error) {
@@ -269,9 +261,7 @@ export class AgentService {
       return {
         mainObjective: "",
         completedTasks: [],
-        completionStatus: {},
         knowledgeBase: [],
-        UserInteractions: [],
       };
     }
   }
@@ -285,8 +275,6 @@ export class AgentService {
     completionPercentage: number;
     characterData?: any;
     worldbookData?: any[];
-    informationQuality: number;
-    answerConfidence: number;
   }> {
     try {
       const session = await ResearchSessionOperations.getSessionById(sessionId);
@@ -295,8 +283,6 @@ export class AgentService {
           hasCharacter: false,
           hasWorldbook: false,
           completionPercentage: 0,
-          informationQuality: 0,
-          answerConfidence: 0,
         };
       }
       
@@ -304,11 +290,7 @@ export class AgentService {
       const hasWorldbook = !!session.generation_output.worldbook_data && session.generation_output.worldbook_data.length > 0;
       
       // Calculate completion percentage from completion status
-      const completion = session.research_state.progress;
-      const completionPercentage = (
-        completion.information_quality + 
-        completion.answer_confidence
-      ) / 2;
+      const completionPercentage = 0;
       
       return {
         hasCharacter,
@@ -316,8 +298,6 @@ export class AgentService {
         completionPercentage: Math.round(completionPercentage),
         characterData: session.generation_output.character_data,
         worldbookData: session.generation_output.worldbook_data,
-        informationQuality: completion.information_quality,
-        answerConfidence: completion.answer_confidence,
       };
       
     } catch (error) {
@@ -326,8 +306,6 @@ export class AgentService {
         hasCharacter: false,
         hasWorldbook: false,
         completionPercentage: 0,
-        informationQuality: 0,
-        answerConfidence: 0,
       };
     }
   }

@@ -13,7 +13,7 @@ export class ReflectTool extends BaseSimpleTool {
   
   readonly toolType = ToolType.REFLECT;
   readonly name = "REFLECT";
-  readonly description = "Add new tasks to the task queue based on reflection and analysis";
+  readonly description = "Add new tasks to the task queue based on analysis of current progress and needs. Use when you identify gaps in the current task plan, need to break down complex work into smaller steps, or when new requirements emerge during generation. This tool helps maintain organized task flow and ensures comprehensive character and worldbook development.";
   
   readonly parameters: ToolParameter[] = [
     {

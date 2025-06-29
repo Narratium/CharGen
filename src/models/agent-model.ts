@@ -48,16 +48,6 @@ export interface KnowledgeEntry {
   relevance_score: number;
 }
 
-/**
- * User interaction tracking (questions and responses)
- */
-export interface UserInteraction {
-  id: string;
-  question: string;
-  is_initial: boolean;
-  parent_id?: string;
-  status: "pending" | "answered" | "clarifying";
-}
 
 /**
  * Task entry for tracking specific work items
@@ -79,20 +69,12 @@ export interface ResearchState {
   // Current research objective
   main_objective: string;
   
-  // Progress tracking (0-100 scale)
-  progress: {
-    answer_confidence: number;    // Confidence in current answer
-    information_quality: number;  // Quality of gathered info
-  };
-  
   // Sequential task management
   task_queue: TaskEntry[];        // Pending tasks in execution order
   completed_tasks: string[];      // Descriptions of finished tasks
   
   // Research artifacts
   knowledge_base: KnowledgeEntry[];
-  user_interactions: UserInteraction[];
-  
 }
 
 /**
@@ -126,6 +108,7 @@ export interface ExecutionContext {
     llm_type: "openai" | "ollama";
     temperature: number;
     max_tokens?: number;
+    tavily_api_key?: string; // Add Tavily API key support
   };
 
 }
@@ -205,6 +188,7 @@ export interface ResearchSession {
     llm_type: "openai" | "ollama";
     temperature: number;
     max_tokens?: number;
+    tavily_api_key?: string; // Add Tavily API key support
   };
   
   // Execution tracking

@@ -3,7 +3,6 @@ import {
   SessionStatus, 
   Message, 
   ResearchState,      
-  UserInteraction,
   KnowledgeEntry,
   GenerationOutput,
 } from "../../models/agent-model";
@@ -30,20 +29,10 @@ export class ResearchSessionOperations {
       id: uuidv4(),
       session_id: conversationId,
       main_objective: initialUserRequest,
-      progress: {
-        information_quality: 0,
-        answer_confidence: 0,
-      },
       // Sequential task management - will be populated by task decomposition
       task_queue: [], // Empty initially - will be filled by task decomposition
       completed_tasks: [],
       knowledge_base: [],
-      user_interactions: [{
-        id: uuidv4(),
-        question: initialUserRequest,
-        is_initial: true,
-        status: "pending",
-      }],
     };
 
     // Create initial character progress
@@ -206,23 +195,6 @@ export class ResearchSessionOperations {
   }
 
   /**
-   * Add user questions to the questions array
-   */
-  static async addUserInteractions(
-    sessionId: string,
-    questions: UserInteraction[]
-  ): Promise<void> {
-    const session = await this.getSessionById(sessionId);
-    if (!session) {
-      throw new Error(`Session not found: ${sessionId}`);
-    }
-
-    session.research_state.user_interactions.push(...questions);
-
-    await this.saveSession(session);
-  }
-
-  /**
    * Increment iteration counter
    */
   static async incrementIteration(sessionId: string): Promise<number> {
@@ -295,11 +267,7 @@ export class ResearchSessionOperations {
     const session = await this.getSessionById(sessionId);
     if (!session) return null;
 
-    const completion = session.research_state.progress;
-    const averageCompletion = (
-      completion.information_quality + 
-      completion.answer_confidence
-    ) / 2;
+    const averageCompletion = 0;
 
     return {
       title: session.title,
@@ -369,27 +337,5 @@ export class ResearchSessionOperations {
         completed_tasks: updatedCompletedTasks
       });
     }
-  }
-
-  /**
-   * Update progress status efficiently
-   */
-  static async updateProgressStatus(
-    sessionId: string,
-    progressUpdates: Partial<ResearchState["progress"]>
-  ): Promise<void> {
-    const session = await this.getSessionById(sessionId);
-    if (!session) {
-      throw new Error(`Session not found: ${sessionId}`);
-    }
-
-    const updatedProgress = {
-      ...session.research_state.progress,
-      ...progressUpdates
-    };
-    
-    await this.updateResearchState(sessionId, {
-      progress: updatedProgress
-    });
   }
 } 

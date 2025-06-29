@@ -2,9 +2,7 @@ import {
   ToolType,
   ExecutionContext,
   ExecutionResult,
-  Message,
   KnowledgeEntry,
-  UserInteraction,
 } from "../models/agent-model";
 import { v4 as uuidv4 } from "uuid";
 
@@ -108,23 +106,6 @@ export abstract class BaseSimpleTool implements SimpleTool {
   }
 
   /**
-   * Create user interaction entry
-   */
-  protected createUserInteraction(
-    question: string,
-    isInitial: boolean = false,
-    parentQuestionId?: string
-  ): UserInteraction {
-    return {
-      id: uuidv4(),
-      question,
-      is_initial: isInitial,
-      parent_id: parentQuestionId,
-      status: "pending",
-    };
-  }
-
-  /**
    * Create success result
    */
   protected createSuccessResult(
@@ -161,16 +142,6 @@ export abstract class BaseSimpleTool implements SimpleTool {
     return knowledgeBase
       .slice(0, 5)
       .map(k => `- ${k.source}: ${k.content.substring(0, 100)}...`)
-      .join("\n");
-  }
-
-  protected buildUserInteractionsSummary(interactions: UserInteraction[]): string {
-    if (interactions.length === 0) {
-      return "No user questions recorded.";
-    }
-    
-    return interactions
-      .map(q => `- ${q.is_initial ? '[Initial]' : '[Follow-up]'} ${q.question}`)
       .join("\n");
   }
 } 

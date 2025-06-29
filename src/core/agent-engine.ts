@@ -5,10 +5,10 @@ import {
   ExecutionResult,
   ToolDecision,
   KnowledgeEntry,
-  UserInteraction,
   ResearchState,
   GenerationOutput,
   Message,
+  ResearchSession,
 } from "../models/agent-model";
 import { ResearchSessionOperations } from "../data/agent/agent-conversation-operations";
 import { ToolRegistry } from "../tools/tool-registry";
@@ -323,6 +323,8 @@ Respond using the following XML format:
           console.log(`📊 Knowledge base updated: added ${result.result.knowledge_entries.length} new entries`);
         }
         
+        // Evaluate task completion after search
+        await this.evaluateTaskCompletion(context, decision.tool);
         continue;
       }
 
@@ -348,15 +350,10 @@ Respond using the following XML format:
           type: "user_input",
         });
         
-        // Add user input and update questions array
-        await ResearchSessionOperations.addUserInteractions(this.conversationId, [{
-          id: `q_${Date.now()}`,
-          question: userInput,
-          is_initial: false,
-          status: "pending",
-        }]);
-        
         await ResearchSessionOperations.updateStatus(this.conversationId, SessionStatus.THINKING);
+        
+        // Evaluate task completion after user interaction
+        await this.evaluateTaskCompletion(context, decision.tool);
         continue;
       }
 
@@ -374,13 +371,25 @@ Respond using the following XML format:
         
         if (decision.tool === ToolType.WORLDBOOK && result.result?.worldbook_data) {
           console.log("🔄 Updating generation output with worldbook data");
+          
+          // Get current worldbook data and merge with new entries
+          const session = await ResearchSessionOperations.getSessionById(this.conversationId);
+          const currentWorldbookData = session?.generation_output.worldbook_data || [];
+          const newEntries = result.result.worldbook_data;
+          
+          // Merge new entries with existing ones
+          const updatedWorldbookData = [...currentWorldbookData, ...newEntries];
+          
           await ResearchSessionOperations.updateGenerationOutput(this.conversationId, {
-            worldbook_data: result.result.worldbook_data,
+            worldbook_data: updatedWorldbookData,
           });
+          
+          console.log(`📚 Added ${newEntries.length} new worldbook entries. Total: ${updatedWorldbookData.length}`);
         }
         
         // Check if current task has been completed using LLM analysis
-        await this.evaluateTaskCompletion(context);
+        await this.evaluateTaskCompletion(context, decision.tool);
+        continue;
       }
 
       // Handle REFLECT tool - add new tasks to the current queue
@@ -392,8 +401,10 @@ Respond using the following XML format:
           await ResearchSessionOperations.addTasksToQueue(this.conversationId, result.result.new_tasks);
           console.log(`📋 Added ${result.result.tasks_count} new tasks to queue`);
         }
+        
+        // Note: REFLECT tool doesn't need task completion evaluation as per requirements
+        continue;
       }
-
 
       // Check if task queue is empty at the end of each iteration
       const currentContext = await this.buildExecutionContext();
@@ -475,19 +486,62 @@ Respond using the following XML format:
     {task_queue_status}
   </current_task_queue>
 
-  <user_requirements>
-    {user_requirements}
-  </user_requirements>
-
   <instructions>
     1.  Analyze the <main_objective> and assess current progress based on <completed_tasks>.
     2.  Review <existing_knowledge> to understand what information is already available.
     3.  Consider recent <conversation_context> for additional context and user feedback.
     4.  Examine <current_task_queue> to understand what tasks remain to be completed.
-    5.  Reference <user_requirements> for specific user needs and preferences.
-    7.  Based on this analysis, determine the single most critical action from <tools_schema> to progress towards the <main_objective>.
-    8.  Construct your response meticulously following the <output_specification>.
+    5.  Based on this analysis, determine the single most critical action from <tools_schema> to progress towards the <main_objective>.
+    6.  Construct your response meticulously following the <output_specification>.
   </instructions>
+
+  <tool_usage_guidelines>
+    <priority_order>
+      1. ASK_USER: Use ONLY for fundamental uncertainties about story direction, genre, or core creative decisions
+      2. SEARCH: Use when referencing existing anime/novels/games or needing factual information
+      3. CHARACTER: Primary tool - complete character development BEFORE worldbook
+      4. WORLDBOOK: Secondary tool - use AFTER character is substantially complete
+      5. REFLECT: Use to organize tasks and break down complex work
+    </priority_order>
+
+    <tool_selection_criteria>
+      <ask_user_when>
+        - Uncertain about story genre/style (Cthulhu, romance, campus, etc.)
+        - Unclear if single character or world scenario
+        - Major creative direction affects entire generation
+        - Cannot determine user's fundamental preferences
+        DO NOT use for details that can be inferred or creatively determined
+      </ask_user_when>
+
+      <search_when>
+        - Story references existing anime, novels, games, movies
+        - Need accurate information about real-world cultural elements
+        - Require specific factual details or historical context
+        DO NOT use for generic creative content that can be imagined
+      </search_when>
+
+      <character_when>
+        - Most frequently used tool
+        - Build incrementally: name/description → personality → scenario → dialogue → details
+        - Must be substantially complete BEFORE starting worldbook
+        - Use systematic approach with logical field ordering
+      </character_when>
+
+      <worldbook_when>
+        - Use AFTER character creation is largely complete
+        - Create 1-3 high-quality entries per call
+        - Start with character relationships → world info → rules → supporting elements
+        - Entries should complement and enhance the established character
+      </worldbook_when>
+
+      <reflect_when>
+        - Identify gaps in current task planning
+        - Need to break complex work into smaller steps
+        - New requirements emerge during generation
+        - Task organization needs improvement
+      </reflect_when>
+    </tool_selection_criteria>
+  </tool_usage_guidelines>
 
   <output_specification>
     You MUST respond using the following XML format. Do not include any other text, explanations, or formatting outside of the <response> block.
@@ -500,10 +554,12 @@ Respond using the following XML format:
       <parameters>
         <!--
         - Provide all parameters for the chosen action inside this block.
-        - For complex types like 'object' or 'array', you MUST provide the value as a JSON string wrapped in a <![CDATA[...]]> block.
-        - Example for SEARCH: <query>Search for dragon lore</query><focus>lore</focus>
-        - Example for CHARACTER: <character_data><![CDATA[{{\"name\": \"Elara\", \"description\": \"A cunning sorceress...\"}}]]></character_data>
-        - Example for WORLDBOOK: <worldbook_entry><![CDATA[{{\"key\": [\"magic\"], \"content\": \"Magic is volatile...\"}}]]></worldbook_entry>
+        - Use simple parameter names directly, no complex JSON structures needed.
+        - Example for SEARCH: <query>dragon mythology</query>
+        - Example for ASK_USER: <question>What genre style do you prefer for this story?</question>
+        - Example for CHARACTER: <name>Elara</name><description>A cunning sorceress...</description><personality>Mysterious and intelligent...</personality>
+        - Example for WORLDBOOK: <key>magic, spell</key><content>Magic system details...</content><comment>Magic system</comment>
+        - Example for REFLECT: <new_tasks><![CDATA[["Research character background", "Define magic system", "Create dialogue examples"]]]></new_tasks>
         -->
       </parameters>
     </response>
@@ -520,7 +576,6 @@ Respond using the following XML format:
           knowledge_base: this.buildKnowledgeBaseSummary(context.research_state.knowledge_base),
           recent_conversation: this.buildRecentConversationSummary(context.message_history),
           task_queue_status: this.buildTaskQueueSummary(context),
-          user_requirements: this.buildUserInteractionsSummary(context.research_state.user_interactions),
         }),
       ]);
 
@@ -748,8 +803,9 @@ Technical Details:
 
   /**
    * Evaluate if current task has been completed using LLM analysis
+   * Enhanced with tool-specific evaluation logic
    */
-  private async evaluateTaskCompletion(context: ExecutionContext): Promise<void> {
+  private async evaluateTaskCompletion(context: ExecutionContext, lastExecutedTool?: ToolType): Promise<void> {
     if (!context.research_state.task_queue || context.research_state.task_queue.length === 0) {
       return; // No tasks to evaluate
     }
@@ -759,46 +815,54 @@ Technical Details:
     
     if (!session) return;
 
+    // Build tool-specific context for evaluation
+    const toolSpecificContext = this.buildToolSpecificContext(lastExecutedTool, session, context);
+
     const prompt = createStandardPromptTemplate(`
-You are evaluating whether a specific task has been completed based on the current generation output.
+You are evaluating whether a specific task has been completed based on the current state and recent tool execution.
 
 TASK TO EVALUATE: {task_description}
 
-CURRENT GENERATION OUTPUT:
-Character Data: {character_data}
-Worldbook Data: {worldbook_data}
+LAST EXECUTED TOOL: {last_tool}
 
-INSTRUCTIONS:
-1. TASK COMPLETION EVALUATION:
-   Analyze whether the specified task has been sufficiently completed based on the current generation output.
-   Consider the task description and determine if the current output satisfies the task requirements.
-   Focus ONLY on whether this specific task is done, not on overall quality.
+TOOL-SPECIFIC EVALUATION CONTEXT:
+{tool_context}
 
-2. GLOBAL OUTPUT EVALUATION (SEPARATE FROM TASK COMPLETION):
-   Additionally, provide global evaluation scores for the overall generation output:
-   
-   - answer_confidence (0-100): How confident we are in the current generation's ability to fulfill the user's original request
-     * 0-30: Very poor, major elements missing or incorrect
-     * 31-50: Below average, significant improvements needed
-     * 51-70: Average quality, some areas need work
-     * 71-85: Good quality, minor refinements needed
-     * 86-100: Excellent quality, meets or exceeds expectations
-   
-   - information_quality (0-100): Quality and completeness of the generated content (character + worldbook)
-     * 0-30: Very low quality, incomplete or inconsistent content
-     * 31-50: Below average, lacks depth or has issues
-     * 51-70: Average quality, adequate but could be improved
-     * 71-85: Good quality, well-developed and consistent
-     * 86-100: Excellent quality, rich, detailed, and highly coherent
+EVALUATION INSTRUCTIONS:
+Based on the task description and the tool-specific context above, determine if this specific task has been sufficiently completed.
 
-IMPORTANT: The answer_confidence and information_quality scores are GLOBAL EVALUATIONS of the entire generation output and DO NOT influence whether the current task is considered complete. Task completion is determined solely by whether the specific task requirements have been met.
+TOOL-SPECIFIC EVALUATION CRITERIA:
+1. For SEARCH tasks:
+   - Check if relevant knowledge has been gathered in the knowledge base
+   - Evaluate if the search results are sufficient for the task requirements
+   - Consider the number and quality of knowledge entries
+
+2. For CHARACTER tasks:
+   - Verify if character data has been generated/updated
+   - Check completeness of required character fields
+   - Assess if the character content matches task requirements
+
+3. For WORLDBOOK tasks:
+   - Confirm if worldbook entries have been created/updated
+   - Evaluate the relevance and quality of worldbook content
+   - Check if entries support the overall narrative
+
+4. For ASK_USER tasks:
+   - Verify if user has provided the requested information
+   - Check if the user's response addresses the question
+   - Determine if sufficient information was obtained
+
+5. For REFLECT tasks:
+   - Assess if new tasks have been added to the queue
+   - Evaluate if the reflection has improved the task planning
+   - Check if the reflection addressed current needs
+
+IMPORTANT: Focus ONLY on whether this specific task is complete based on its requirements and the tool execution results. Do not evaluate overall generation quality.
 
 Respond in XML format:
 <evaluation>
   <completed>true/false</completed>
-  <reasoning>Detailed explanation of why the current task is or isn't complete based on task requirements</reasoning>
-  <answer_confidence>Confidence score 0-100 in the overall generation's ability to fulfill user request</answer_confidence>
-  <information_quality>Quality score 0-100 of the overall generated content (character + worldbook)</information_quality>
+  <reasoning>Detailed explanation of why the current task is or isn't complete based on task requirements and tool execution results</reasoning>
 </evaluation>
     `);
 
@@ -806,27 +870,17 @@ Respond in XML format:
       const response = await this.model.invoke([
         await prompt.format({
           task_description: currentTask.description,
-          character_data: JSON.stringify(session.generation_output.character_data || {}, null, 2),
-          worldbook_data: JSON.stringify(session.generation_output.worldbook_data || [], null, 2)
+          last_tool: lastExecutedTool,
+          tool_context: toolSpecificContext
         }),
       ]);
 
       const content = response.content as string;
       const completedMatch = content.match(/<completed>(.*?)<\/completed>/);
       const reasoningMatch = content.match(/<reasoning>(.*?)<\/reasoning>/s);
-      const confidenceMatch = content.match(/<answer_confidence>(\d+)<\/answer_confidence>/);
-      const qualityMatch = content.match(/<information_quality>(\d+)<\/information_quality>/);
       
       const isCompleted = completedMatch?.[1]?.trim().toLowerCase() === 'true';
       const reasoning = reasoningMatch?.[1]?.trim() || 'No reasoning provided';
-      const answerConfidence = parseInt(confidenceMatch?.[1] || '0', 10);
-      const informationQuality = parseInt(qualityMatch?.[1] || '0', 10);
-
-      // Update progress data based on task evaluation
-      await this.updateCompletionStatus({
-        answer_confidence: answerConfidence,
-        information_quality: informationQuality,
-      });
 
       if (isCompleted) {
         console.log(`✅ Task completed: ${currentTask.description}`);
@@ -847,6 +901,65 @@ Respond in XML format:
 
     } catch (error) {
       console.error("❌ Error evaluating task completion:", error);
+    }
+  }
+
+  /**
+   * Build tool-specific context for task evaluation
+   */
+  private buildToolSpecificContext(
+    toolType: ToolType | undefined, 
+    session: ResearchSession, 
+    context: ExecutionContext
+  ): string {
+    if (!toolType) {
+      return "No recent tool execution information available.";
+    }
+
+    switch (toolType) {
+      case ToolType.SEARCH:
+        const knowledgeBase = context.research_state.knowledge_base;
+        const recentEntries = knowledgeBase.slice(-3); // Last 3 entries
+        return `SEARCH RESULTS:
+Knowledge Base Size: ${knowledgeBase.length} entries
+Recent Knowledge Entries:
+${recentEntries.map(entry => `- Source: ${entry.source}\n  Content: ${entry.content.substring(0, 200)}...`).join('\n')}
+
+Recent Search Quality: ${knowledgeBase.length > 0 ? 'Information gathered' : 'No information found'}`;
+
+      case ToolType.CHARACTER:
+        const characterData = session.generation_output.character_data;
+        return `CHARACTER GENERATION:
+Character Data Status: ${characterData ? 'Generated' : 'Not generated'}
+${characterData ? `Generated Fields:
+${Object.entries(characterData).map(([key, value]) => `- ${key}: ${value ? 'Present' : 'Missing'}`).join('\n')}` : 'No character data available'}`;
+
+      case ToolType.WORLDBOOK:
+        const worldbookData = session.generation_output.worldbook_data || [];
+        return `WORLDBOOK GENERATION:
+Worldbook Entries Count: ${worldbookData.length}
+${worldbookData.length > 0 ? `Recent Entries:
+${worldbookData.slice(-3).map(entry => `- Key: ${entry.key.join(', ')}\n  Content: ${entry.content.substring(0, 150)}...`).join('\n')}` : 'No worldbook entries available'}`;
+
+      case ToolType.ASK_USER:
+        const recentMessages = context.message_history.slice(-3);
+        const lastUserMessage = recentMessages.reverse().find(msg => msg.role === 'user' && msg.type === 'user_input');
+        return `USER INTERACTION:
+Latest User Response: ${lastUserMessage ? `"${lastUserMessage.content}"` : 'No recent user input'}
+User Response Status: ${lastUserMessage ? 'Received' : 'Waiting for response'}
+Response Length: ${lastUserMessage ? lastUserMessage.content.length : 0} characters`;
+
+      case ToolType.REFLECT:
+        const taskQueue = context.research_state.task_queue;
+        const completedTasks = context.research_state.completed_tasks;
+        return `REFLECTION RESULTS:
+Current Task Queue Size: ${taskQueue.length}
+Completed Tasks Count: ${completedTasks.length}
+Recent Task Updates: ${taskQueue.length > 1 ? 'New tasks added' : 'No new tasks'}
+Planning Status: ${taskQueue.length > 0 ? 'Active planning' : 'Planning complete'}`;
+
+      default:
+        return `Unknown tool type: ${toolType}`;
     }
   }
 
@@ -1103,20 +1216,6 @@ Respond in XML format:
       .join("\n");
   }
 
-  private buildUserInteractionsSummary(interactions: UserInteraction[]): string {
-    if (!interactions || interactions.length === 0) {
-      return "No user questions recorded.";
-    }
-    
-    return interactions
-      .map(q => `- ${q.is_initial ? '[Initial]' : '[Follow-up]'} ${q.question}`)
-      .join("\n");
-  }
-
-  private async updateCompletionStatus(updates: Partial<ResearchState["progress"]>): Promise<void> {
-    // Update progress status
-    await ResearchSessionOperations.updateProgressStatus(this.conversationId, updates);
-  }
 
   private async generateFinalResult(): Promise<any> {
     // For final result generation, we do need the complete session data
@@ -1128,7 +1227,6 @@ Respond in XML format:
       character_data: session.generation_output.character_data,
       worldbook_data: session.generation_output.worldbook_data,
       knowledge_base: session.research_state.knowledge_base,
-      completion_status: session.research_state.progress,
     };
   }
 } 
