@@ -161,7 +161,9 @@ export class ResearchSessionOperations {
   }
 
   /**
-   * Update character progress
+   * Update generation output with intelligent merging
+   * For character_data: merges new fields with existing ones, overwrites existing fields with new values
+   * For other fields: performs direct assignment
    */
   static async updateGenerationOutput(
     sessionId: string,
@@ -172,8 +174,26 @@ export class ResearchSessionOperations {
       throw new Error(`Session not found: ${sessionId}`);
     }
 
-    // Update character progress
-    Object.assign(session.generation_output, updates);
+    // Handle character_data with intelligent merging
+    if (updates.character_data) {
+      const existingCharacterData = session.generation_output.character_data || {};
+      // Merge new character fields with existing ones, new fields override existing ones
+      session.generation_output.character_data = {
+        ...existingCharacterData,
+        ...updates.character_data
+      };
+      
+      // Remove character_data from updates to avoid double processing
+      const { character_data, ...otherUpdates } = updates;
+      
+      // Apply other updates normally
+      if (Object.keys(otherUpdates).length > 0) {
+        Object.assign(session.generation_output, otherUpdates);
+      }
+    } else {
+      // No character_data to merge, apply updates normally
+      Object.assign(session.generation_output, updates);
+    }
 
     await this.saveSession(session);
   }

@@ -231,10 +231,10 @@ Respond using the following XML format:
           <description>specific actionable step</description>
           <reasoning>why this step is important</reasoning>
         </sub_problem>
-        <!-- 2-5 sub-problems per task -->
+        // 2-5 sub-problems per task
       </sub_problems>
     </task>
-    <!-- 5-7 tasks total -->
+    // 5-7 tasks total
   </initial_tasks>
   <task_strategy>explanation of the overall approach</task_strategy>
 </task_decomposition>`);
@@ -550,6 +550,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
    * Following DeepResearch: planner generates ALL content, tools just store/process results
    */
   private async selectNextDecision(context: ExecutionContext): Promise<ToolDecision | null> {
+    console.log("🔄 Selecting next decision");
     
     // Get detailed tool information in XML format to inject into the prompt
     const availableTools = ToolRegistry.getDetailedToolsInfo();
@@ -666,7 +667,14 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - Example for ASK_USER: <question>What genre style do you prefer?</question>
         - Example for CHARACTER: <name>Elara</name><description>A cunning sorceress...</description><tags><![CDATA[["fantasy", "sorceress"]]]></tags>
         - Example for WORLDBOOK: <key><![CDATA[["magic", "spell"]]]></key><content>Details...</content><comment>Magic system</comment><constant>false</constant><order>100</order>
-        - Example for REFLECT: <new_tasks><![CDATA[[{"description":"Research character background", "reasoning":"Need more depth", "sub_problems":[{"description":"Find character family history", "reasoning":"Core background element"}, {"description":"Research character education", "reasoning":"Character development"}]}]]]></new_tasks>
+        - Example for REFLECT: <new_tasks>
+            <task>
+              <description>Research character background</description>
+              <reasoning>Need more depth</reasoning>
+              <sub_problem>Find character family history</sub_problem>
+              <sub_problem>Research character education</sub_problem>
+            </task>
+          </new_tasks>
         -->
       </parameters>
     </response>
@@ -730,6 +738,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
                 }
             }
         }
+        console.log("🔄 finished parsing parameters");
     }
 
       return {
@@ -979,7 +988,7 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
 
   <evaluation_context>
     <generation_output>
-      <![CDATA[{generation_output}]]>
+      {generation_output}
     </generation_output>
   </evaluation_context>
 
