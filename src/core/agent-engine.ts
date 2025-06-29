@@ -5,7 +5,6 @@ import {
   ExecutionResult,
   ToolDecision,
   KnowledgeEntry,
-  ResearchState,
   GenerationOutput,
   Message,
   ResearchSession,
@@ -179,46 +178,59 @@ export class AgentEngine {
 
     const prompt = createStandardPromptTemplate(`
 You are an expert task planner for character card and worldbook generation. 
-Analyze the user's objective and decompose it into a structured task queue.
+Analyze the user's objective and create a smart, targeted task queue.
 
 USER OBJECTIVE: {main_objective}
 
-DECOMPOSITION GUIDELINES:
-1. Break down the main objective into 5-8 concrete, actionable tasks
-2. Each task should be specific and measurable
-3. Tasks should follow a logical progression for character/worldbook creation
-4. Consider research, analysis, and generation phases
-5. Include validation and refinement tasks
+ANALYSIS GUIDELINES:
+1. FIRST, determine if the story relates to existing real-world content (anime, novels, games, movies, etc.)
+   - Look for specific mentions of existing works, characters, or franchises
+   - Check if user wants something "based on" or "inspired by" existing content
+   - If YES: Include research tasks to gather accurate information
 
-For character card generation, typical phases include:
-- Character concept research
-- Personality development
-- Background and setting research
-- Dialogue and interaction analysis
-- Character card generation
-- Quality review and refinement
+2. SECOND, assess if the story direction is clear enough
+   - Is the genre/style clear? (romance, adventure, fantasy, sci-fi, horror, campus life, etc.)
+   - Is the story type clear? (single character focus vs world/scenario focus)
+   - Is the setting/theme sufficiently defined?
+   - If NO: Include user clarification tasks
 
-For worldbook creation, consider:
-- World concept and theme research
-- Lore and history development
-- Character relationship mapping
-- Location and setting details
-- Cultural and social aspects
-- Worldbook entry generation
+3. THIRD, create 5-7 specific tasks following this structure:
+   - Research tasks (if needed for existing content)
+   - User clarification tasks (if story is too vague)
+   - Character card generation task (REQUIRED)
+   - Worldbook generation task (REQUIRED, after character)
+   - Quality review task (REQUIRED)
+
+TASK CREATION RULES:
+- Character card generation MUST come before worldbook generation
+- Each task should be actionable with existing tools (SEARCH, ASK_USER, CHARACTER, WORLDBOOK, REFLECT)
+- Tasks should build upon each other logically
+- Include specific outcomes for each task
+
+EXAMPLE DECISION LOGIC:
+- Story mentions "Harry Potter": ADD research task for Harry Potter universe
+- Story says "anime girl": ASK_USER for specific style/genre clarification  
+- Story is vague "fantasy adventure": ASK_USER for more specific direction
+- Story is clear "cyberpunk detective in Neo-Tokyo": PROCEED with character creation
 
 Respond using the following XML format:
 <task_decomposition>
+  <analysis>
+    <real_world_content_detected>true/false</real_world_content_detected>
+    <real_world_details>specific content mentioned (if any)</real_world_details>
+    <story_clarity_level>clear/moderate/vague</story_clarity_level>
+    <unclear_aspects>list aspects that need clarification (if any)</unclear_aspects>
+  </analysis>
   <initial_tasks>
     <task>
       <description>specific task description</description>
-      <reasoning>why this task is important</reasoning>
-      <expected_outcome>what should be achieved</expected_outcome>
+      <tool_type>SEARCH/ASK_USER/CHARACTER/WORLDBOOK/REFLECT</tool_type>
+      <reasoning>why this task is needed</reasoning>
     </task>
-    <!-- Add more tasks as needed -->
+    <!-- 5-7 tasks total -->
   </initial_tasks>
-  <decomposition_reasoning>explanation of the task breakdown approach</decomposition_reasoning>
-</task_decomposition>
-    `);
+  <task_strategy>explanation of the overall approach</task_strategy>
+</task_decomposition>`);
 
     try {
       const response = await this.model.invoke([
@@ -229,26 +241,29 @@ Respond using the following XML format:
 
       const content = response.content as string;
       
-      // Parse XML response directly
+      // Parse analysis
+      const realWorldContent = content.match(/<real_world_content_detected>(.*?)<\/real_world_content_detected>/)?.[1]?.trim() === 'true';
+      const realWorldDetails = content.match(/<real_world_details>(.*?)<\/real_world_details>/)?.[1]?.trim() || '';
+      const clarityLevel = content.match(/<story_clarity_level>(.*?)<\/story_clarity_level>/)?.[1]?.trim() || 'moderate';
+      const unclearAspects = content.match(/<unclear_aspects>(.*?)<\/unclear_aspects>/)?.[1]?.trim() || '';
+      
+      // Parse tasks
       const taskMatches = [...content.matchAll(/<task>([\s\S]*?)<\/task>/g)];
       const taskQueue = taskMatches.map((match, index) => {
         const taskContent = match[1];
         const description = taskContent.match(/<description>([\s\S]*?)<\/description>/)?.[1]?.trim() || `Task ${index + 1}`;
-        const reasoning = taskContent.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1]?.trim() || "Initial task decomposition";
+        const toolType = taskContent.match(/<tool_type>([\s\S]*?)<\/tool_type>/)?.[1]?.trim() || '';
+        const reasoning = taskContent.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1]?.trim() || "Task planning";
         
         return {
-        id: `init_task_${Date.now()}_${index}`,
+          id: `init_task_${Date.now()}_${index}`,
           description,
-          reasoning
+          reasoning: `[${toolType}] ${reasoning}`
         };
       });
 
-      // Parse knowledge gaps
-      const gapMatches = [...content.matchAll(/<gap>([\s\S]*?)<\/gap>/g)];
-      const knowledgeGaps = gapMatches.map(match => match[1]?.trim()).filter(gap => gap);
-
-      // Parse decomposition reasoning
-      const decompositionReasoning = content.match(/<decomposition_reasoning>([\s\S]*?)<\/decomposition_reasoning>/)?.[1]?.trim() || "Task decomposition completed";
+      // Parse strategy
+      const taskStrategy = content.match(/<task_strategy>([\s\S]*?)<\/task_strategy>/)?.[1]?.trim() || "Task decomposition completed";
 
       // Update research state with initial decomposition
       const stateUpdate = {
@@ -258,16 +273,36 @@ Respond using the following XML format:
       await ResearchSessionOperations.updateResearchState(this.conversationId, stateUpdate);
       
       console.log(`✅ Task decomposition complete: ${taskQueue.length} tasks created`);
+      console.log(`📊 Analysis: Real-world content: ${realWorldContent}, Clarity: ${clarityLevel}`);
 
-      // Add initialization message
+      // Add comprehensive initialization message
+      let analysisMessage = `🎯 Task Planning Analysis:
+- Real-world content detected: ${realWorldContent ? 'Yes' : 'No'}`;
+      
+      if (realWorldContent && realWorldDetails) {
+        analysisMessage += `\n- Content details: ${realWorldDetails}`;
+      }
+      
+      analysisMessage += `\n- Story clarity level: ${clarityLevel}`;
+      
+      if (unclearAspects) {
+        analysisMessage += `\n- Needs clarification: ${unclearAspects}`;
+      }
+      
+      analysisMessage += `\n\n📋 Task Strategy: ${taskStrategy}
+      
+Created ${taskQueue.length} tasks:
+${taskQueue.map((task, i) => `${i + 1}. ${task.description}`).join('\n')}`;
+
       await ResearchSessionOperations.addMessage(this.conversationId, {
         role: "agent",
-        content: `Task decomposition complete: ${taskQueue.length} initial tasks identified. ${decompositionReasoning}`,
+        content: analysisMessage,
         type: "agent_thinking",
       });
 
     } catch (error) {
       console.error("❌ Task decomposition failed:", error);
+      console.log("🔄 Using fallback task queue due to decomposition failure");
     }
   }
 
@@ -372,19 +407,11 @@ Respond using the following XML format:
         if (decision.tool === ToolType.WORLDBOOK && result.result?.worldbook_data) {
           console.log("🔄 Updating generation output with worldbook data");
           
-          // Get current worldbook data and merge with new entries
-          const session = await ResearchSessionOperations.getSessionById(this.conversationId);
-          const currentWorldbookData = session?.generation_output.worldbook_data || [];
+          // Use the new simplified method for appending worldbook data
           const newEntries = result.result.worldbook_data;
+          await ResearchSessionOperations.appendWorldbookData(this.conversationId, newEntries);
           
-          // Merge new entries with existing ones
-          const updatedWorldbookData = [...currentWorldbookData, ...newEntries];
-          
-          await ResearchSessionOperations.updateGenerationOutput(this.conversationId, {
-            worldbook_data: updatedWorldbookData,
-          });
-          
-          console.log(`📚 Added ${newEntries.length} new worldbook entries. Total: ${updatedWorldbookData.length}`);
+          console.log(`📚 Added ${newEntries.length} new worldbook entries`);
         }
         
         // Check if current task has been completed using LLM analysis
@@ -410,9 +437,9 @@ Respond using the following XML format:
       const currentContext = await this.buildExecutionContext();
       if (!currentContext.research_state.task_queue || currentContext.research_state.task_queue.length === 0) {
         console.log("📋 Task queue is empty, checking final generation completion...");
-        const session = await ResearchSessionOperations.getSessionById(this.conversationId);
-        if (session?.generation_output) {
-          const evaluationResult = await this.evaluateGenerationProgress(session.generation_output);
+        const generationOutput = await ResearchSessionOperations.getGenerationOutput(this.conversationId);
+        if (generationOutput) {
+          const evaluationResult = await this.evaluateGenerationProgress(generationOutput);
           if (evaluationResult === null) {
             console.log("✅ Final generation evaluation: Complete");
             await ResearchSessionOperations.updateStatus(this.conversationId, SessionStatus.COMPLETED);
@@ -539,6 +566,7 @@ Respond using the following XML format:
         - Need to break complex work into smaller steps
         - New requirements emerge during generation
         - Task organization needs improvement
+        - Task queue is empty but main objective is not yet complete
       </reflect_when>
     </tool_selection_criteria>
   </tool_usage_guidelines>
@@ -555,11 +583,13 @@ Respond using the following XML format:
         <!--
         - Provide all parameters for the chosen action inside this block.
         - Use simple parameter names directly, no complex JSON structures needed.
-        - Example for SEARCH: <query>dragon mythology</query>
-        - Example for ASK_USER: <question>What genre style do you prefer for this story?</question>
-        - Example for CHARACTER: <name>Elara</name><description>A cunning sorceress...</description><personality>Mysterious and intelligent...</personality>
-        - Example for WORLDBOOK: <key>magic, spell</key><content>Magic system details...</content><comment>Magic system</comment>
-        - Example for REFLECT: <new_tasks><![CDATA[["Research character background", "Define magic system", "Create dialogue examples"]]]></new_tasks>
+        - For array parameters, use CDATA format: <param_name><![CDATA[["item1", "item2"]]]></param_name>
+        - For other parameters, use simple values: <param_name>value</param_name>
+        - Example for SEARCH: <query><![CDATA["dragon mythology", "magic system"]]]></query>
+        - Example for ASK_USER: <question>What genre style do you prefer?</question>
+        - Example for CHARACTER: <name>Elara</name><description>A cunning sorceress...</description><tags><![CDATA[["fantasy", "sorceress"]]]></tags>
+        - Example for WORLDBOOK: <key><![CDATA[["magic", "spell"]]]></key><content>Details...</content><comment>Magic system</comment><constant>false</constant><order>100</order>
+        - Example for REFLECT: <new_tasks><![CDATA[["Research character background", "Define magic system"]]]></new_tasks>
         -->
       </parameters>
     </response>
@@ -610,7 +640,16 @@ Respond using the following XML format:
                     parameters[key] = cdataMatch[1];
                 }
             } else {
-                parameters[key] = value;
+                // Simple parameter parsing - handle basic types
+                if (value.toLowerCase() === 'true') {
+                    parameters[key] = true;
+                } else if (value.toLowerCase() === 'false') {
+                    parameters[key] = false;
+                } else if (!isNaN(Number(value)) && value.trim() !== '') {
+                    parameters[key] = Number(value);
+                } else {
+                    parameters[key] = value;
+                }
             }
         }
     }
@@ -1156,9 +1195,6 @@ Planning Status: ${taskQueue.length > 0 ? 'Active planning' : 'Planning complete
     return { isValid: true };
   }
 
-
-
-
   // ============================================================================
   // HELPER METHODS
   // ============================================================================
@@ -1199,8 +1235,6 @@ Planning Status: ${taskQueue.length > 0 ? 'Active planning' : 'Planning complete
     throw new Error(`Unsupported LLM type: ${config.llm_type}`);
   }
 
-
-
   private buildRecentConversationSummary(messages: Message[]): string {
     return messages.slice(-5).map(m => `${m.type}: ${m.content}`).join("\n");
   }
@@ -1215,7 +1249,6 @@ Planning Status: ${taskQueue.length > 0 ? 'Active planning' : 'Planning complete
       .map(k => `- ${k.source}: ${k.content.substring(0, 100)}...`)
       .join("\n");
   }
-
 
   private async generateFinalResult(): Promise<any> {
     // For final result generation, we do need the complete session data

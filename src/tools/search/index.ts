@@ -18,8 +18,8 @@ export class SearchTool extends BaseSimpleTool {
   readonly parameters: ToolParameter[] = [
     {
       name: "query",
-      type: "string",
-      description: "The specific search query to execute. The tool will use Tavily's professional search API to gather comprehensive information for character/worldbook generation",
+      type: "array",
+      description: "Array of search queries to execute. The tool will use Tavily's professional search API to gather comprehensive information for character/worldbook generation. Each query should be a specific search string.",
       required: true
     }
   ];
@@ -35,8 +35,18 @@ export class SearchTool extends BaseSimpleTool {
   protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<ExecutionResult> {
     const query = parameters.query;
     
-    if (!query || typeof query !== 'string') {
-      return this.createFailureResult("SEARCH tool requires 'query' parameter as a non-empty string.");
+    // Support both array and string formats for backward compatibility
+    let queries: string[];
+    if (Array.isArray(query)) {
+      queries = query.filter((q: any) => q && typeof q === 'string' && q.trim().length > 0);
+    } else if (typeof query === 'string' && query.trim().length > 0) {
+      queries = [query.trim()];
+    } else {
+      return this.createFailureResult("SEARCH tool requires 'query' parameter as an array of strings or a single string.");
+    }
+
+    if (queries.length === 0) {
+      return this.createFailureResult("SEARCH tool requires at least one valid query string.");
     }
 
     // Check if Tavily API key is configured
@@ -47,7 +57,7 @@ export class SearchTool extends BaseSimpleTool {
 
     console.log("Tavily API key:", tavilyApiKey);
     try {
-      console.log(`🔍 Starting Tavily search for: "${query}"`);
+      console.log(`🔍 Starting Tavily search for ${queries.length} queries: ${queries.join(', ')}`);
       this.tavilySearch = new TavilySearch({
         tavilyApiKey: tavilyApiKey,
           maxResults: 8, // Increased for better coverage
@@ -64,38 +74,58 @@ export class SearchTool extends BaseSimpleTool {
         console.log("Tavily API key set via environment variable:", process.env.TAVILY_API_KEY);
       
       
-      // Use Tavily search directly
-      const searchResult = await this.tavilySearch.invoke({ query });
-      
-      // Parse the Tavily response
-      const searchData = typeof searchResult === 'string' ? JSON.parse(searchResult) : searchResult;
-      
-      if (!searchData.results || !Array.isArray(searchData.results)) {
-        throw new Error('Invalid search response format from Tavily');
-    }
-    
-      // Convert Tavily results to knowledge entries
-      const knowledgeEntries = searchData.results.map((result: any) => 
-        this.createKnowledgeEntry(
-          result.title || "Search Result",
-          result.content || result.snippet || "",
-          result.url || "Unknown",
-          Math.round((result.score || 0.5) * 100) // Convert score to percentage
-        )
-      );
+      const allKnowledgeEntries = [];
+      const allSources = [];
+      let totalResponseTime = 0;
 
-      console.log(`✅ Tavily search completed: ${knowledgeEntries.length} knowledge entries created`);
+      // Execute searches for all queries
+      for (const singleQuery of queries) {
+        try {
+          console.log(`🔍 Searching for: "${singleQuery}"`);
+          // Use Tavily search directly
+          const searchResult = await this.tavilySearch.invoke({ query: singleQuery });
+          
+          // Parse the Tavily response
+          const searchData = typeof searchResult === 'string' ? JSON.parse(searchResult) : searchResult;
+          
+          if (!searchData.results || !Array.isArray(searchData.results)) {
+            console.warn(`Invalid search response format for query: "${singleQuery}"`);
+            continue;
+          }
+        
+          // Convert Tavily results to knowledge entries
+          const knowledgeEntries = searchData.results.map((result: any) => 
+            this.createKnowledgeEntry(
+              `${result.title || "Search Result"} (Query: ${singleQuery})`,
+              result.content || result.snippet || "",
+              result.url || "Unknown",
+              Math.round((result.score || 0.5) * 100) // Convert score to percentage
+            )
+          );
+
+          allKnowledgeEntries.push(...knowledgeEntries);
+          allSources.push(...searchData.results.map((r: any) => r.title || r.url));
+          totalResponseTime += searchData.response_time || 0;
+
+          console.log(`✅ Search completed for "${singleQuery}": ${knowledgeEntries.length} results`);
+        } catch (queryError) {
+          console.warn(`❌ Search failed for "${singleQuery}":`, queryError);
+          // Continue with other queries instead of failing completely
+        }
+      }
+
+      console.log(`✅ All Tavily searches completed: ${allKnowledgeEntries.length} total knowledge entries created`);
 
       return this.createSuccessResult({
-        query,
-        results_count: knowledgeEntries.length,
-        sources: searchData.results.map((r: any) => r.title || r.url).slice(0, 5),
-        search_method: "tavily_advanced",
-        response_time: searchData.response_time || 0,
-        knowledge_entries: knowledgeEntries
+        queries: queries,
+        results_count: allKnowledgeEntries.length,
+        sources: allSources.slice(0, 10), // Show top 10 sources
+        search_method: "tavily_advanced_multi",
+        response_time: totalResponseTime,
+        knowledge_entries: allKnowledgeEntries
       });
     } catch (error) {
-      console.error(`❌ Tavily search failed for "${query}":`, error);
+      console.error(`❌ Tavily search failed for queries [${queries.join(', ')}]:`, error);
       return this.createFailureResult(`Tavily search failed: ${error instanceof Error ? error.message : String(error)}`);
   }
   }

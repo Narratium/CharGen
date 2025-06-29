@@ -95,16 +95,6 @@ export class ToolRegistry {
         xmlOutput += `        <type>${param.type}</type>\n`;
         xmlOutput += `        <required>${param.required}</required>\n`;
         xmlOutput += `        <description>${param.description}</description>\n`;
-        if (param.options) {
-          xmlOutput += `        <options>${param.options.join(", ")}</options>\n`;
-        }
-        if (param.properties) {
-          xmlOutput += `        <properties>\n`;
-          for (const [key, value] of Object.entries(param.properties)) {
-            xmlOutput += `          <property name="${key}" type="${value.type}" description="${value.description}" />\n`;
-          }
-          xmlOutput += `        </properties>\n`;
-        }
         xmlOutput += `      </parameter>\n`;
       });
 

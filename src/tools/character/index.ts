@@ -60,8 +60,8 @@ export class CharacterTool extends BaseSimpleTool {
     },
     {
       name: "tags",
-      type: "string", 
-      description: "Comma-separated tags categorizing the character (e.g., 'fantasy, sorceress, mysterious')",
+      type: "array", 
+      description: "Array of tags categorizing the character (e.g., ['fantasy', 'sorceress', 'mysterious'])",
       required: false
     }
   ];
@@ -78,8 +78,13 @@ export class CharacterTool extends BaseSimpleTool {
     if (parameters.mes_example) characterUpdates.mes_example = parameters.mes_example;
     if (parameters.creator_notes) characterUpdates.creator_notes = parameters.creator_notes;
     if (parameters.tags) {
-      // Convert comma-separated string to array
-      characterUpdates.tags = parameters.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
+      // Support both array and comma-separated string formats
+      if (Array.isArray(parameters.tags)) {
+        characterUpdates.tags = parameters.tags.filter((tag: string) => tag && tag.trim().length > 0);
+      } else if (typeof parameters.tags === 'string') {
+        // Convert comma-separated string to array for backward compatibility
+        characterUpdates.tags = parameters.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
+      }
     }
 
     if (Object.keys(characterUpdates).length === 0) {

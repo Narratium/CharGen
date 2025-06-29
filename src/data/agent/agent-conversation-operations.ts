@@ -328,14 +328,40 @@ export class ResearchSessionOperations {
       const completedTask = taskQueue[0];
       const remainingTasks = taskQueue.slice(1);
       
-      // Add task to completed list
-      const completedTasks = session.research_state.completed_tasks || [];
-      const updatedCompletedTasks = [...completedTasks, completedTask.description];
+      // Update research state
+      session.research_state.task_queue = remainingTasks;
+      session.research_state.completed_tasks.push(completedTask.description);
       
-      await this.updateResearchState(sessionId, {
-        task_queue: remainingTasks,
-        completed_tasks: updatedCompletedTasks
-      });
+      await this.saveSession(session);
     }
+  }
+
+  /**
+   * Append new worldbook entries to existing worldbook data efficiently
+   */
+  static async appendWorldbookData(
+    sessionId: string,
+    newEntries: any[]
+  ): Promise<void> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const currentWorldbookData = session.generation_output.worldbook_data || [];
+    const updatedWorldbookData = [...currentWorldbookData, ...newEntries];
+    
+    session.generation_output.worldbook_data = updatedWorldbookData;
+    await this.saveSession(session);
+  }
+
+  /**
+   * Get generation output without fetching entire session
+   */
+  static async getGenerationOutput(sessionId: string): Promise<GenerationOutput | null> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) return null;
+    
+    return session.generation_output;
   }
 } 

@@ -19,10 +19,6 @@ export interface ToolParameter {
   type: "string" | "number" | "boolean" | "object" | "array";
   required: boolean;
   description: string;
-  options?: any[];
-  default?: any;
-  items?: ToolParameter | { type: string; description?: string; };
-  properties?: { [key: string]: Omit<ToolParameter, 'name' | 'required'> & { required?: boolean } };
 }
 
 /**

@@ -18,8 +18,8 @@ export class WorldbookTool extends BaseSimpleTool {
   readonly parameters: ToolParameter[] = [
     {
       name: "key",
-      type: "string",
-      description: "Comma-separated primary trigger keywords for this worldbook entry (e.g., 'magic, spell, enchantment')",
+      type: "array",
+      description: "Array of primary trigger keywords for this worldbook entry (e.g., ['magic', 'spell', 'enchantment'])",
       required: true
     },
     {
@@ -36,8 +36,8 @@ export class WorldbookTool extends BaseSimpleTool {
     },
     {
       name: "keysecondary",
-      type: "string",
-      description: "Comma-separated secondary trigger keywords (optional)",
+      type: "array",
+      description: "Array of secondary trigger keywords (optional)",
       required: false
     },
     {
@@ -59,8 +59,18 @@ export class WorldbookTool extends BaseSimpleTool {
     const content = parameters.content;
     const comment = parameters.comment;
     
-    if (!key || typeof key !== 'string') {
-      return this.createFailureResult("WORLDBOOK tool requires 'key' parameter as a string.");
+    if (!key) {
+      return this.createFailureResult("WORLDBOOK tool requires 'key' parameter.");
+    }
+
+    // Handle key parameter - support both array and comma-separated string
+    let keyArray: string[];
+    if (Array.isArray(key)) {
+      keyArray = key.filter((k: string) => k && k.trim().length > 0);
+    } else if (typeof key === 'string') {
+      keyArray = key.split(',').map((k: string) => k.trim()).filter((k: string) => k.length > 0);
+    } else {
+      return this.createFailureResult("WORLDBOOK tool requires 'key' parameter as an array or comma-separated string.");
     }
 
     if (!content || typeof content !== 'string') {
@@ -71,13 +81,22 @@ export class WorldbookTool extends BaseSimpleTool {
       return this.createFailureResult("WORLDBOOK tool requires 'comment' parameter as a string.");
     }
 
+    // Handle keysecondary parameter - support both array and comma-separated string
+    let keysecondaryArray: string[] = [];
+    if (parameters.keysecondary) {
+      if (Array.isArray(parameters.keysecondary)) {
+        keysecondaryArray = parameters.keysecondary.filter((k: string) => k && k.trim().length > 0);
+      } else if (typeof parameters.keysecondary === 'string') {
+        keysecondaryArray = parameters.keysecondary.split(',').map((k: string) => k.trim()).filter((k: string) => k.length > 0);
+      }
+    }
+
     // Build the worldbook entry
     const entry = {
       id: `wb_entry_${Date.now()}`,
       uid: (1000 + Math.floor(Math.random() * 1000)).toString(),
-      key: key.split(',').map((k: string) => k.trim()).filter((k: string) => k.length > 0),
-      keysecondary: parameters.keysecondary ? 
-        parameters.keysecondary.split(',').map((k: string) => k.trim()).filter((k: string) => k.length > 0) : [],
+      key: keyArray,
+      keysecondary: keysecondaryArray,
       comment: comment,
       content: content,
       constant: parameters.constant || false,
