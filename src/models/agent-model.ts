@@ -48,15 +48,24 @@ export interface KnowledgeEntry {
   relevance_score: number;
 }
 
+/**
+ * Sub-problem entry for breaking down tasks into smaller actionable steps
+ */
+export interface SubProblem {
+  id: string;
+  description: string;
+  reasoning?: string;
+}
 
 /**
  * Task entry for tracking specific work items
- * Simplified structure - tasks are executed in sequential order
+ * Enhanced structure with sub-problems - tasks are no longer bound to specific tools
  */
 export interface TaskEntry {
   id: string;
   description: string;
   reasoning?: string; // Why this task was created/updated
+  sub_problems: SubProblem[]; // Ordered list of sub-problems to solve
 }
 
 /**

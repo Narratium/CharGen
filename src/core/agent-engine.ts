@@ -178,7 +178,7 @@ export class AgentEngine {
 
     const prompt = createStandardPromptTemplate(`
 You are an expert task planner for character card and worldbook generation. 
-Analyze the user's objective and create a smart, targeted task queue.
+Analyze the user's objective and create a smart, targeted task queue with sub-problems.
 
 USER OBJECTIVE: {main_objective}
 
@@ -194,7 +194,7 @@ ANALYSIS GUIDELINES:
    - Is the setting/theme sufficiently defined?
    - If NO: Include user clarification tasks
 
-3. THIRD, create 5-7 specific tasks following this structure:
+3. THIRD, create 5-7 specific tasks with actionable sub-problems:
    - Research tasks (if needed for existing content)
    - User clarification tasks (if story is too vague)
    - Character card generation task (REQUIRED)
@@ -203,14 +203,15 @@ ANALYSIS GUIDELINES:
 
 TASK CREATION RULES:
 - Character card generation MUST come before worldbook generation
-- Each task should be actionable with existing tools (SEARCH, ASK_USER, CHARACTER, WORLDBOOK, REFLECT)
+- Each task should be broken down into 2-5 specific sub-problems
+- Sub-problems should be tool-agnostic and action-oriented
 - Tasks should build upon each other logically
-- Include specific outcomes for each task
+- Sub-problems are completed sequentially within each task
 
 EXAMPLE DECISION LOGIC:
-- Story mentions "Harry Potter": ADD research task for Harry Potter universe
-- Story says "anime girl": ASK_USER for specific style/genre clarification  
-- Story is vague "fantasy adventure": ASK_USER for more specific direction
+- Story mentions "Harry Potter": ADD research task with sub-problems for different aspects
+- Story says "anime girl": ADD clarification task with specific questions  
+- Story is vague "fantasy adventure": ADD clarification task for genre/setting details
 - Story is clear "cyberpunk detective in Neo-Tokyo": PROCEED with character creation
 
 Respond using the following XML format:
@@ -223,9 +224,15 @@ Respond using the following XML format:
   </analysis>
   <initial_tasks>
     <task>
-      <description>specific task description</description>
-      <tool_type>SEARCH/ASK_USER/CHARACTER/WORLDBOOK/REFLECT</tool_type>
+      <description>main task description</description>
       <reasoning>why this task is needed</reasoning>
+      <sub_problems>
+        <sub_problem>
+          <description>specific actionable step</description>
+          <reasoning>why this step is important</reasoning>
+        </sub_problem>
+        <!-- 2-5 sub-problems per task -->
+      </sub_problems>
     </task>
     <!-- 5-7 tasks total -->
   </initial_tasks>
@@ -247,18 +254,32 @@ Respond using the following XML format:
       const clarityLevel = content.match(/<story_clarity_level>(.*?)<\/story_clarity_level>/)?.[1]?.trim() || 'moderate';
       const unclearAspects = content.match(/<unclear_aspects>(.*?)<\/unclear_aspects>/)?.[1]?.trim() || '';
       
-      // Parse tasks
+      // Parse tasks with sub-problems
       const taskMatches = [...content.matchAll(/<task>([\s\S]*?)<\/task>/g)];
       const taskQueue = taskMatches.map((match, index) => {
         const taskContent = match[1];
         const description = taskContent.match(/<description>([\s\S]*?)<\/description>/)?.[1]?.trim() || `Task ${index + 1}`;
-        const toolType = taskContent.match(/<tool_type>([\s\S]*?)<\/tool_type>/)?.[1]?.trim() || '';
         const reasoning = taskContent.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1]?.trim() || "Task planning";
+        
+        // Parse sub-problems
+        const subProblemMatches = [...taskContent.matchAll(/<sub_problem>([\s\S]*?)<\/sub_problem>/g)];
+        const sub_problems = subProblemMatches.map((subMatch, subIndex) => {
+          const subContent = subMatch[1];
+          const subDescription = subContent.match(/<description>([\s\S]*?)<\/description>/)?.[1]?.trim() || `Sub-problem ${subIndex + 1}`;
+          const subReasoning = subContent.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1]?.trim() || "Step planning";
+          
+          return {
+            id: `sub_${Date.now()}_${index}_${subIndex}`,
+            description: subDescription,
+            reasoning: subReasoning
+          };
+        });
         
         return {
           id: `init_task_${Date.now()}_${index}`,
           description,
-          reasoning: `[${toolType}] ${reasoning}`
+          reasoning,
+          sub_problems
         };
       });
 
@@ -291,8 +312,8 @@ Respond using the following XML format:
       
       analysisMessage += `\n\n📋 Task Strategy: ${taskStrategy}
       
-Created ${taskQueue.length} tasks:
-${taskQueue.map((task, i) => `${i + 1}. ${task.description}`).join('\n')}`;
+Created ${taskQueue.length} tasks with sub-problems:
+${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems.length} sub-problems)`).join('\n')}`;
 
       await ResearchSessionOperations.addMessage(this.conversationId, {
         role: "agent",
@@ -302,6 +323,66 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description}`).join('\n')}`;
 
     } catch (error) {
       console.error("❌ Task decomposition failed:", error);
+      
+      // Fallback: Create basic task queue with sub-problems
+      const fallbackTasks = [
+        {
+          id: `fallback_task_${Date.now()}_1`,
+          description: "Analyze user request and determine if clarification is needed",
+          reasoning: "Ensure we understand the story requirements",
+          sub_problems: [
+            {
+              id: `sub_${Date.now()}_1_1`,
+              description: "Review the user's story request for clarity",
+              reasoning: "Check if we have enough information"
+            },
+            {
+              id: `sub_${Date.now()}_1_2`, 
+              description: "Ask user for clarification if needed",
+              reasoning: "Get missing details for better generation"
+            }
+          ]
+        },
+        {
+          id: `fallback_task_${Date.now()}_2`, 
+          description: "Generate initial character card with basic information",
+          reasoning: "Create the main character foundation",
+          sub_problems: [
+            {
+              id: `sub_${Date.now()}_2_1`,
+              description: "Create character name and basic description",
+              reasoning: "Establish character identity"
+            },
+            {
+              id: `sub_${Date.now()}_2_2`,
+              description: "Develop character personality and traits",
+              reasoning: "Define character behavior"
+            }
+          ]
+        },
+        {
+          id: `fallback_task_${Date.now()}_3`,
+          description: "Create worldbook entries to support the character and story",
+          reasoning: "Build the world context around the character",
+          sub_problems: [
+            {
+              id: `sub_${Date.now()}_3_1`,
+              description: "Create basic world setting entries",
+              reasoning: "Establish story environment"
+            },
+            {
+              id: `sub_${Date.now()}_3_2`,
+              description: "Add character relationship entries",
+              reasoning: "Define character connections"
+            }
+          ]
+        }
+      ];
+      
+      await ResearchSessionOperations.updateResearchState(this.conversationId, {
+        task_queue: fallbackTasks,
+      });
+      
       console.log("🔄 Using fallback task queue due to decomposition failure");
     }
   }
@@ -358,8 +439,8 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description}`).join('\n')}`;
           console.log(`📊 Knowledge base updated: added ${result.result.knowledge_entries.length} new entries`);
         }
         
-        // Evaluate task completion after search
-        await this.evaluateTaskCompletion(context, decision.tool);
+        // Complete current sub-problem after successful tool execution
+        await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
         continue;
       }
 
@@ -387,8 +468,8 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description}`).join('\n')}`;
         
         await ResearchSessionOperations.updateStatus(this.conversationId, SessionStatus.THINKING);
         
-        // Evaluate task completion after user interaction
-        await this.evaluateTaskCompletion(context, decision.tool);
+        // Complete current sub-problem after successful user interaction
+        await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
         continue;
       }
 
@@ -414,8 +495,8 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description}`).join('\n')}`;
           console.log(`📚 Added ${newEntries.length} new worldbook entries`);
         }
         
-        // Check if current task has been completed using LLM analysis
-        await this.evaluateTaskCompletion(context, decision.tool);
+        // Complete current sub-problem after successful tool execution
+        await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
         continue;
       }
 
@@ -428,8 +509,8 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description}`).join('\n')}`;
           await ResearchSessionOperations.addTasksToQueue(this.conversationId, result.result.new_tasks);
           console.log(`📋 Added ${result.result.tasks_count} new tasks to queue`);
         }
-        
-        // Note: REFLECT tool doesn't need task completion evaluation as per requirements
+
+        await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
         continue;
       }
 
@@ -449,14 +530,6 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description}`).join('\n')}`;
             };
           } else {
             console.log("❓ Final generation evaluation: Incomplete, adding completion task");
-            // Add basic completion task if needed
-            await ResearchSessionOperations.updateResearchState(this.conversationId, {
-              task_queue: [{
-                id: `completion_task_${Date.now()}`,
-                description: "Complete and finalize character and worldbook generation",
-                reasoning: "Added for final completion"
-              }]
-            });
           }
         }
       }
@@ -513,12 +586,16 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description}`).join('\n')}`;
     {task_queue_status}
   </current_task_queue>
 
+  <current_sub_problem>
+    {current_sub_problem}
+  </current_sub_problem>
+
   <instructions>
     1.  Analyze the <main_objective> and assess current progress based on <completed_tasks>.
     2.  Review <existing_knowledge> to understand what information is already available.
     3.  Consider recent <conversation_context> for additional context and user feedback.
-    4.  Examine <current_task_queue> to understand what tasks remain to be completed.
-    5.  Based on this analysis, determine the single most critical action from <tools_schema> to progress towards the <main_objective>.
+    4.  Examine <current_task_queue> and <current_sub_problem> to understand what specific step needs to be completed.
+    5.  Based on this analysis, determine the single most critical tool action to complete the current sub-problem.
     6.  Construct your response meticulously following the <output_specification>.
   </instructions>
 
@@ -589,7 +666,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description}`).join('\n')}`;
         - Example for ASK_USER: <question>What genre style do you prefer?</question>
         - Example for CHARACTER: <name>Elara</name><description>A cunning sorceress...</description><tags><![CDATA[["fantasy", "sorceress"]]]></tags>
         - Example for WORLDBOOK: <key><![CDATA[["magic", "spell"]]]></key><content>Details...</content><comment>Magic system</comment><constant>false</constant><order>100</order>
-        - Example for REFLECT: <new_tasks><![CDATA[["Research character background", "Define magic system"]]]></new_tasks>
+        - Example for REFLECT: <new_tasks><![CDATA[[{"description":"Research character background", "reasoning":"Need more depth", "sub_problems":[{"description":"Find character family history", "reasoning":"Core background element"}, {"description":"Research character education", "reasoning":"Character development"}]}]]]></new_tasks>
         -->
       </parameters>
     </response>
@@ -606,6 +683,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description}`).join('\n')}`;
           knowledge_base: this.buildKnowledgeBaseSummary(context.research_state.knowledge_base),
           recent_conversation: this.buildRecentConversationSummary(context.message_history),
           task_queue_status: this.buildTaskQueueSummary(context),
+          current_sub_problem: context.research_state.task_queue?.[0]?.sub_problems?.[0]?.description || "No current sub-problem",
         }),
       ]);
 
@@ -799,27 +877,24 @@ Technical Details:
    */
   private buildTaskQueueSummary(context: ExecutionContext): string {
     if (!context.research_state.task_queue || context.research_state.task_queue.length === 0) {
-      return "No pending tasks in queue";
+      return "No tasks in queue";
     }
 
     const currentTask = context.research_state.task_queue[0];
-    const remainingCount = context.research_state.task_queue.length - 1;
-
-    let summary = `Current Task: ${currentTask.description}`;
-    if (currentTask.reasoning) {
-      summary += ` (${currentTask.reasoning})`;
+    if (!currentTask.sub_problems || currentTask.sub_problems.length === 0) {
+      return `Current Task: ${currentTask.description}\nNo sub-problems defined`;
     }
 
-    if (remainingCount > 0) {
-      summary += `\nRemaining Tasks: ${remainingCount} tasks in queue`;
-      // Show next 2 upcoming tasks for context
-      const upcomingTasks = context.research_state.task_queue.slice(1, 3);
-      upcomingTasks.forEach((task, index) => {
-        summary += `\n${index + 2}. ${task.description}`;
-      });
-    }
+    const currentSubProblem = currentTask.sub_problems[0];
+    const remainingSubProblems = currentTask.sub_problems.length - 1;
+    const upcomingTasks = context.research_state.task_queue.length - 1;
 
-    return summary;
+    return `Current Task: ${currentTask.description}
+Current Sub-Problem: ${currentSubProblem.description}
+Remaining Sub-Problems in Current Task: ${remainingSubProblems}
+Upcoming Tasks: ${upcomingTasks}
+
+Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${currentTask.sub_problems.length} sub-problems completed`;
   }
 
   private buildCompletedTasksSummary(context: ExecutionContext): string {
@@ -844,163 +919,7 @@ Technical Details:
    * Evaluate if current task has been completed using LLM analysis
    * Enhanced with tool-specific evaluation logic
    */
-  private async evaluateTaskCompletion(context: ExecutionContext, lastExecutedTool?: ToolType): Promise<void> {
-    if (!context.research_state.task_queue || context.research_state.task_queue.length === 0) {
-      return; // No tasks to evaluate
-    }
 
-    const currentTask = context.research_state.task_queue[0]; // First task in queue
-    const session = await ResearchSessionOperations.getSessionById(this.conversationId);
-    
-    if (!session) return;
-
-    // Build tool-specific context for evaluation
-    const toolSpecificContext = this.buildToolSpecificContext(lastExecutedTool, session, context);
-
-    const prompt = createStandardPromptTemplate(`
-You are evaluating whether a specific task has been completed based on the current state and recent tool execution.
-
-TASK TO EVALUATE: {task_description}
-
-LAST EXECUTED TOOL: {last_tool}
-
-TOOL-SPECIFIC EVALUATION CONTEXT:
-{tool_context}
-
-EVALUATION INSTRUCTIONS:
-Based on the task description and the tool-specific context above, determine if this specific task has been sufficiently completed.
-
-TOOL-SPECIFIC EVALUATION CRITERIA:
-1. For SEARCH tasks:
-   - Check if relevant knowledge has been gathered in the knowledge base
-   - Evaluate if the search results are sufficient for the task requirements
-   - Consider the number and quality of knowledge entries
-
-2. For CHARACTER tasks:
-   - Verify if character data has been generated/updated
-   - Check completeness of required character fields
-   - Assess if the character content matches task requirements
-
-3. For WORLDBOOK tasks:
-   - Confirm if worldbook entries have been created/updated
-   - Evaluate the relevance and quality of worldbook content
-   - Check if entries support the overall narrative
-
-4. For ASK_USER tasks:
-   - Verify if user has provided the requested information
-   - Check if the user's response addresses the question
-   - Determine if sufficient information was obtained
-
-5. For REFLECT tasks:
-   - Assess if new tasks have been added to the queue
-   - Evaluate if the reflection has improved the task planning
-   - Check if the reflection addressed current needs
-
-IMPORTANT: Focus ONLY on whether this specific task is complete based on its requirements and the tool execution results. Do not evaluate overall generation quality.
-
-Respond in XML format:
-<evaluation>
-  <completed>true/false</completed>
-  <reasoning>Detailed explanation of why the current task is or isn't complete based on task requirements and tool execution results</reasoning>
-</evaluation>
-    `);
-
-    try {
-      const response = await this.model.invoke([
-        await prompt.format({
-          task_description: currentTask.description,
-          last_tool: lastExecutedTool,
-          tool_context: toolSpecificContext
-        }),
-      ]);
-
-      const content = response.content as string;
-      const completedMatch = content.match(/<completed>(.*?)<\/completed>/);
-      const reasoningMatch = content.match(/<reasoning>(.*?)<\/reasoning>/s);
-      
-      const isCompleted = completedMatch?.[1]?.trim().toLowerCase() === 'true';
-      const reasoning = reasoningMatch?.[1]?.trim() || 'No reasoning provided';
-
-      if (isCompleted) {
-        console.log(`✅ Task completed: ${currentTask.description}`);
-        console.log(`📝 Reasoning: ${reasoning}`);
-        
-        // Complete the current task and move it to completed tasks
-        await ResearchSessionOperations.completeCurrentTask(this.conversationId);
-
-        await ResearchSessionOperations.addMessage(this.conversationId, {
-          role: "agent",
-          content: `Task completed: ${currentTask.description}. ${reasoning}`,
-          type: "quality_evaluation",
-        });
-      } else {
-        console.log(`⏳ Task still in progress: ${currentTask.description}`);
-        console.log(`📝 Reasoning: ${reasoning}`);
-      }
-
-    } catch (error) {
-      console.error("❌ Error evaluating task completion:", error);
-    }
-  }
-
-  /**
-   * Build tool-specific context for task evaluation
-   */
-  private buildToolSpecificContext(
-    toolType: ToolType | undefined, 
-    session: ResearchSession, 
-    context: ExecutionContext
-  ): string {
-    if (!toolType) {
-      return "No recent tool execution information available.";
-    }
-
-    switch (toolType) {
-      case ToolType.SEARCH:
-        const knowledgeBase = context.research_state.knowledge_base;
-        const recentEntries = knowledgeBase.slice(-3); // Last 3 entries
-        return `SEARCH RESULTS:
-Knowledge Base Size: ${knowledgeBase.length} entries
-Recent Knowledge Entries:
-${recentEntries.map(entry => `- Source: ${entry.source}\n  Content: ${entry.content.substring(0, 200)}...`).join('\n')}
-
-Recent Search Quality: ${knowledgeBase.length > 0 ? 'Information gathered' : 'No information found'}`;
-
-      case ToolType.CHARACTER:
-        const characterData = session.generation_output.character_data;
-        return `CHARACTER GENERATION:
-Character Data Status: ${characterData ? 'Generated' : 'Not generated'}
-${characterData ? `Generated Fields:
-${Object.entries(characterData).map(([key, value]) => `- ${key}: ${value ? 'Present' : 'Missing'}`).join('\n')}` : 'No character data available'}`;
-
-      case ToolType.WORLDBOOK:
-        const worldbookData = session.generation_output.worldbook_data || [];
-        return `WORLDBOOK GENERATION:
-Worldbook Entries Count: ${worldbookData.length}
-${worldbookData.length > 0 ? `Recent Entries:
-${worldbookData.slice(-3).map(entry => `- Key: ${entry.key.join(', ')}\n  Content: ${entry.content.substring(0, 150)}...`).join('\n')}` : 'No worldbook entries available'}`;
-
-      case ToolType.ASK_USER:
-        const recentMessages = context.message_history.slice(-3);
-        const lastUserMessage = recentMessages.reverse().find(msg => msg.role === 'user' && msg.type === 'user_input');
-        return `USER INTERACTION:
-Latest User Response: ${lastUserMessage ? `"${lastUserMessage.content}"` : 'No recent user input'}
-User Response Status: ${lastUserMessage ? 'Received' : 'Waiting for response'}
-Response Length: ${lastUserMessage ? lastUserMessage.content.length : 0} characters`;
-
-      case ToolType.REFLECT:
-        const taskQueue = context.research_state.task_queue;
-        const completedTasks = context.research_state.completed_tasks;
-        return `REFLECTION RESULTS:
-Current Task Queue Size: ${taskQueue.length}
-Completed Tasks Count: ${completedTasks.length}
-Recent Task Updates: ${taskQueue.length > 1 ? 'New tasks added' : 'No new tasks'}
-Planning Status: ${taskQueue.length > 0 ? 'Active planning' : 'Planning complete'}`;
-
-      default:
-        return `Unknown tool type: ${toolType}`;
-    }
-  }
 
   /**
    * Execute a tool decision
@@ -1145,7 +1064,7 @@ Planning Status: ${taskQueue.length > 0 ? 'Active planning' : 'Planning complete
 
       await ResearchSessionOperations.addMessage(this.conversationId, {
         role: "agent",
-          content: improvementMsg,
+        content: improvementMsg,
         type: "quality_evaluation",
       }); 
 

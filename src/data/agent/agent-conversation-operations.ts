@@ -5,6 +5,7 @@ import {
   ResearchState,      
   KnowledgeEntry,
   GenerationOutput,
+  TaskEntry,
 } from "../../models/agent-model";
 import { readData, writeData, AGENT_CONVERSATIONS_FILE } from "../local-storage";
 import { v4 as uuidv4 } from "uuid";
@@ -285,7 +286,7 @@ export class ResearchSessionOperations {
    */
   static async addTasksToQueue(
     sessionId: string,
-    newTasks: string[]
+    newTasks: TaskEntry[]
   ): Promise<void> {
     const sessions = await this.getAllSessions();
     const sessionIndex = sessions.findIndex(s => s.id === sessionId);
@@ -297,15 +298,8 @@ export class ResearchSessionOperations {
     const session = sessions[sessionIndex];
     const currentQueue = session.research_state.task_queue || [];
     
-    // Create new TaskEntry objects for the new tasks
-    const newTaskEntries = newTasks.map((taskDesc, index) => ({
-      id: `reflect_task_${Date.now()}_${index}`,
-      description: taskDesc,
-      reasoning: "Added during reflection"
-    }));
-    
     // Add new tasks to the end of current queue
-    session.research_state.task_queue = [...currentQueue, ...newTaskEntries];
+    session.research_state.task_queue = [...currentQueue, ...newTasks];
     
     // Save only the updated session
     await writeData(AGENT_CONVERSATIONS_FILE, sessions);
@@ -363,5 +357,61 @@ export class ResearchSessionOperations {
     if (!session) return null;
     
     return session.generation_output;
+  }
+
+  /**
+   * Complete current sub-problem by removing it from the latest task
+   */
+  static async completeCurrentSubProblem(sessionId: string): Promise<void> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const taskQueue = session.research_state.task_queue || [];
+    
+    if (taskQueue.length > 0 && taskQueue[0].sub_problems.length > 0) {
+      const currentTask = taskQueue[0];
+      const completedSubProblem = currentTask.sub_problems[0]; // First sub-problem
+      
+      // Remove the first sub-problem
+      currentTask.sub_problems = currentTask.sub_problems.slice(1);
+      
+      // If no more sub-problems in this task, move the task to completed
+      if (currentTask.sub_problems.length === 0) {
+        session.research_state.task_queue = taskQueue.slice(1);
+        session.research_state.completed_tasks.push(currentTask.description);
+      }
+      
+      await this.saveSession(session);
+      
+      console.log(`✅ Sub-problem completed: ${completedSubProblem.description}`);
+      if (currentTask.sub_problems.length === 0) {
+        console.log(`✅ Task completed: ${currentTask.description}`);
+      }
+    }
+  }
+
+  /**
+   * Get current sub-problem from the first task in queue
+   */
+  static async getCurrentSubProblem(sessionId: string): Promise<{ 
+    task?: TaskEntry, 
+    subProblem?: any 
+  }> {
+    const session = await this.getSessionById(sessionId);
+    if (!session || !session.research_state.task_queue || session.research_state.task_queue.length === 0) {
+      return {};
+    }
+
+    const currentTask = session.research_state.task_queue[0];
+    if (!currentTask.sub_problems || currentTask.sub_problems.length === 0) {
+      return { task: currentTask };
+    }
+
+    return { 
+      task: currentTask, 
+      subProblem: currentTask.sub_problems[0] 
+    };
   }
 } 
