@@ -434,4 +434,46 @@ export class ResearchSessionOperations {
       subProblem: currentTask.sub_problems[0] 
     };
   }
+
+  /**
+   * Modify current task description and replace sub-problems
+   */
+  static async modifyCurrentTaskAndSubproblems(sessionId: string, newDescription: string, newSubproblems: string[]): Promise<void> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    const taskQueue = session.research_state.task_queue || [];
+    
+    if (taskQueue.length > 0) {
+      const currentTask = taskQueue[0];
+      
+      // Update task description
+      currentTask.description = newDescription;
+      
+      // Replace sub-problems with new ones
+      if (newSubproblems.length > 0) {
+        currentTask.sub_problems = newSubproblems.map((description, index) => ({
+          id: `modified_sub_${Date.now()}_${index}`,
+          description: description,
+          reasoning: "Updated by task adjustment"
+        }));
+      } else {
+        // If no new sub-problems provided, clear existing ones and mark task as complete
+        currentTask.sub_problems = [];
+        session.research_state.task_queue = taskQueue.slice(1);
+        session.research_state.completed_tasks.push(currentTask.description);
+      }
+      
+      await this.saveSession(session);
+      console.log(`✅ Modified current task to: ${newDescription}`);
+      
+      if (newSubproblems.length > 0) {
+        console.log(`✅ Updated with ${newSubproblems.length} new sub-problems`);
+      } else {
+        console.log(`✅ Task completed with no sub-problems: ${currentTask.description}`);
+      }
+    }
+  }
 } 

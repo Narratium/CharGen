@@ -7,7 +7,7 @@ import {
   KnowledgeEntry,
   GenerationOutput,
   Message,
-  ResearchSession,
+  TaskAdjustment,
 } from "../models/agent-model";
 import { ResearchSessionOperations } from "../data/agent/agent-conversation-operations";
 import { ToolRegistry } from "../tools/tool-registry";
@@ -30,17 +30,19 @@ const CORE_KNOWLEDGE_SECTION = `
 ### CHARACTER CARDS OVERVIEW
 A character card is a structured data format that defines AI roleplay scenarios. Character cards can represent either individual characters or entire world-based scenarios and stories, serving as the foundation for persistent conversations and defining how the AI should behave and interact.
 
-#### Character Card Core Fields:
-- **name**: Primary identifier - can be a character name or scenario title
-- **description**: Physical/visual details for characters, or world setting description for scenarios
-- **personality**: Behavioral traits for characters, or narrative style/tone for world scenarios
-- **scenario**: Context and circumstances - character's situation or world's current state/events
-- **first_mes**: Opening message that establishes the roleplay situation
-- **mes_example**: Example dialogue demonstrating the expected interaction style and format
-- **creator_notes**: Usage guidelines, compatibility information, and creator insights
-- **avatar**: Visual representation - character portrait or scenario artwork
-- **alternate_greetings**: Multiple opening scenarios or character introduction variations
-- **tags**: Categorization for discovery - genre, themes, character types, world elements
+#### Character Card Core Fields (ALL REQUIRED):
+- **name**: Primary identifier - can be a character name or scenario title [REQUIRED]
+- **description**: Physical/visual details for characters, or world setting description for scenarios [REQUIRED]
+- **personality**: Behavioral traits for characters, or narrative style/tone for world scenarios [REQUIRED]
+- **scenario**: Context and circumstances - character's situation or world's current state/events [REQUIRED]
+- **first_mes**: Opening message that establishes the roleplay situation [REQUIRED]
+- **mes_example**: Example dialogue demonstrating the expected interaction style and format [REQUIRED]
+- **creator_notes**: Usage guidelines, compatibility information, and creator insights [REQUIRED]
+- **tags**: Categorization for discovery - genre, themes, character types, world elements [REQUIRED]
+- **avatar**: Visual representation - character portrait or scenario artwork [OPTIONAL]
+- **alternate_greetings**: Multiple opening scenarios or character introduction variations [OPTIONAL]
+
+**CRITICAL**: All eight core fields (name through tags) must be completed in the specified order for a professional-quality character card. The CHARACTER tool should be used systematically to build these fields incrementally across multiple tool calls until all required fields are present.
 
 #### Character Card Types & Applications:
 1. **Individual Characters**: Focused on a specific person with defined personality, background, and traits
@@ -194,7 +196,7 @@ ANALYSIS GUIDELINES:
    - Is the setting/theme sufficiently defined?
    - If NO: Include user clarification tasks
 
-3. THIRD, create 5-7 specific tasks with actionable sub-problems:
+3. THIRD, create 3-5 specific tasks with actionable sub-problems:
    - Research tasks (if needed for existing content)
    - User clarification tasks (if story is too vague)
    - Character card generation task (REQUIRED)
@@ -234,7 +236,7 @@ Respond using the following XML format:
         // 2-5 sub-problems per task
       </sub_problems>
     </task>
-    // 5-7 tasks total
+    // 3-5 tasks total
   </initial_tasks>
   <task_strategy>explanation of the overall approach</task_strategy>
 </task_decomposition>`);
@@ -323,66 +325,6 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
 
     } catch (error) {
       console.error("❌ Task decomposition failed:", error);
-      
-      // Fallback: Create basic task queue with sub-problems
-      const fallbackTasks = [
-        {
-          id: `fallback_task_${Date.now()}_1`,
-          description: "Analyze user request and determine if clarification is needed",
-          reasoning: "Ensure we understand the story requirements",
-          sub_problems: [
-            {
-              id: `sub_${Date.now()}_1_1`,
-              description: "Review the user's story request for clarity",
-              reasoning: "Check if we have enough information"
-            },
-            {
-              id: `sub_${Date.now()}_1_2`, 
-              description: "Ask user for clarification if needed",
-              reasoning: "Get missing details for better generation"
-            }
-          ]
-        },
-        {
-          id: `fallback_task_${Date.now()}_2`, 
-          description: "Generate initial character card with basic information",
-          reasoning: "Create the main character foundation",
-          sub_problems: [
-            {
-              id: `sub_${Date.now()}_2_1`,
-              description: "Create character name and basic description",
-              reasoning: "Establish character identity"
-            },
-            {
-              id: `sub_${Date.now()}_2_2`,
-              description: "Develop character personality and traits",
-              reasoning: "Define character behavior"
-            }
-          ]
-        },
-        {
-          id: `fallback_task_${Date.now()}_3`,
-          description: "Create worldbook entries to support the character and story",
-          reasoning: "Build the world context around the character",
-          sub_problems: [
-            {
-              id: `sub_${Date.now()}_3_1`,
-              description: "Create basic world setting entries",
-              reasoning: "Establish story environment"
-            },
-            {
-              id: `sub_${Date.now()}_3_2`,
-              description: "Add character relationship entries",
-              reasoning: "Define character connections"
-            }
-          ]
-        }
-      ];
-      
-      await ResearchSessionOperations.updateResearchState(this.conversationId, {
-        task_queue: fallbackTasks,
-      });
-      
       console.log("🔄 Using fallback task queue due to decomposition failure");
     }
   }
@@ -418,6 +360,12 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       if (!decision) {
         console.log("🎯 No more decisions available");
         continue; // Continue to end of loop where task queue check happens
+      }
+
+      // Handle task optimization if specified
+      if (decision.taskAdjustment && decision.taskAdjustment.type !== "perfect") {
+        console.log(`📋 Applying task optimization: ${decision.taskAdjustment.type} - ${decision.taskAdjustment.reasoning}`);
+        await this.applyTaskAdjustment(decision.taskAdjustment);
       }
 
       // Execute the decided tool
@@ -595,9 +543,14 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
     1.  Analyze the <main_objective> and assess current progress based on <completed_tasks>.
     2.  Review <existing_knowledge> to understand what information is already available.
     3.  Consider recent <conversation_context> for additional context and user feedback.
-    4.  Examine <current_task_queue> and <current_sub_problem> to understand what specific step needs to be completed.
-    5.  Based on this analysis, determine the single most critical tool action to complete the current sub-problem.
-    6.  Construct your response meticulously following the <output_specification>.
+    4.  TASK OPTIMIZATION ANALYSIS: Evaluate if current task needs optimization based on last tool result:
+        - SEARCH: If search was sufficient, optimize by reducing sub-problems. If insufficient, optimize task description and sub-problems.
+        - ASK_USER: If user provided clear direction, optimize task accordingly. If user declined, optimize by reducing sub-problems.
+        - CHARACTER: If character work progressed well, optimize by focusing remaining sub-problems. If issues found, optimize task focus.
+        - WORLDBOOK: If attempted too early, optimize task to prioritize character completion first.
+    5.  Examine <current_task_queue> and <current_sub_problem> to understand what specific step needs to be completed.
+    6.  Based on this analysis, determine the single most critical tool action to complete the current sub-problem.
+    7.  Construct your response meticulously following the <output_specification>.
   </instructions>
 
   <tool_usage_guidelines>
@@ -627,9 +580,11 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
 
       <character_when>
         - Most frequently used tool
-        - Build incrementally: name/description → personality → scenario → dialogue → details
-        - Must be substantially complete BEFORE starting worldbook
-        - Use systematic approach with logical field ordering
+        - Build incrementally in REQUIRED order: name → description → personality → scenario → first_mes → mes_example → creator_notes → tags
+        - ALL EIGHT FIELDS ARE MANDATORY for complete character card
+        - Use multiple tool calls to build systematically, adding one or more fields each time
+        - Must have ALL required fields complete BEFORE starting worldbook
+        - Character completion is verified by presence of all eight required fields
       </character_when>
 
       <worldbook_when>
@@ -654,8 +609,29 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
 
     <response>
       <think>
-        Provide a detailed, step-by-step reasoning for your choice of action. Explain how this action helps achieve the main objective based on the current state.
+        Provide detailed reasoning in TWO parts:
+        1. TASK ADJUSTMENT ANALYSIS: Analyze if current tasks need adjustment based on recent tool results and progress.
+        2. TOOL SELECTION: Explain your choice of the next tool action and how it helps achieve the main objective.
       </think>
+      <task_adjustment>
+        Based on the last tool execution result, analyze if current task needs optimization:
+        <adjustment_type>perfect|optimize_task</adjustment_type>
+        <reasoning>Brief reasoning for the decision</reasoning>
+        <task_description>New task description if optimization needed</task_description>
+        <new_subproblems>New sub-problems separated by | (max 2, cannot exceed current count)</new_subproblems>
+        
+        Example 1 - Current task is perfect:
+        <adjustment_type>perfect</adjustment_type>
+        <reasoning>Character tool executed successfully, current task and sub-problems are perfectly aligned</reasoning>
+        <task_description></task_description>
+        <new_subproblems></new_subproblems>
+        
+        Example 2 - Task needs optimization:
+        <adjustment_type>optimize_task</adjustment_type>
+        <reasoning>Search provided sufficient background info, can simplify remaining sub-problems</reasoning>
+        <task_description>Create character personality and traits</task_description>
+        <new_subproblems>Define core personality traits</new_subproblems>
+      </task_adjustment>
       <action>The name of the ONE tool you are choosing to use (e.g., SEARCH, CHARACTER, WORLDBOOK).</action>
       <parameters>
         <!--
@@ -699,7 +675,21 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       
       // Parse XML response directly
       const think = content.match(/<think>([\s\S]*?)<\/think>/)?.[1].trim() ?? 'No reasoning provided';
+      const taskAdjustmentBlock = content.match(/<task_adjustment>([\s\S]*?)<\/task_adjustment>/)?.[1] ?? '';
       const action = content.match(/<action>([\s\S]*?)<\/action>/)?.[1].trim() ?? 'null';
+      
+      // Parse task adjustment details
+      const adjustmentType = taskAdjustmentBlock.match(/<adjustment_type>([\s\S]*?)<\/adjustment_type>/)?.[1]?.trim() ?? 'none';
+      const adjustmentReasoning = taskAdjustmentBlock.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1]?.trim() ?? '';
+      const newTaskDescription = taskAdjustmentBlock.match(/<task_description>([\s\S]*?)<\/task_description>/)?.[1]?.trim() ?? '';
+      const newSubproblemsText = taskAdjustmentBlock.match(/<new_subproblems>([\s\S]*?)<\/new_subproblems>/)?.[1]?.trim() ?? '';
+      
+      const taskAdjustment = {
+        type: adjustmentType as 'perfect' | 'optimize_task',
+        reasoning: adjustmentReasoning,
+        taskDescription: newTaskDescription || undefined,
+        newSubproblems: newSubproblemsText ? newSubproblemsText.split('|').map(s => s.trim()).filter(s => s.length > 0).slice(0, 2) : undefined
+      };
       
       if (action === "null" || !action) {
       return null;
@@ -746,6 +736,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         parameters: parameters,
         reasoning: think,
         priority: 5,
+        taskAdjustment: taskAdjustment as TaskAdjustment,
       };
     } catch (error) {
       console.error("Error in selectNextDecision:", error);
@@ -878,6 +869,53 @@ Technical Details:
       return `Parameters not found for tool ${toolType}`;
     } catch (error) {
       return `Error extracting parameters for ${toolType}: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  /**
+   * Apply task optimization based on planning analysis
+   */
+  private async applyTaskAdjustment(taskAdjustment: TaskAdjustment): Promise<void> {
+    try {
+      console.log(`🔄 Processing task optimization: ${taskAdjustment.type}`);
+      
+      if (taskAdjustment.type === "optimize_task") {
+        // Get current task info to validate constraints
+        const currentTaskInfo = await ResearchSessionOperations.getCurrentSubProblem(this.conversationId);
+        const currentSubproblemCount = currentTaskInfo.task?.sub_problems?.length || 0;
+        
+        // Ensure new sub-problems don't exceed current count and max limit of 2
+        let finalSubproblems = taskAdjustment.newSubproblems || [];
+        if (finalSubproblems.length > currentSubproblemCount) {
+          finalSubproblems = finalSubproblems.slice(0, currentSubproblemCount);
+        }
+        if (finalSubproblems.length > 2) {
+          finalSubproblems = finalSubproblems.slice(0, 2);
+        }
+        
+        // Apply the optimization
+        await ResearchSessionOperations.modifyCurrentTaskAndSubproblems(
+          this.conversationId, 
+          taskAdjustment.taskDescription || currentTaskInfo.task?.description || '',
+          finalSubproblems
+        );
+        
+        console.log(`✅ Optimized current task: ${taskAdjustment.taskDescription || 'description unchanged'}`);
+        if (finalSubproblems.length > 0) {
+          console.log(`✅ Updated sub-problems (${finalSubproblems.length}): ${finalSubproblems.join(', ')}`);
+        }
+      }
+      
+      // Record the task optimization in conversation history
+      await ResearchSessionOperations.addMessage(this.conversationId, {
+        role: "agent",
+        content: `Task optimization applied: ${taskAdjustment.type} - ${taskAdjustment.reasoning}`,
+        type: "system_info"
+      });
+      
+    } catch (error) {
+      console.error("❌ Failed to apply task optimization:", error);
+      // Don't throw - continue with execution even if optimization fails
     }
   }
 

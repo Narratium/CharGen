@@ -82,26 +82,26 @@ export class SearchTool extends BaseSimpleTool {
       for (const singleQuery of queries) {
         try {
           console.log(`🔍 Searching for: "${singleQuery}"`);
-          // Use Tavily search directly
+      // Use Tavily search directly
           const searchResult = await this.tavilySearch.invoke({ query: singleQuery });
-          
-          // Parse the Tavily response
-          const searchData = typeof searchResult === 'string' ? JSON.parse(searchResult) : searchResult;
-          
-          if (!searchData.results || !Array.isArray(searchData.results)) {
+      
+      // Parse the Tavily response
+      const searchData = typeof searchResult === 'string' ? JSON.parse(searchResult) : searchResult;
+      
+      if (!searchData.results || !Array.isArray(searchData.results)) {
             console.warn(`Invalid search response format for query: "${singleQuery}"`);
             continue;
-          }
-        
-          // Convert Tavily results to knowledge entries
-          const knowledgeEntries = searchData.results.map((result: any) => 
-            this.createKnowledgeEntry(
+    }
+    
+      // Convert Tavily results to knowledge entries
+      const knowledgeEntries = searchData.results.map((result: any) => 
+        this.createKnowledgeEntry(
               `${result.title || "Search Result"} (Query: ${singleQuery})`,
-              result.content || result.snippet || "",
-              result.url || "Unknown",
-              Math.round((result.score || 0.5) * 100) // Convert score to percentage
-            )
-          );
+          result.content || result.snippet || "",
+          result.url || "Unknown",
+          Math.round((result.score || 0.5) * 100) // Convert score to percentage
+        )
+      );
 
           allKnowledgeEntries.push(...knowledgeEntries);
           allSources.push(...searchData.results.map((r: any) => r.title || r.url));

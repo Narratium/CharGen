@@ -28,6 +28,16 @@ export enum SessionStatus {
 // ============================================================================
 
 /**
+ * Task adjustment structure for planning analysis
+ */
+export interface TaskAdjustment {
+  type: 'perfect' | 'optimize_task';
+  reasoning: string;
+  taskDescription?: string; // New task description if optimization needed
+  newSubproblems?: string[]; // New sub-problems (max 2, cannot exceed current count)
+}
+
+/**
  * Real-time tool decision - inspired by DeepResearch action types
  */
 export interface ToolDecision {
@@ -35,6 +45,7 @@ export interface ToolDecision {
   parameters: Record<string, any>;
   reasoning: string;
   priority: number;
+  taskAdjustment?: TaskAdjustment; // Optional task adjustment from planning analysis
 }
 
 /**

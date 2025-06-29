@@ -13,7 +13,7 @@ import { BaseSimpleTool, ToolParameter } from "../base-tool";
 export class CharacterTool extends BaseSimpleTool {
   readonly toolType = ToolType.CHARACTER;
   readonly name = "CHARACTER";
-  readonly description = "Generate or update character card data - one of the most frequently used tools. Build character incrementally by adding fields in logical order: start with basic info (name, description), then personality, scenario, dialogue examples, and finally details like creator notes and tags. CHARACTER generation should typically be completed BEFORE starting worldbook creation, as worldbook entries should complement and enhance the established character.";
+  readonly description = "Generate or update character card data - one of the most frequently used tools. Build character incrementally by adding fields in REQUIRED logical order: name → description → personality → scenario → first_mes → mes_example → creator_notes → tags. ALL EIGHT FIELDS ARE REQUIRED for a complete character card. Use multiple tool calls to build systematically, with each call adding one or more fields. CHARACTER generation with all required fields must be completed BEFORE starting worldbook creation, as worldbook entries should complement and enhance the established character.";
   
   readonly parameters: ToolParameter[] = [
     {
