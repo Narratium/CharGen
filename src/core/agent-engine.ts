@@ -77,11 +77,40 @@ Worldbooks are dynamic knowledge systems that provide contextual information to 
 - **constant**: Controls whether entry remains permanently active regardless of keywords
 - **selective**: Enables advanced keyword logic with AND/OR/NOT operations for precise activation
 
+#### Essential Entry Excellence Standards:
+
+**STATUS Entry Standard:**
+Comprehensive real-time information including temporal context, spatial context, environmental data, character statistics, physical information, interactive elements, visual structure with symbols and organized data presentation, and dynamic elements that change based on story progression.
+
+**WORLD_VIEW Entry Standard:**
+A high-quality WORLD_VIEW entry should provide systematic world-building with:
+- **Version Control**: Clear versioning for world consistency (e.g., "version: 3.0")
+- **Historical Timeline**: Detailed chronological development with specific dates, times, phases
+- **System Categories**: Comprehensive coverage of technology, politics, economics, society, environment
+- **Hierarchical Structure**: Main categories → subcategories → specific items → detailed descriptions
+- **Interconnected Elements**: All systems relate to and support each other logically
+- **Expansion Interfaces**: Clear connection points where supplementary entries can add specific details
+- **Causal Relationships**: Events, systems, and factions have logical cause-and-effect connections
+- **Living World Design**: Dynamic elements that can evolve and change over time
+
+**USER_SETTING Entry Standard:**
+A high-quality USER_SETTING entry should provide comprehensive player character profiling with:
+- **Multi-dimensional Information**: Basic info, appearance, personality layers (surface vs inner), life circumstances, special experiences, abilities, current state
+- **Hierarchical Organization**: Main categories → subcategories → specific items → detailed descriptions
+- **Timeline Integration**: Character development across different time periods, before/after major events, transformation arcs
+- **Psychological Depth**: Surface personality vs inner nature, mental state evolution, motivations, desires, plans
+- **Systematic Ability Description**: Detailed mechanisms, usage methods, limitations, and conditions for special powers or skills
+- **Dynamic Character Arc**: Past circumstances → current situation → future intentions, showing character growth and change
+- **World Integration**: How the character fits into and interacts with the established world systems and events
+- **Behavioral Framework**: Action tendencies, decision-making patterns, relationship dynamics, strategic approaches
+
+These create immersive, comprehensive world foundations that provide rich context for AI responses and clear expansion opportunities for supplementary worldbook entries.
+
 #### Worldbook Best Practices:
-1. **Dual Classification System**: Create two types of entries - (1) Essential fixed entries with specific comment values "STATUS" (wrapped in <status>content</status>), "USER_SETTING" (wrapped in <user_setting>content</user_setting>), "WORLD_VIEW" (wrapped in <world_view>content</world_view>) containing 200-1000 words each, and (2) Supplementary keyword-triggered entries for NPCs, locations, items, and world details
+1. **Dual Classification System**: Create two types of entries - (1) Essential fixed entries with specific comment values "STATUS" (comprehensive real-time interface), "USER_SETTING" (multi-dimensional player character profiling with hierarchical organization, timeline integration, psychological depth, systematic ability descriptions, dynamic character arc, and behavioral framework), "WORLD_VIEW" (systematic world-building with version control, historical timeline, hierarchical system categories, interconnected elements, and expansion interfaces for supplementary entries) all wrapped in proper XML tags containing 200-1000 words each, and (2) Supplementary keyword-triggered entries that expand specific world elements (NPCs, locations, items, factions, technologies, events) referenced in the WORLD_VIEW foundation
 2. **Strict Creation Order**: Follow this exact sequence - FIRST: STATUS entry (current game state), SECOND: USER_SETTING entry (player character info), THIRD: WORLD_VIEW entry (world background), ONLY THEN: supplementary keyword entries. Each essential entry must be completed with proper XML wrapping before proceeding to the next type
 3. **Quality over Quantity**: Focus on creating meaningful, well-crafted entries rather than numerous shallow ones
-4. **Comprehensive Coverage**: Include character relationships, world information, rules, and contextual details
+4. **Systematic Expansion**: Supplementary entries should expand specific elements referenced in WORLD_VIEW foundation (e.g., if WORLD_VIEW mentions "资源集散地", create specific entries for individual locations; if it mentions factions, create detailed NPC entries for faction leaders)
 5. **Strategic Keywords**: Use discoverable, relevant keywords that naturally appear in conversations for supplementary entries
 6. **Content Depth**: Provide useful, detailed information that genuinely enhances storytelling and immersion
 7. **Strategic Positioning**: Use position 0-1 for foundational world info, position 2 for supplemental context, position 3-4 for immediate response relevance
@@ -1144,14 +1173,17 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
     </character_data_criteria>
     
     <worldbook_criteria>
-      - MANDATORY: Must contain exactly THREE essential fixed entries with proper XML wrapping: (1) comment="STATUS" with <status>content</status>, (2) comment="USER_SETTING" with <user_setting>content</user_setting>, (3) comment="WORLD_VIEW" with <world_view>content</world_view>
+      - MANDATORY: Must contain exactly THREE essential fixed entries with proper XML wrapping: (1) comment="STATUS" with <status>content</status> containing comprehensive real-time interface, (2) comment="USER_SETTING" with <user_setting>content</user_setting> containing multi-dimensional player character profiling with hierarchical organization, timeline integration, psychological depth, systematic ability descriptions, dynamic character arc, and behavioral framework, (3) comment="WORLD_VIEW" with <world_view>content</world_view> containing systematic world-building with version control, historical timeline, hierarchical system categories, interconnected elements, and expansion interfaces
+      - STATUS entry must demonstrate excellence standard: immersive game-like interface with organized sections, dynamic values, clear formatting with symbols, and comprehensive real-time information display
+      - USER_SETTING entry must demonstrate excellence standard: multi-dimensional character profiling with basic info, appearance, personality layers (surface vs inner), life circumstances, special experiences, abilities with detailed mechanisms, timeline integration showing character development, psychological depth including motivations and plans, and behavioral framework for decision-making patterns
+      - WORLD_VIEW entry must demonstrate excellence standard: systematic world-building with version control, detailed chronological development, comprehensive system coverage (technology, politics, economics, society, environment), hierarchical structure, interconnected elements, and clear expansion interfaces for supplementary entries
       - Essential entries must contain substantial content (200-1000 words each) within their respective XML tags
       - Must have at least 5 total high-quality entries (3 essential + minimum 2 supplementary)
       - Supplementary entries must include: character relationships, world information, world rules, NPCs, locations, or items
       - Each supplementary entry should have appropriate keywords for discovery
       - All content should be detailed, useful, and consistent
       - All entries should complement the character and enhance the storytelling experience
-      - STRICT ENFORCEMENT: Worldbook is considered INCOMPLETE if any of the three essential entries are missing or lack proper XML wrapping
+      - STRICT ENFORCEMENT: Worldbook is considered INCOMPLETE if any of the three essential entries are missing, lack proper XML wrapping, or fail to meet excellence standards
     </worldbook_criteria>
     
     <overall_quality_standards>
