@@ -13,13 +13,13 @@ import { BaseSimpleTool, ToolParameter } from "../base-tool";
 export class CharacterTool extends BaseSimpleTool {
   readonly toolType = ToolType.CHARACTER;
   readonly name = "CHARACTER";
-  readonly description = "Generate or update character card data - one of the most frequently used tools. Build character incrementally by adding fields in REQUIRED logical order: name → description → personality → scenario → first_mes → mes_example → creator_notes → tags. ALL EIGHT FIELDS ARE REQUIRED for a complete character card. Use multiple tool calls to build systematically, with each call adding one or more fields. CHARACTER generation with all required fields must be completed BEFORE starting worldbook creation, as worldbook entries should complement and enhance the established character.";
+  readonly description = "Generate or update character card data - one of the most frequently used tools. Build character incrementally by adding fields in REQUIRED logical order: name → description → personality → scenario → first_mes → mes_example → creator_notes → tags. ALL EIGHT CORE FIELDS ARE REQUIRED for a complete character card. Optional fields like alternate_greetings can be added to enhance player choice. Use multiple tool calls to build systematically, with each call adding one or more fields. CHARACTER generation with all required fields must be completed BEFORE starting worldbook creation, as worldbook entries should complement and enhance the established character.";
   
   readonly parameters: ToolParameter[] = [
     {
       name: "name",
       type: "string",
-      description: "Character's name - the primary identifier",
+      description: "The primary identifier - typically the story title, scenario name, or thematic title rather than just a character name. For complex scenarios, use descriptive titles like 'The Enchanted Academy' or 'Cyberpunk Detective Story'. For simple character-focused cards, can be a character name with descriptive prefix like 'Elara the Sorceress'.",
       required: false
     },
     {
@@ -31,7 +31,7 @@ export class CharacterTool extends BaseSimpleTool {
     {
       name: "personality",
       type: "string",
-      description: "Character's personality traits, behavior patterns, and psychological profile",
+      description: "For character-focused cards: personality traits, behavior patterns, and psychological profile. For story/scenario cards: overall story atmosphere, tone, and key NPC personalities (e.g., 'Dark mysterious atmosphere with Professor Magnus (stern mentor), Luna (cheerful student), Marcus (rival)')",
       required: false
     },
     {
@@ -43,7 +43,7 @@ export class CharacterTool extends BaseSimpleTool {
     {
       name: "first_mes",
       type: "string",
-      description: "Character's first message or introduction dialogue",
+      description: "The opening scene or introduction that sets the story in motion. For character cards: character's introduction and first interaction. For story cards: narrative opening that establishes the setting, atmosphere, and initial scenario (e.g., 'The bell rings as you enter the mysterious academy, students whispering about the new transfer student...')",
       required: false
     },
     {
@@ -59,9 +59,15 @@ export class CharacterTool extends BaseSimpleTool {
       required: false
     },
     {
+      name: "alternate_greetings",
+      type: "array",
+      description: "Array of alternative opening scenarios that provide different starting points or worldlines for the story. Each greeting should offer a distinct narrative path, setting variation, or character situation. Examples: ['Summer festival version', 'Library encounter', 'Rainy day meeting', 'Battle aftermath scenario']",
+      required: false
+    },
+    {
       name: "tags",
       type: "array", 
-      description: "Array of tags categorizing the character (e.g., ['fantasy', 'sorceress', 'mysterious'])",
+      description: "Array of categorization tags. REQUIRED CATEGORIES: Card Type ['character-card' OR 'story-card']. GENRE OPTIONS: ['fantasy', 'romance', 'sci-fi', 'mystery', 'horror', 'slice-of-life', 'historical', 'modern', 'cyberpunk', 'steampunk', 'urban-fantasy', 'isekai', 'school-life', 'workplace', 'adventure', 'thriller', 'comedy', 'drama', 'supernatural', 'post-apocalyptic']. ADDITIONAL DESCRIPTORS: ['cute', 'dark', 'mature', 'wholesome', 'intense', 'lighthearted', 'serious', 'mysterious', 'action-packed', 'emotional']. Example: ['story-card', 'fantasy', 'school-life', 'mysterious', 'wholesome']",
       required: false
     }
   ];
@@ -77,6 +83,15 @@ export class CharacterTool extends BaseSimpleTool {
     if (parameters.first_mes) characterUpdates.first_mes = parameters.first_mes;
     if (parameters.mes_example) characterUpdates.mes_example = parameters.mes_example;
     if (parameters.creator_notes) characterUpdates.creator_notes = parameters.creator_notes;
+    if (parameters.alternate_greetings) {
+      // Support both array and comma-separated string formats
+      if (Array.isArray(parameters.alternate_greetings)) {
+        characterUpdates.alternate_greetings = parameters.alternate_greetings.filter((greeting: string) => greeting && greeting.trim().length > 0);
+      } else if (typeof parameters.alternate_greetings === 'string') {
+        // Convert comma-separated string to array for backward compatibility
+        characterUpdates.alternate_greetings = parameters.alternate_greetings.split('|').map((greeting: string) => greeting.trim()).filter((greeting: string) => greeting.length > 0);
+      }
+    }
     if (parameters.tags) {
       // Support both array and comma-separated string formats
       if (Array.isArray(parameters.tags)) {

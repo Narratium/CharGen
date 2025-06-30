@@ -31,16 +31,16 @@ const CORE_KNOWLEDGE_SECTION = `
 A character card is a structured data format that defines AI roleplay scenarios. Character cards can represent either individual characters or entire world-based scenarios and stories, serving as the foundation for persistent conversations and defining how the AI should behave and interact.
 
 #### Character Card Core Fields (ALL REQUIRED):
-- **name**: Primary identifier - can be a character name or scenario title [REQUIRED]
+- **name**: Primary identifier - typically story title, scenario name, or thematic title rather than just character name [REQUIRED]
 - **description**: Physical/visual details for characters, or world setting description for scenarios [REQUIRED]
-- **personality**: Behavioral traits for characters, or narrative style/tone for world scenarios [REQUIRED]
+- **personality**: For character cards: behavioral traits and psychological profile; For story cards: atmosphere, tone, and key NPC personalities [REQUIRED]
 - **scenario**: Context and circumstances - character's situation or world's current state/events [REQUIRED]
-- **first_mes**: Opening message that establishes the roleplay situation [REQUIRED]
+- **first_mes**: Opening scene that sets the story in motion - narrative opening establishing setting and atmosphere [REQUIRED]
 - **mes_example**: Example dialogue demonstrating the expected interaction style and format [REQUIRED]
 - **creator_notes**: Usage guidelines, compatibility information, and creator insights [REQUIRED]
-- **tags**: Categorization for discovery - genre, themes, character types, world elements [REQUIRED]
+- **tags**: Categorization tags including card type (character-card/story-card), genre, and descriptors [REQUIRED]
 - **avatar**: Visual representation - character portrait or scenario artwork [OPTIONAL]
-- **alternate_greetings**: Multiple opening scenarios or character introduction variations [OPTIONAL]
+- **alternate_greetings**: Array of alternative opening scenarios providing different worldlines and starting points for player choice [REQUIRED]
 
 **CRITICAL**: All eight core fields (name through tags) must be completed in the specified order for a professional-quality character card. The CHARACTER tool should be used systematically to build these fields incrementally across multiple tool calls until all required fields are present.
 
@@ -54,7 +54,8 @@ A character card is a structured data format that defines AI roleplay scenarios.
 2. **Consistency**: Maintain coherent tone, style, and logical consistency throughout all fields
 3. **Engaging Content**: Create compelling scenarios that invite meaningful interaction and exploration
 4. **Contextual Clarity**: Provide sufficient background for users to understand and engage with the scenario
-5. **Professional Quality**: Meet standards for AI roleplay applications with polished, well-crafted content
+5. **Multiple Entry Points**: Use alternate_greetings to offer diverse starting scenarios and worldlines for enhanced replayability
+6. **Professional Quality**: Meet standards for AI roleplay applications with polished, well-crafted content
 
 ### WORLDBOOKS (LOREBOOKS) OVERVIEW
 Worldbooks are dynamic knowledge systems that provide contextual information to enhance AI roleplay. They function as intelligent databases that inject relevant background information when specific keywords are detected, supporting both character-focused and world-based scenarios.
@@ -581,7 +582,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       - If character is 100% complete: Only then consider WORLDBOOK tool
       
       🚫 CRITICAL CONSTRAINT: Worldbook creation is BLOCKED until ALL character fields are complete
-      - Required character fields: name, description, personality, scenario, first_mes, mes_example, creator_notes, tags
+      - Required character fields: name, description, personality, scenario, first_mes, mes_example, creator_notes, tags, alternate_greetings
       - Do NOT use WORLDBOOK tool if any character field is missing
       - Character completion is mandatory before worldbook creation
       
@@ -625,7 +626,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
 
       <character_when>
         - Most frequently used tool
-        - Build incrementally in REQUIRED order: name → description → personality → scenario → first_mes → mes_example → creator_notes → tags
+        - Build incrementally in REQUIRED order: name → description → personality → scenario → first_mes → mes_example → alternate_greetings → creator_notes → tags
         - ALL EIGHT FIELDS ARE MANDATORY for complete character card
         - Use multiple tool calls to build systematically, adding one or more fields each time
         - Must have ALL required fields complete BEFORE starting worldbook
@@ -634,7 +635,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
 
       <worldbook_when>
         - Use ONLY AFTER character creation is 100% complete
-        - ALL character fields must be present: name, description, personality, scenario, first_mes, mes_example, creator_notes, tags
+        - ALL character fields must be present: name, description, personality, scenario, first_mes, mes_example, alternate_greetings, creator_notes, tags
         - Do NOT use if any character field is missing or empty
         - Create 1-3 high-quality entries per call
         - Start with character relationships → world info → rules → supporting elements
@@ -728,7 +729,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - For other parameters, use simple values: <param_name>value</param_name>
         - Example for SEARCH: <query><![CDATA["dragon mythology", "magic system"]]]></query>
         - Example for ASK_USER: <question>What genre style do you prefer?</question>
-        - Example for CHARACTER: <name>Elara</name><description>A cunning sorceress...</description><tags><![CDATA[["fantasy", "sorceress"]]]></tags>
+        - Example for CHARACTER: <name>Elara</name><description>A cunning sorceress...</description><alternate_greetings><![CDATA[["Summer festival version", "Library encounter", "Rainy day meeting", "Battle aftermath scenario"]]]></alternate_greetings><tags><![CDATA[["fantasy", "sorceress"]]]></tags>
         - Example for WORLDBOOK: <key><![CDATA[["magic", "spell"]]]></key><content>Details...</content><comment>Magic system</comment><constant>false</constant><position>0</position><order>100</order>
         - Example for REFLECT: <new_tasks>
             <task>
