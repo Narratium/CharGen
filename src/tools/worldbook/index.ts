@@ -50,8 +50,8 @@ export class WorldbookTool extends BaseSimpleTool {
        name: "position",
        type: "number",
        description: "Controls where this worldbook entry is inserted in the AI conversation context. Values: 0-1 (at story beginning for foundational info), 2 (at story end for supplemental context), 3 (before recent user input for immediate relevance), 4 (after recent user input for response context). Default: 0",
-       required: false
-     },
+      required: false
+    },
     {
       name: "order",
       type: "number",

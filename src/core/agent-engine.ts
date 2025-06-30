@@ -35,12 +35,12 @@ A character card is a structured data format that defines AI roleplay scenarios.
 - **description**: Physical/visual details for characters, or world setting description for scenarios [REQUIRED]
 - **personality**: For character cards: behavioral traits and psychological profile; For story cards: atmosphere, tone, and key NPC personalities [REQUIRED]
 - **scenario**: Context and circumstances - character's situation or world's current state/events [REQUIRED]
-- **first_mes**: Opening scene that sets the story in motion - narrative opening establishing setting and atmosphere [REQUIRED]
-- **mes_example**: Example dialogue demonstrating the expected interaction style and format [REQUIRED]
+- **first_mes**: Extensive, immersive opening sequence (typically 200-800 words) that establishes the entire narrative foundation including detailed scene setting, atmospheric description, character introduction with visual details, initial dialogue or internal monologue, environmental context, and emotional tone [REQUIRED]
+- **mes_example**: Comprehensive dialogue examples (typically 3-6 exchanges) demonstrating complex communication patterns, personality nuances, behavioral consistency, speech patterns, emotional range, decision-making style, and relationship dynamics across different conversation scenarios [REQUIRED]
 - **creator_notes**: Usage guidelines, compatibility information, and creator insights [REQUIRED]
 - **tags**: Categorization tags including card type (character-card/story-card), genre, and descriptors [REQUIRED]
 - **avatar**: Visual representation - character portrait or scenario artwork [OPTIONAL]
-- **alternate_greetings**: Array of alternative opening scenarios providing different worldlines and starting points for player choice [REQUIRED]
+- **alternate_greetings**: Array of comprehensive alternative opening scenarios (typically 3-5 entries, each 150-600 words) providing entirely different narrative starting points, worldlines, or timeline variations with unique atmospheric settings, character contexts, and story hooks for meaningful player choice [REQUIRED]
 
 **CRITICAL**: All eight core fields (name through tags) must be completed in the specified order for a professional-quality character card. The CHARACTER tool should be used systematically to build these fields incrementally across multiple tool calls until all required fields are present.
 
@@ -54,7 +54,7 @@ A character card is a structured data format that defines AI roleplay scenarios.
 2. **Consistency**: Maintain coherent tone, style, and logical consistency throughout all fields
 3. **Engaging Content**: Create compelling scenarios that invite meaningful interaction and exploration
 4. **Contextual Clarity**: Provide sufficient background for users to understand and engage with the scenario
-5. **Multiple Entry Points**: Use alternate_greetings to offer diverse starting scenarios and worldlines for enhanced replayability
+5. **Multiple Entry Points**: Use alternate_greetings to offer 3-5 comprehensive, fully-developed alternative opening scenarios (each 150-600 words) that provide entirely different narrative paths, emotional tones, and story contexts for enhanced replayability and meaningful player choice
 6. **Professional Quality**: Meet standards for AI roleplay applications with polished, well-crafted content
 
 ### WORLDBOOKS (LOREBOOKS) OVERVIEW
@@ -78,13 +78,15 @@ Worldbooks are dynamic knowledge systems that provide contextual information to 
 - **selective**: Enables advanced keyword logic with AND/OR/NOT operations for precise activation
 
 #### Worldbook Best Practices:
-1. **Quality over Quantity**: Focus on creating meaningful, well-crafted entries rather than numerous shallow ones
-2. **Comprehensive Coverage**: Include character relationships, world information, rules, and contextual details
-3. **Strategic Keywords**: Use discoverable, relevant keywords that naturally appear in conversations
-4. **Content Depth**: Provide useful, detailed information that genuinely enhances storytelling and immersion
-5. **Strategic Positioning**: Use position 0-1 for foundational world info, position 2 for supplemental context, position 3-4 for immediate response relevance
-6. **Scenario Integration**: Ensure entries complement and enhance the character card's scenario and tone
-7. **Token Management**: Balance information richness with efficient token usage for optimal performance
+1. **Dual Classification System**: Create two types of entries - (1) Essential fixed entries with specific comment values "STATUS" (wrapped in <status>content</status>), "USER_SETTING" (wrapped in <user_setting>content</user_setting>), "WORLD_VIEW" (wrapped in <world_view>content</world_view>) containing 200-1000 words each, and (2) Supplementary keyword-triggered entries for NPCs, locations, items, and world details
+2. **Strict Creation Order**: Follow this exact sequence - FIRST: STATUS entry (current game state), SECOND: USER_SETTING entry (player character info), THIRD: WORLD_VIEW entry (world background), ONLY THEN: supplementary keyword entries. Each essential entry must be completed with proper XML wrapping before proceeding to the next type
+3. **Quality over Quantity**: Focus on creating meaningful, well-crafted entries rather than numerous shallow ones
+4. **Comprehensive Coverage**: Include character relationships, world information, rules, and contextual details
+5. **Strategic Keywords**: Use discoverable, relevant keywords that naturally appear in conversations for supplementary entries
+6. **Content Depth**: Provide useful, detailed information that genuinely enhances storytelling and immersion
+7. **Strategic Positioning**: Use position 0-1 for foundational world info, position 2 for supplemental context, position 3-4 for immediate response relevance
+8. **Scenario Integration**: Ensure entries complement and enhance the character card's scenario and tone
+9. **Token Management**: Balance information richness with efficient token usage for optimal performance
 
 ### INTEGRATION PRINCIPLES
 Character cards and worldbooks work together to create rich, immersive roleplay experiences across different scenario types:
@@ -637,8 +639,11 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - Use ONLY AFTER character creation is 100% complete
         - ALL character fields must be present: name, description, personality, scenario, first_mes, mes_example, alternate_greetings, creator_notes, tags
         - Do NOT use if any character field is missing or empty
-        - Create 1-3 high-quality entries per call
-        - Start with character relationships → world info → rules → supporting elements
+        - Follow STRICT CREATION ORDER: FIRST create STATUS entry, SECOND create USER_SETTING entry, THIRD create WORLD_VIEW entry, ONLY THEN create supplementary entries
+        - Check existing worldbook for missing essential entries: if STATUS missing, create STATUS; if USER_SETTING missing, create USER_SETTING; if WORLD_VIEW missing, create WORLD_VIEW
+        - Essential entries must use proper XML wrapping: STATUS uses <status>content</status>, USER_SETTING uses <user_setting>content</user_setting>, WORLD_VIEW uses <world_view>content</world_view>
+        - Create 1-3 high-quality entries per call, prioritizing missing essential entries first
+        - Only create supplementary keyword entries (NPCs, locations, items) after all three essential entries exist
         - Entries should complement and enhance the established character
       </worldbook_when>
 
@@ -1139,11 +1144,14 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
     </character_data_criteria>
     
     <worldbook_criteria>
-      - Must have at least 5 high-quality entries
-      - For world-building stories, must include: character relationships, world information, world rules
-      - Each entry should have appropriate keywords for discovery
-      - Content should be detailed, useful, and consistent
-      - Entries should complement the character and enhance the storytelling experience
+      - MANDATORY: Must contain exactly THREE essential fixed entries with proper XML wrapping: (1) comment="STATUS" with <status>content</status>, (2) comment="USER_SETTING" with <user_setting>content</user_setting>, (3) comment="WORLD_VIEW" with <world_view>content</world_view>
+      - Essential entries must contain substantial content (200-1000 words each) within their respective XML tags
+      - Must have at least 5 total high-quality entries (3 essential + minimum 2 supplementary)
+      - Supplementary entries must include: character relationships, world information, world rules, NPCs, locations, or items
+      - Each supplementary entry should have appropriate keywords for discovery
+      - All content should be detailed, useful, and consistent
+      - All entries should complement the character and enhance the storytelling experience
+      - STRICT ENFORCEMENT: Worldbook is considered INCOMPLETE if any of the three essential entries are missing or lack proper XML wrapping
     </worldbook_criteria>
     
     <overall_quality_standards>
@@ -1373,11 +1381,21 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
     }
 
     const entries = generationOutput.worldbook_data;
+    
+    // Check for essential fixed entries
+    const hasStatus = entries.some(entry => entry.comment === "STATUS");
+    const hasUserSetting = entries.some(entry => entry.comment === "USER_SETTING");
+    const hasWorldView = entries.some(entry => entry.comment === "WORLD_VIEW");
+    
     const completedEntries = entries.filter(entry => entry.content && entry.content.trim() !== '').length;
     const totalEntries = entries.length;
     const progressPercentage = Math.round((completedEntries / totalEntries) * 100);
     
     let summary = `WORLDBOOK STATUS: ${progressPercentage}% Complete (${completedEntries}/${totalEntries} entries)`;
+    
+    // Essential entries check
+    const essentialStatus = `STATUS:${hasStatus ? "✅" : "❌"} USER_SETTING:${hasUserSetting ? "✅" : "❌"} WORLD_VIEW:${hasWorldView ? "✅" : "❌"}`;
+    summary += `\n🔥 Essential: ${essentialStatus}`;
     
     // Show some example entry types
     const entryTypes = entries.slice(0, 3).map(entry => entry.comment || 'Unnamed entry').join(', ');

@@ -43,13 +43,13 @@ export class CharacterTool extends BaseSimpleTool {
     {
       name: "first_mes",
       type: "string",
-      description: "The opening scene or introduction that sets the story in motion. For character cards: character's introduction and first interaction. For story cards: narrative opening that establishes the setting, atmosphere, and initial scenario (e.g., 'The bell rings as you enter the mysterious academy, students whispering about the new transfer student...')",
+      description: "An extensive, immersive opening sequence that establishes the entire narrative foundation. This should be a substantial multi-paragraph text (typically 200-800 words) that includes: detailed scene setting, atmospheric description, character introduction with visual details, initial dialogue or internal monologue, environmental context, and emotional tone. For character cards: comprehensive character debut with backstory hints, personality showcase, and engaging first interaction. For story cards: elaborate world-building opening that establishes location, time period, social dynamics, and compelling hook to draw users into the narrative world.",
       required: false
     },
     {
       name: "mes_example",
       type: "string", 
-      description: "Example dialogue showing the character's speaking style and mannerisms",
+      description: "Comprehensive dialogue examples demonstrating the character's complex communication patterns, personality nuances, and behavioral consistency. Should include multiple conversation scenarios (typically 3-6 exchanges) showing: speech patterns and vocabulary choices, emotional range and reactions, decision-making style, relationship dynamics, cultural background influence, and situational adaptability. Include both casual and intense conversation examples to showcase character depth and versatility across different narrative contexts.",
       required: false
     },
     {
@@ -61,7 +61,7 @@ export class CharacterTool extends BaseSimpleTool {
     {
       name: "alternate_greetings",
       type: "array",
-      description: "Array of alternative opening scenarios that provide different starting points or worldlines for the story. Each greeting should offer a distinct narrative path, setting variation, or character situation. Examples: ['Summer festival version', 'Library encounter', 'Rainy day meeting', 'Battle aftermath scenario']",
+      description: "Array of comprehensive alternative opening scenarios (typically 3-5 entries, each 150-600 words) that provide entirely different narrative starting points, worldlines, or timeline variations. Each greeting should be a fully-developed immersive sequence with unique atmospheric setting, character context, emotional tone, and story hook. Examples include: seasonal variations (summer festival vs winter solitude), relationship dynamics (first meeting vs established friendship vs conflict resolution), location changes (academy library vs mysterious forest vs bustling marketplace), temporal shifts (peaceful times vs crisis moments vs celebration periods). Each alternate greeting should offer players meaningful choice in how their story begins, with distinct mood, circumstances, and narrative potential.",
       required: false
     },
     {
