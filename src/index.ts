@@ -47,6 +47,14 @@ program
   });
 
 program
+  .command('resume')
+  .description('Resume a previous generation')
+  .action(async () => {
+    const generator = new CharacterGeneratorCLI();
+    await generator.resumeGeneration();
+  });
+
+program
   .command('clear')
   .description('Clear all generation history')
   .action(async () => {

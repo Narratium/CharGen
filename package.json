@@ -33,12 +33,14 @@
     "fs-extra": "^11.0.0",
     "inquirer": "^9.0.0",
     "ora": "^5.4.1",
+    "sharp": "^0.33.0",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.0",
     "@types/inquirer": "^9.0.0",
     "@types/node": "^20.0.0",
+    "@types/sharp": "^0.32.0",
     "@types/uuid": "^9.0.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"

@@ -582,7 +582,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       - If character is 100% complete: Only then consider WORLDBOOK tool
       
       🚫 CRITICAL CONSTRAINT: Worldbook creation is BLOCKED until ALL character fields are complete
-      - Required character fields: name, description, personality, scenario, first_mes, mes_example, creator_notes, tags, alternate_greetings
+      - Required character fields: name, description, personality, scenario, first_mes, mes_example, alternate_greetings, creator_notes, tags
       - Do NOT use WORLDBOOK tool if any character field is missing
       - Character completion is mandatory before worldbook creation
       
@@ -626,7 +626,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
 
       <character_when>
         - Most frequently used tool
-        - Build incrementally in REQUIRED order: name → description → personality → scenario → first_mes → mes_example → alternate_greetings → creator_notes → tags
+        - Build incrementally in REQUIRED order: name → description → personality → scenario → first_mes → alternate_greetings → mes_example → creator_notes → tags
         - ALL EIGHT FIELDS ARE MANDATORY for complete character card
         - Use multiple tool calls to build systematically, adding one or more fields each time
         - Must have ALL required fields complete BEFORE starting worldbook

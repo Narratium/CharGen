@@ -140,6 +140,10 @@ export class CharacterGeneratorCLI {
       
       if (status.hasResult && status.result) {
         spinner.succeed('Character generation completed!');
+        
+        // Post-processing: Generate avatar image
+        await this.handleAvatarGeneration(result.conversationId, spinner);
+        
         await this.saveResults(status.result, params.outputDir);
         
         // Show generation statistics
@@ -151,6 +155,77 @@ export class CharacterGeneratorCLI {
     } catch (error) {
       spinner.fail('Generation failed');
       console.error(chalk.red('Error:'), error instanceof Error ? error.message : error);
+    }
+  }
+
+  /**
+   * Handle avatar generation as post-processing step
+   */
+  private async handleAvatarGeneration(conversationId: string, spinner: any): Promise<void> {
+    try {
+      // Ask user if they want to generate avatar
+      spinner.stop();
+      
+      const avatarAnswer = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'generateAvatar',
+        message: 'Would you like to search for an avatar image for this character?',
+        default: true,
+      }]);
+
+      if (!avatarAnswer.generateAvatar) {
+        console.log(chalk.gray('Skipping avatar generation.'));
+        return;
+      }
+
+      spinner = ora('Generating avatar image...').start();
+      spinner.text = 'Analyzing character data to create image description...';
+
+      const avatarResult = await this.agentService.generateAvatar(conversationId);
+      
+      if (avatarResult.success) {
+        spinner.succeed('Avatar generation completed!');
+        
+        console.log(chalk.blue('\n🖼️  Avatar Generation Results:'));
+        console.log(chalk.gray(`  Image Description: ${avatarResult.imageDescription}`));
+        
+        if (avatarResult.localImagePath) {
+          console.log(chalk.green(`  ✅ Downloaded Image: ${avatarResult.localImagePath}`));
+        }
+        
+        if (avatarResult.outputFilePath) {
+          console.log(chalk.green(`  📋 Character Card: ${avatarResult.outputFilePath}`));
+        }
+        
+        if (avatarResult.candidateImages && avatarResult.candidateImages.length > 1) {
+          console.log(chalk.gray(`  📸 Found ${avatarResult.candidateImages.length} candidate images`));
+          
+          // Optionally show candidates
+          const showCandidates = await inquirer.prompt([{
+            type: 'confirm',
+            name: 'showCandidates',
+            message: 'Would you like to see all candidate images?',
+            default: false,
+          }]);
+          
+          if (showCandidates.showCandidates) {
+            console.log(chalk.blue('\n📸 Candidate Images:'));
+            avatarResult.candidateImages.forEach((url, index) => {
+              console.log(chalk.gray(`  ${index + 1}. ${url}`));
+            });
+          }
+        }
+      } else {
+        spinner.fail('Avatar generation failed');
+        console.log(chalk.yellow(`⚠️  ${avatarResult.error}`));
+        
+        if (avatarResult.error?.includes('Tavily API key')) {
+          console.log(chalk.gray('💡 Run "char-gen config" to set up your Tavily API key for image search.'));
+        }
+      }
+    } catch (error) {
+      spinner.fail('Avatar generation failed');
+      console.error(chalk.red('Avatar generation error:'), error instanceof Error ? error.message : error);
     }
   }
 
@@ -177,11 +252,68 @@ export class CharacterGeneratorCLI {
   private async saveResults(result: any, outputDir: string): Promise<void> {
     await fs.ensureDir(outputDir);
     
-    // Save character card
+    console.log(chalk.blue('\n💾 Saving results...'));
+
+    // Generate standard format character card first
+    if (result.character_data) {
+      const characterName = result.character_data.name || 'character';
+      const safeFileName = characterName.replace(/[^a-zA-Z0-9\-_]/g, '_').toLowerCase();
+      
+      // Build character book entries from worldbook data
+      const characterBookEntries = (result.worldbook_data || []).map((entry: any, index: number) => ({
+        comment: entry.comment,
+        content: entry.content,
+        disable: entry.disable,
+        position: entry.position,
+        constant: entry.constant,
+        key: entry.key,
+        order: entry.order || index + 1,
+        depth: 4 // Default depth
+      }));
+
+      // Create standard format
+      const standardFormat = {
+        spec: "chara_card_v3",
+        spec_version: "3.0",
+        data: {
+          name: result.character_data.name,
+          description: result.character_data.description,
+          personality: result.character_data.personality,
+          first_mes: result.character_data.first_mes,
+          scenario: result.character_data.scenario,
+          mes_example: result.character_data.mes_example,
+          creator_notes: result.character_data.creator_notes,
+          // Only include fields that exist
+          ...(result.character_data.system_prompt && { system_prompt: result.character_data.system_prompt }),
+          ...(result.character_data.post_history_instructions && { post_history_instructions: result.character_data.post_history_instructions }),
+          ...(result.character_data.tags && { tags: result.character_data.tags }),
+          ...(result.character_data.creator && { creator: result.character_data.creator }),
+          ...(result.character_data.character_version && { character_version: result.character_data.character_version }),
+          ...(result.character_data.alternate_greetings && { alternate_greetings: result.character_data.alternate_greetings }),
+          // Add character book if worldbook exists
+          ...(characterBookEntries.length > 0 && {
+            character_book: {
+              entries: characterBookEntries
+            }
+          })
+        }
+      };
+
+      const standardPath = path.join(outputDir, `${safeFileName}_card.json`);
+      await fs.writeJson(standardPath, standardFormat, { spaces: 2 });
+      console.log(chalk.green('  ✅ Standard character card:'), chalk.cyan(standardPath));
+    }
+    
+    // Save individual files for reference
     if (result.character_data) {
       const characterFile = path.join(outputDir, 'character.json');
       await fs.writeJson(characterFile, result.character_data, { spaces: 2 });
-      console.log(chalk.gray('  📄 Character card:'), characterFile);
+      console.log(chalk.gray('  📄 Character data:'), characterFile);
+      
+      // Show avatar info if present
+      if (result.character_data.avatar) {
+        console.log(chalk.green('  🖼️  Avatar image:'), result.character_data.avatar);
+      }
     }
     
     // Save worldbook
@@ -198,24 +330,12 @@ export class CharacterGeneratorCLI {
       console.log(chalk.gray('  🧠 Knowledge base:'), knowledgeFile);
     }
     
-    // Save quality metrics
-    if (result.quality_metrics) {
-      const metricsFile = path.join(outputDir, 'quality_metrics.json');
-      await fs.writeJson(metricsFile, result.quality_metrics, { spaces: 2 });
-      console.log(chalk.gray('  📈 Quality metrics:'), metricsFile);
-    }
-    
-    // Save completion status
-    if (result.completion_status) {
-      const statusFile = path.join(outputDir, 'completion_status.json');
-      await fs.writeJson(statusFile, result.completion_status, { spaces: 2 });
-      console.log(chalk.gray('  ✅ Completion status:'), statusFile);
-    }
-    
     // Save complete result
     const fullResultFile = path.join(outputDir, 'complete_result.json');
     await fs.writeJson(fullResultFile, result, { spaces: 2 });
     console.log(chalk.gray('  💾 Complete result:'), fullResultFile);
+
+    console.log(chalk.blue('\n✨ All files saved to:'), chalk.cyan(path.resolve(outputDir)));
   }
 
   /**
@@ -457,6 +577,303 @@ export class CharacterGeneratorCLI {
       await fs.writeJson(configPath, this.config, { spaces: 2 });
     } catch (error) {
       console.error('Failed to save config:', error);
+    }
+  }
+
+  /**
+   * Resume a previous generation
+   */
+  async resumeGeneration(): Promise<void> {
+    console.log(chalk.blue.bold('🔄 Resume Previous Generation\n'));
+    
+    const conversations = await this.agentService.listConversations();
+    
+    if (conversations.length === 0) {
+      console.log(chalk.gray('No previous generations found.'));
+      return;
+    }
+
+    // Filter and categorize conversations (async operations)
+    const categorizedConversations = await this.categorizeConversations(conversations);
+    
+    const incompleteConversations = categorizedConversations.incomplete;
+    const completeWithoutAvatar = categorizedConversations.needsAvatar;
+    const fullyComplete = categorizedConversations.complete;
+
+    // Create choices with category headers
+    const choices: any[] = [];
+    
+          if (incompleteConversations.length > 0) {
+        choices.push(new inquirer.Separator(chalk.yellow('📝 Incomplete Generations (can be continued):')));
+        incompleteConversations.forEach(conv => {
+          const completionInfo = this.getCompletionInfo(conv);
+          choices.push({
+            name: `${conv.id.slice(0, 8)} - ${conv.title} ${completionInfo}`,
+            value: { id: conv.id, action: 'continue' },
+            short: conv.id.slice(0, 8)
+          });
+        });
+      }
+
+      if (completeWithoutAvatar.length > 0) {
+        choices.push(new inquirer.Separator(chalk.blue('🖼️  Complete (needs local download):')));
+        completeWithoutAvatar.forEach(conv => {
+          choices.push({
+            name: `${conv.id.slice(0, 8)} - ${conv.title} (download avatar)`,
+            value: { id: conv.id, action: 'avatar' },
+            short: conv.id.slice(0, 8)
+          });
+        });
+      }
+
+      if (fullyComplete.length > 0) {
+        choices.push(new inquirer.Separator(chalk.green('✅ Fully Complete (with local files):')));
+        fullyComplete.forEach(conv => {
+          choices.push({
+            name: `${conv.id.slice(0, 8)} - ${conv.title} (view only)`,
+            value: { id: conv.id, action: 'view' },
+            short: conv.id.slice(0, 8)
+          });
+        });
+      }
+
+    if (choices.length === 0) {
+      console.log(chalk.gray('No generations available for resumption.'));
+      return;
+    }
+
+    choices.push(new inquirer.Separator());
+    choices.push({
+      name: chalk.gray('Cancel'),
+      value: null
+    });
+
+    const selection = await inquirer.prompt([{
+      type: 'list',
+      name: 'conversation',
+      message: 'Select a generation to resume:',
+      choices: choices,
+      pageSize: 15
+    }]);
+
+    if (!selection.conversation) {
+      console.log(chalk.gray('Operation cancelled.'));
+      return;
+    }
+
+    await this.handleResumeAction(selection.conversation);
+  }
+
+  /**
+   * Handle the resume action based on selection
+   */
+  private async handleResumeAction(selection: { id: string; action: string }): Promise<void> {
+    const spinner = ora('Loading session...').start();
+
+    try {
+      // Create user input callback for resume operations
+      const userInputCallback = async (message?: string): Promise<string> => {
+        spinner.stop();
+        console.log(chalk.yellow('\n💬 Need more information:'));
+        if (message) {
+          console.log(chalk.gray(`${message}`));
+        }
+        
+        const answer = await inquirer.prompt([{
+          type: 'input',
+          name: 'input',
+          message: 'Please provide more details:',
+          validate: (input: string) => input.trim().length > 0 || 'Please provide input',
+        }]);
+        
+        spinner.start('Continuing...');
+        return answer.input;
+      };
+
+      if (selection.action === 'view') {
+        // Just show the complete generation details
+        const status = await this.agentService.getSessionStatus(selection.id);
+        spinner.succeed('Generation loaded!');
+        
+        if (status.hasResult && status.result) {
+          console.log(chalk.green('\n✅ Complete Generation:'));
+          await this.showGenerationResults(status.result);
+        }
+        return;
+      }
+
+      // Resume the session
+      spinner.text = `Resuming generation (${selection.action})...`;
+      const result = await this.agentService.resumeSession(selection.id, userInputCallback);
+
+      if (!result.success) {
+        spinner.fail('Failed to resume generation');
+        console.error(chalk.red('Error:'), result.error);
+        return;
+      }
+
+      // Handle different resume results
+      switch (result.action) {
+        case 'continued':
+          spinner.succeed('Generation resumed and completed!');
+          console.log(chalk.green('\n🎉 Generation continued successfully!'));
+          
+          // Show final results
+          const status = await this.agentService.getSessionStatus(selection.id);
+          if (status.hasResult && status.result) {
+            await this.showGenerationResults(status.result);
+            
+            // Ask about avatar generation if not already done
+            if (!status.result.character_data?.avatar) {
+              await this.handleAvatarGeneration(selection.id, spinner);
+            }
+          }
+          break;
+
+        case 'avatar_generated':
+          spinner.succeed('Avatar generation completed!');
+          console.log(chalk.blue('\n🖼️  Avatar Generation Results:'));
+          
+          if (result.result?.imageDescription) {
+            console.log(chalk.gray(`  Description: ${result.result.imageDescription}`));
+          }
+          if (result.result?.localImagePath) {
+            console.log(chalk.green(`  ✅ Downloaded Image: ${result.result.localImagePath}`));
+          }
+          if (result.result?.outputFilePath) {
+            console.log(chalk.green(`  📋 Character Card: ${result.result.outputFilePath}`));
+          }
+          if (result.result?.candidateImages) {
+            console.log(chalk.gray(`  📸 Found ${result.result.candidateImages.length} candidate images`));
+          }
+          break;
+
+        case 'already_complete':
+          spinner.succeed('Generation is already complete!');
+          console.log(chalk.green('\n✅ This generation is already fully complete:'));
+          await this.showGenerationResults(result.result);
+          break;
+      }
+
+      // Show generation statistics
+      await this.showGenerationStats(selection.id);
+
+    } catch (error) {
+      spinner.fail('Resume operation failed');
+      console.error(chalk.red('Error:'), error instanceof Error ? error.message : error);
+    }
+  }
+
+  /**
+   * Check if local image file exists for the character
+   */
+  private async checkLocalImageExists(characterName: string): Promise<boolean> {
+    try {
+      const safeFileName = (characterName || 'character').replace(/[^a-zA-Z0-9\-_]/g, '_').toLowerCase();
+      const imagePath = path.join(process.cwd(), 'output', 'images', `${safeFileName}.png`);
+      
+      return await fs.pathExists(imagePath);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  /**
+   * Categorize conversations based on completion status and local file existence
+   */
+  private async categorizeConversations(conversations: any[]): Promise<{
+    incomplete: any[];
+    needsAvatar: any[];
+    complete: any[];
+  }> {
+    const incomplete: any[] = [];
+    const needsAvatar: any[] = [];
+    const complete: any[] = [];
+
+    for (const conv of conversations) {
+      const isStatusComplete = conv.status === 'completed';
+      const isCharacterComplete = this.isCharacterComplete(conv.generation_output.character_data);
+      const hasAvatarUrl = !!conv.generation_output.character_data?.avatar;
+      
+      if (!isStatusComplete || !isCharacterComplete) {
+        incomplete.push(conv);
+        continue;
+      }
+
+      if (!hasAvatarUrl) {
+        needsAvatar.push(conv);
+        continue;
+      }
+
+      // Check if local image file exists
+      const characterName = conv.generation_output.character_data?.name;
+      const hasLocalImage = await this.checkLocalImageExists(characterName);
+      
+      if (hasLocalImage) {
+        complete.push(conv);
+      } else {
+        needsAvatar.push(conv);
+      }
+    }
+
+    return { incomplete, needsAvatar, complete };
+  }
+
+  /**
+   * Check if character data is complete
+   */
+  private isCharacterComplete(characterData?: any): boolean {
+    if (!characterData) return false;
+
+    const requiredFields = [
+      'name', 'description', 'personality', 'scenario', 
+      'first_mes', 'mes_example', 'creator_notes', 'tags', 'alternate_greetings'
+    ];
+
+    return requiredFields.every(field => {
+      const value = characterData[field];
+      if (Array.isArray(value)) {
+        return value.length > 0;
+      }
+      return value && typeof value === 'string' && value.trim().length > 0;
+    });
+  }
+
+  /**
+   * Get completion information for display
+   */
+  private getCompletionInfo(conversation: any): string {
+    const hasCharacter = !!conversation.generation_output.character_data;
+    const hasWorldbook = !!(conversation.generation_output.worldbook_data && conversation.generation_output.worldbook_data.length > 0);
+    const avatar = conversation.generation_output.character_data?.avatar;
+    
+    const indicators = [];
+    if (hasCharacter) indicators.push('📝');
+    if (hasWorldbook) indicators.push('🌍');
+    if (avatar) indicators.push('🔗'); // Show link icon for avatar URL
+    
+    const status = conversation.status === 'completed' ? '✅' : '⏳';
+    
+    return `${status} [${indicators.join('')}]`;
+  }
+
+  /**
+   * Show generation results in formatted output
+   */
+  private async showGenerationResults(result: any): Promise<void> {
+    if (result.character_data) {
+      console.log(chalk.blue('  📝 Character Card:'), chalk.cyan(result.character_data.name || 'Unnamed'));
+      if (result.character_data.avatar) {
+        console.log(chalk.blue('  🖼️  Avatar:'), chalk.cyan(result.character_data.avatar));
+      }
+    }
+    
+    if (result.worldbook_data) {
+      console.log(chalk.blue('  🌍 Worldbook:'), chalk.cyan(`${result.worldbook_data.length} entries`));
+    }
+    
+    if (result.knowledge_base) {
+      console.log(chalk.blue('  📚 Knowledge Base:'), chalk.cyan(`${result.knowledge_base.length} entries`));
     }
   }
 } 
