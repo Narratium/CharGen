@@ -10,7 +10,8 @@ export enum ToolType {
   ASK_USER = "ASK_USER", // Get user input
   CHARACTER = "CHARACTER", // Generate/update character card
   WORLDBOOK = "WORLDBOOK", // Generate worldbook entries
-  REFLECT = "REFLECT"    // Reflect on progress and update tasks
+  REFLECT = "REFLECT",    // Reflect on progress and update tasks
+  COMPLETE = "COMPLETE"   // Final completion - clear all tasks and end session
 }
 
 // Session execution status

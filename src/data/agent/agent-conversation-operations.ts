@@ -476,4 +476,17 @@ export class ResearchSessionOperations {
       }
     }
   }
+
+  /**
+   * Clear all tasks from the task queue
+   */
+  static async clearAllTasks(sessionId: string): Promise<void> {
+    const session = await this.getSessionById(sessionId);
+    if (!session) {
+      throw new Error(`Session not found: ${sessionId}`);
+    }
+
+    session.research_state.task_queue = [];
+    await this.saveSession(session);
+  }
 } 

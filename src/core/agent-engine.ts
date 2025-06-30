@@ -462,6 +462,24 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         continue;
       }
 
+      // Handle COMPLETE tool - clear all tasks and end session
+      if (decision.tool === ToolType.COMPLETE && result.success) {
+        console.log("✅ Completion tool executed");
+        
+        if (result.result.finished === true) {
+          console.log("🎯 Session completion confirmed, clearing all tasks");
+          await ResearchSessionOperations.clearAllTasks(this.conversationId);
+          
+          // Complete current sub-problem after successful completion
+          await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
+          continue;
+        } else {
+          console.log("⚠️ Completion tool called but finished=false, continuing session");
+          await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
+          continue;
+        }
+      }
+
       // Check if task queue is empty at the end of each iteration
       const currentContext = await this.buildExecutionContext();
       if (!currentContext.research_state.task_queue || currentContext.research_state.task_queue.length === 0) {
@@ -548,7 +566,6 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
 
   <current_generation_output>
     // Current generation output state - this is the core information that needs to be analyzed for decision making
-    {generation_output_json}
     <character_progress>
       {character_progress}
     </character_progress>
@@ -594,6 +611,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       3. CHARACTER: Primary tool - complete character development BEFORE worldbook
       4. WORLDBOOK: Secondary tool - use ONLY AFTER character is 100% complete
       5. REFLECT: Use to organize tasks and break down complex work
+      6. COMPLETE: Use when generation is finished and session should end
 
       TOOL SELECTION CRITERIA:
       <ask_user_when>
@@ -636,6 +654,14 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - Task organization needs improvement
         - Task queue is empty but main objective is not yet complete
       </reflect_when>
+
+      <complete_when>
+        - Character and worldbook creation are both 100% complete
+        - All required fields are filled and quality standards are met
+        - Generation output is ready for final delivery
+        - Session should terminate and return final results
+        - Use with finished=true to clear all tasks and end session
+      </complete_when>
     </tool_priority_and_criteria>
   </tool_usage_guidelines>
 

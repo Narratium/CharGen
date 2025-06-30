@@ -10,6 +10,7 @@ import { AskUserTool } from "./ask-user";
 import { CharacterTool } from "./character";
 import { WorldbookTool } from "./worldbook";
 import { ReflectTool } from "./reflect";
+import { CompleteTool } from "./complete";
 
 /**
  * Simplified Tool Registry - Real-time Decision Architecture
@@ -31,9 +32,10 @@ export class ToolRegistry {
     this.tools.set(ToolType.CHARACTER, new CharacterTool());
     this.tools.set(ToolType.WORLDBOOK, new WorldbookTool());
     this.tools.set(ToolType.REFLECT, new ReflectTool());
+    this.tools.set(ToolType.COMPLETE, new CompleteTool());
 
     this.initialized = true;
-    console.log("🔧 Tool Registry initialized with 5 tools (including enhanced search)");
+    console.log("🔧 Tool Registry initialized with 6 tools (including enhanced search and completion)");
   }
 
   /**
