@@ -72,6 +72,7 @@ Worldbooks are dynamic knowledge systems that provide contextual information to 
 - **content**: The actual information inserted into the prompt when triggered
 - **comment**: Internal organizational notes for creators and maintainers
 - **order**: Priority level determining insertion sequence when multiple entries activate
+- **position**: Controls context insertion placement (0-1: story beginning, 2: story end, 3: before user input, 4: after user input)
 - **constant**: Controls whether entry remains permanently active regardless of keywords
 - **selective**: Enables advanced keyword logic with AND/OR/NOT operations for precise activation
 
@@ -80,8 +81,9 @@ Worldbooks are dynamic knowledge systems that provide contextual information to 
 2. **Comprehensive Coverage**: Include character relationships, world information, rules, and contextual details
 3. **Strategic Keywords**: Use discoverable, relevant keywords that naturally appear in conversations
 4. **Content Depth**: Provide useful, detailed information that genuinely enhances storytelling and immersion
-5. **Scenario Integration**: Ensure entries complement and enhance the character card's scenario and tone
-6. **Token Management**: Balance information richness with efficient token usage for optimal performance
+5. **Strategic Positioning**: Use position 0-1 for foundational world info, position 2 for supplemental context, position 3-4 for immediate response relevance
+6. **Scenario Integration**: Ensure entries complement and enhance the character card's scenario and tone
+7. **Token Management**: Balance information richness with efficient token usage for optimal performance
 
 ### INTEGRATION PRINCIPLES
 Character cards and worldbooks work together to create rich, immersive roleplay experiences across different scenario types:
@@ -727,7 +729,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - Example for SEARCH: <query><![CDATA["dragon mythology", "magic system"]]]></query>
         - Example for ASK_USER: <question>What genre style do you prefer?</question>
         - Example for CHARACTER: <name>Elara</name><description>A cunning sorceress...</description><tags><![CDATA[["fantasy", "sorceress"]]]></tags>
-        - Example for WORLDBOOK: <key><![CDATA[["magic", "spell"]]]></key><content>Details...</content><comment>Magic system</comment><constant>false</constant><order>100</order>
+        - Example for WORLDBOOK: <key><![CDATA[["magic", "spell"]]]></key><content>Details...</content><comment>Magic system</comment><constant>false</constant><position>0</position><order>100</order>
         - Example for REFLECT: <new_tasks>
             <task>
               <description>Research character background</description>

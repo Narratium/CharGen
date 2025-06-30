@@ -19,7 +19,7 @@ export class WorldbookTool extends BaseSimpleTool {
     {
       name: "key",
       type: "array",
-      description: "Array of primary trigger keywords for this worldbook entry (e.g., ['magic', 'spell', 'enchantment'])",
+      description: "Array of primary trigger keywords that activate this worldbook entry when mentioned in conversation. Choose common, natural words that users would likely use when discussing this topic. Keywords should be broad enough to catch relevant context but specific enough to avoid false triggers (e.g., for magic system: ['magic', 'spell', 'mana', 'enchantment', 'wizard'])",
       required: true
     },
     {
@@ -43,15 +43,21 @@ export class WorldbookTool extends BaseSimpleTool {
     {
       name: "constant",
       type: "boolean",
-      description: "Whether this entry should always be active (default: false)",
+      description: "Whether this entry should always be active. Use TRUE for global information like world background, historical events, character relationships, and NPC details that should always be available. Use FALSE (default) for situational information that only appears in specific story contexts or scenes.",
       required: false
     },
+         {
+       name: "position",
+       type: "number",
+       description: "Controls where this worldbook entry is inserted in the AI conversation context. Values: 0-1 (at story beginning for foundational info), 2 (at story end for supplemental context), 3 (before recent user input for immediate relevance), 4 (after recent user input for response context). Default: 0",
+       required: false
+     },
     {
       name: "order",
       type: "number",
       description: "Display/processing order priority (default: 100)",
       required: false
-    }
+    },
   ];
 
   protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<ExecutionResult> {
@@ -102,7 +108,7 @@ export class WorldbookTool extends BaseSimpleTool {
       constant: parameters.constant || false,
       selective: true,
       order: parameters.order || 100,
-      position: 0,
+      position: parameters.position || 0,
       disable: false,
       probability: 100,
       useProbability: true
