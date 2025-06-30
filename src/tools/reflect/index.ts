@@ -14,7 +14,7 @@ export class ReflectTool extends BaseSimpleTool {
   
   readonly toolType = ToolType.REFLECT;
   readonly name = "REFLECT";
-  readonly description = "Add new tasks with sub-problems to the task queue based on analysis of current progress and needs. Use when you identify gaps in the current task plan, need to break down complex work into smaller steps, or when new requirements emerge during generation. IMPORTANTLY: Also use this tool when the task queue is empty but the main objective is not yet complete - analyze what still needs to be done and generate the necessary tasks to finish the work. This tool helps maintain organized task flow and ensures comprehensive character and worldbook development.";
+  readonly description = "Add new tasks with sub-problems to the task queue when current tasks are finished but generation output is incomplete. Use ONLY when: 1) Task queue is empty but main objective is not yet complete, 2) Current tasks are finished but generation output is incomplete, 3) Need to create new tasks to continue progress toward completion, 4) Session is ending but final output quality is insufficient. DO NOT use for task refinement or sub-problem adjustment - that's handled by task optimization. This tool helps create new tasks to bridge gaps when existing work is complete but the overall objective remains unfinished. IMPORTANTLY: Also use this tool when the task queue is empty but the main objective is not yet complete - analyze what still needs to be done and generate the necessary tasks to finish the work. This tool helps maintain organized task flow and ensures comprehensive character and worldbook development.";
   
   readonly parameters: ToolParameter[] = [
     {

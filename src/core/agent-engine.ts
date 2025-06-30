@@ -388,8 +388,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         }
         
         // Complete current sub-problem after successful tool execution
-        await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
-        continue;
+        await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId); 
       }
 
       // Handle ASK_USER tool - special case for user interaction flow control
@@ -418,7 +417,6 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         
         // Complete current sub-problem after successful user interaction
         await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
-        continue;
       }
 
       // Handle CHARACTER or WORLDBOOK tool - data updates and task completion evaluation
@@ -445,7 +443,6 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         
         // Complete current sub-problem after successful tool execution
         await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
-        continue;
       }
 
       // Handle REFLECT tool - add new tasks to the current queue
@@ -459,7 +456,6 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         }
         
         await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
-        continue;
       }
 
       // Handle COMPLETE tool - clear all tasks and end session
@@ -472,11 +468,6 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
           
           // Complete current sub-problem after successful completion
           await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
-          continue;
-        } else {
-          console.log("⚠️ Completion tool called but finished=false, continuing session");
-          await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
-          continue;
         }
       }
 
@@ -601,7 +592,8 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       - If "Generation not started": Start with CHARACTER tool
       - If "Character incomplete": Use CHARACTER tool to complete missing fields
       - If "Character complete - Ready for worldbook": Use WORLDBOOK tool
-      - If "Ready for final evaluation": Use REFLECT tool for quality assessment
+      - If "Ready for final evaluation": Use COMPLETE tool to finish session
+      - If "Task queue empty but output incomplete": Use REFLECT tool to create new tasks
     </generation_based_tool_selection>
     
     <tool_priority_and_criteria>
@@ -610,7 +602,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       2. SEARCH: Use when referencing existing anime/novels/games or needing factual information
       3. CHARACTER: Primary tool - complete character development BEFORE worldbook
       4. WORLDBOOK: Secondary tool - use ONLY AFTER character is 100% complete
-      5. REFLECT: Use to organize tasks and break down complex work
+      5. REFLECT: Use ONLY when task queue is empty but generation output is incomplete
       6. COMPLETE: Use when generation is finished and session should end
 
       TOOL SELECTION CRITERIA:
@@ -648,11 +640,11 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       </worldbook_when>
 
       <reflect_when>
-        - Identify gaps in current task planning
-        - Need to break complex work into smaller steps
-        - New requirements emerge during generation
-        - Task organization needs improvement
         - Task queue is empty but main objective is not yet complete
+        - Current tasks are finished but generation output is incomplete
+        - Need to create new tasks to continue progress toward completion
+        - Session is ending but final output quality is insufficient
+        DO NOT use for task refinement or sub-problem adjustment - that's handled by task optimization
       </reflect_when>
 
       <complete_when>
@@ -682,6 +674,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
     5. TOOL GUIDELINES: Apply the tool selection guidelines based on generation output analysis
        - Use CHARACTER tool until all 8 required fields are complete
        - Only use WORLDBOOK tool after character is 100% complete
+       - Use REFLECT ONLY when task queue is empty but generation output is incomplete
        - Follow the priority order and selection criteria
     
     6. KNOWLEDGE & CONTEXT: Review <existing_knowledge> and <conversation_context> for additional context
@@ -1159,6 +1152,8 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
 
   <instructions>
     Evaluate the GenerationOutput strictly based on the criteria above. Focus on content quality, completeness, and overall excellence. Be thorough but demanding in your assessment.
+    
+    IMPORTANT: When providing improvement suggestions, focus on actionable tasks that can be used with the REFLECT tool to generate new tasks. Each suggestion should be specific enough to create concrete sub-problems for task planning.
   </instructions>
 
   <output_specification>
@@ -1171,8 +1166,8 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
       <overall_quality_score>Overall quality score from 0 to 100.</overall_quality_score>
       <is_sufficient>true or false, based on whether the generation meets high-quality completion standards (overall_quality_score >= 85).</is_sufficient>
       <improvement_suggestions>
-        <suggestion>Specific improvement suggestion 1, if needed.</suggestion>
-        <suggestion>Specific improvement suggestion 2, if needed.</suggestion>
+        <suggestion>Specific improvement suggestion that can be used with REFLECT tool to create new tasks</suggestion>
+        <suggestion>Another specific improvement suggestion for REFLECT tool task generation</suggestion>
       </improvement_suggestions>
     </evaluation_response>
   </output_specification>
@@ -1209,11 +1204,11 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
         return null;
       } else {
         // Generation needs improvement - return suggestions
-        const improvementMsg = `Quality assessment indicates improvements needed (Overall: ${overall_quality_score}%):\n${reasoning}\n\nSpecific suggestions:\n${improvement_suggestions.map(s => `- ${s}`).join('\n')}`;
+        const improvementMsg = `Quality assessment indicates improvements needed (Overall: ${overall_quality_score}%):\n${reasoning}\n\nSpecific suggestions:\n${improvement_suggestions.map(s => `- ${s}`).join('\n')}\n\n🚨 IMMEDIATE ACTION: Use REFLECT tool to generate new tasks based on the following optimization suggestions:\n${improvement_suggestions.map(s => `- ${s}`).join('\n')}`;
 
       await ResearchSessionOperations.addMessage(this.conversationId, {
         role: "agent",
-          content: improvementMsg,
+        content: improvementMsg,
         type: "quality_evaluation",
       }); 
 
@@ -1222,7 +1217,7 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
 
     } catch (error) {
       console.error("❌ Generation evaluation failed:", error);
-      const errorMsg = `Generation evaluation failed: ${error instanceof Error ? error.message : String(error)}`;
+      const errorMsg = `Generation evaluation failed: ${error instanceof Error ? error.message : String(error)}\n\nNext step: Call REFLECT tool to analyze and create new tasks to continue generation progress.`;
       
       await ResearchSessionOperations.addMessage(this.conversationId, {
         role: "agent",
@@ -1240,25 +1235,37 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
   private performBasicValidation(generationOutput: GenerationOutput): { isValid: boolean; reason?: string } {
     // Check if character_data exists and all required fields are non-empty
     if (!generationOutput.character_data) {
-      return { isValid: false, reason: "character_data is missing" };
+      return { 
+        isValid: false, 
+        reason: `character_data is missing. Next step: Call REFLECT tool to analyze and create new tasks to complete character creation. Required fields: name, description, personality, scenario, first_mes, mes_example, creator_notes, tags` 
+      };
     }
 
     const charData = generationOutput.character_data;
-    const requiredCharFields = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'creator_notes'];
+    const requiredCharFields = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'creator_notes', 'tags'];
     
     for (const field of requiredCharFields) {
-      if (!charData[field] || charData[field].trim() === '') {
-        return { isValid: false, reason: `character_data.${field} is empty or missing` };
+      if (!charData[field] || charData[field].toString().trim() === '') {
+        return { 
+          isValid: false, 
+          reason: `character_data.${field} is empty or missing. Next step: Call REFLECT tool to analyze and create new tasks to complete the missing character field: ${field}` 
+        };
       }
     }
 
     // Check if worldbook_data exists and has at least 5 entries
     if (!generationOutput.worldbook_data || !Array.isArray(generationOutput.worldbook_data)) {
-      return { isValid: false, reason: "worldbook_data is missing or not an array" };
+      return { 
+        isValid: false, 
+        reason: `worldbook_data is missing or not an array. Next step: Call REFLECT tool to analyze and create new tasks to start worldbook creation (character is complete, ready for worldbook)` 
+      };
     }
 
     if (generationOutput.worldbook_data.length < 5) {
-      return { isValid: false, reason: `worldbook_data has only ${generationOutput.worldbook_data.length} entries, minimum 5 required` };
+      return { 
+        isValid: false, 
+        reason: `worldbook_data has only ${generationOutput.worldbook_data.length} entries, minimum 5 required. Next step: Call REFLECT tool to analyze and create new tasks to complete worldbook creation (need ${5 - generationOutput.worldbook_data.length} more entries)` 
+      };
     }
     return { isValid: true };
   }
@@ -1338,13 +1345,13 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
     }
 
     const charData = generationOutput.character_data;
-    const requiredFields = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'creator_notes', 'tags'];
-    const completedFields = charData ? requiredFields.filter(field => charData[field] && charData[field].toString().trim() !== '') : [];
-    const missingFields = charData ? requiredFields.filter(field => !charData[field] || charData[field].toString().trim() === '') : requiredFields;
+    const requiredCharFields = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'creator_notes', 'tags'];
+    const completedFields = charData ? requiredCharFields.filter(field => charData[field] && charData[field].toString().trim() !== '') : [];
+    const missingFields = charData ? requiredCharFields.filter(field => !charData[field] || charData[field].toString().trim() === '') : requiredCharFields;
     
-    const progressPercentage = Math.round((completedFields.length / requiredFields.length) * 100);
+    const progressPercentage = Math.round((completedFields.length / requiredCharFields.length) * 100);
     
-    let summary = `CHARACTER STATUS: ${progressPercentage}% Complete (${completedFields.length}/${requiredFields.length} fields)`;
+    let summary = `CHARACTER STATUS: ${progressPercentage}% Complete (${completedFields.length}/${requiredCharFields.length} fields)`;
     
     if (completedFields.length > 0) {
       summary += `\n✅ Completed: ${completedFields.join(', ')}`;

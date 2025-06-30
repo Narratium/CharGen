@@ -165,8 +165,6 @@ export class CharacterGeneratorCLI {
       if (summary && progress) {
         console.log(chalk.blue('\n📊 Generation Statistics:'));
         console.log(chalk.gray(`  Messages: ${summary.messageCount}`));
-        console.log(chalk.gray(`  Knowledge Base: ${summary.knowledgeBaseSize} entries`));
-        console.log(chalk.gray(`  Completion: ${summary.completionPercentage}%`));
       }
     } catch (error) {
       console.error('Failed to show stats:', error);
