@@ -1240,12 +1240,12 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
     if (!generationOutput.character_data) {
       return { 
         isValid: false, 
-        reason: `character_data is missing. Next step: Call REFLECT tool to analyze and create new tasks to complete character creation. Required fields: name, description, personality, scenario, first_mes, mes_example, creator_notes, tags` 
+        reason: `character_data is missing. Next step: Call REFLECT tool to analyze and create new tasks to complete character creation. Required fields: name, description, personality, scenario, first_mes, mes_example, alternate_greetings, creator_notes, tags` 
       };
     }
 
     const charData = generationOutput.character_data;
-    const requiredCharFields = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'creator_notes', 'tags'];
+    const requiredCharFields = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'alternate_greetings', 'creator_notes', 'tags'];
     
     for (const field of requiredCharFields) {
       if (!charData[field] || charData[field].toString().trim() === '') {
