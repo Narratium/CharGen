@@ -362,9 +362,9 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         continue; // Continue to end of loop where task queue check happens
       }
 
-      // Handle task optimization if specified
-      if (decision.taskAdjustment && decision.taskAdjustment.type !== "perfect") {
-        console.log(`📋 Applying task optimization: ${decision.taskAdjustment.type} - ${decision.taskAdjustment.reasoning}`);
+      // MANDATORY: Always apply task optimization after planning
+      if (decision.taskAdjustment) {
+        console.log(`📋 Applying MANDATORY task optimization: ${decision.taskAdjustment.reasoning}`);
         await this.applyTaskAdjustment(decision.taskAdjustment);
       }
 
@@ -512,57 +512,90 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
   </system_role>
 
   <tools_schema>
+    // These are all the tools available for the agent to call, along with their parameters and usage guidelines
     {available_tools}
   </tools_schema>
 
   <main_objective>
+    // The main objective of the agent, which is to create a character and worldbook based on the user's request
     {main_objective}
   </main_objective>
 
   <completed_tasks>
+    // The tasks that have been completed so far, which are used to assess the progress of the agent
     {completed_tasks}
   </completed_tasks>
 
   <existing_knowledge>
+    // The knowledge base of the agent, which is used to store the information that the agent has gathered from the user's request
     {knowledge_base}
   </existing_knowledge>
 
   <conversation_context>
+    // The recent conversation history of the agent, which is used to store the conversation history of the agent
     {recent_conversation}
   </conversation_context>
 
   <current_task_queue>
+    // The current task queue of the agent, which is used to store the current task queue of the agent
     {task_queue_status}
   </current_task_queue>
 
   <current_sub_problem>
+    // The current sub-problem of the agent, which is used to store the current sub-problem of the agent
     {current_sub_problem}
   </current_sub_problem>
 
-  <instructions>
-    1.  Analyze the <main_objective> and assess current progress based on <completed_tasks>.
-    2.  Review <existing_knowledge> to understand what information is already available.
-    3.  Consider recent <conversation_context> for additional context and user feedback.
-    4.  TASK OPTIMIZATION ANALYSIS: Evaluate if current task needs optimization based on last tool result:
-        - SEARCH: If search was sufficient, optimize by reducing sub-problems. If insufficient, optimize task description and sub-problems.
-        - ASK_USER: If user provided clear direction, optimize task accordingly. If user declined, optimize by reducing sub-problems.
-        - CHARACTER: If character work progressed well, optimize by focusing remaining sub-problems. If issues found, optimize task focus.
-        - WORLDBOOK: If attempted too early, optimize task to prioritize character completion first.
-    5.  Examine <current_task_queue> and <current_sub_problem> to understand what specific step needs to be completed.
-    6.  Based on this analysis, determine the single most critical tool action to complete the current sub-problem.
-    7.  Construct your response meticulously following the <output_specification>.
-  </instructions>
+  <current_generation_output>
+    // Current generation output state - this is the core information that needs to be analyzed for decision making
+    {generation_output_json}
+    <character_progress>
+      {character_progress}
+    </character_progress>
+    <worldbook_progress>
+      {worldbook_progress}
+    </worldbook_progress>
+    <completion_status>
+      {completion_status}
+    </completion_status>
+  </current_generation_output>
 
   <tool_usage_guidelines>
-    <priority_order>
+    <generation_based_tool_selection>
+      TOOL SELECTION BASED ON GENERATION OUTPUT:
+      
+      CHARACTER PROGRESS ANALYSIS:
+      - If character is < 50% complete: Focus on CHARACTER tool to build core fields
+      - If character is 50-80% complete: Use CHARACTER tool to fill remaining required fields
+      - If character is > 80% complete: Continue with CHARACTER tool until 100% complete
+      - If character is 100% complete: Only then consider WORLDBOOK tool
+      
+      🚫 CRITICAL CONSTRAINT: Worldbook creation is BLOCKED until ALL character fields are complete
+      - Required character fields: name, description, personality, scenario, first_mes, mes_example, creator_notes, tags
+      - Do NOT use WORLDBOOK tool if any character field is missing
+      - Character completion is mandatory before worldbook creation
+      
+      WORLDBOOK PROGRESS ANALYSIS (only if character is 100% complete):
+      - If worldbook has < 3 entries: Focus on creating core world elements
+      - If worldbook has 3-7 entries: Add supporting character relationships and world rules
+      - If worldbook has > 7 entries: Focus on quality refinement and completion
+      
+      COMPLETION STATUS ANALYSIS:
+      - If "Generation not started": Start with CHARACTER tool
+      - If "Character incomplete": Use CHARACTER tool to complete missing fields
+      - If "Character complete - Ready for worldbook": Use WORLDBOOK tool
+      - If "Ready for final evaluation": Use REFLECT tool for quality assessment
+    </generation_based_tool_selection>
+    
+    <tool_priority_and_criteria>
+      TOOL PRIORITY ORDER:
       1. ASK_USER: Use ONLY for fundamental uncertainties about story direction, genre, or core creative decisions
       2. SEARCH: Use when referencing existing anime/novels/games or needing factual information
       3. CHARACTER: Primary tool - complete character development BEFORE worldbook
-      4. WORLDBOOK: Secondary tool - use AFTER character is substantially complete
+      4. WORLDBOOK: Secondary tool - use ONLY AFTER character is 100% complete
       5. REFLECT: Use to organize tasks and break down complex work
-    </priority_order>
 
-    <tool_selection_criteria>
+      TOOL SELECTION CRITERIA:
       <ask_user_when>
         - Uncertain about story genre/style (Cthulhu, romance, campus, etc.)
         - Unclear if single character or world scenario
@@ -588,7 +621,9 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       </character_when>
 
       <worldbook_when>
-        - Use AFTER character creation is largely complete
+        - Use ONLY AFTER character creation is 100% complete
+        - ALL character fields must be present: name, description, personality, scenario, first_mes, mes_example, creator_notes, tags
+        - Do NOT use if any character field is missing or empty
         - Create 1-3 high-quality entries per call
         - Start with character relationships → world info → rules → supporting elements
         - Entries should complement and enhance the established character
@@ -601,8 +636,36 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - Task organization needs improvement
         - Task queue is empty but main objective is not yet complete
       </reflect_when>
-    </tool_selection_criteria>
+    </tool_priority_and_criteria>
   </tool_usage_guidelines>
+
+  <instructions>
+    CRITICAL DECISION PROCESS - Follow this order of importance:
+    
+    1. MAIN OBJECTIVE (Highest Priority): Analyze <main_objective> to understand the user's core request and desired outcome
+    
+    2. GENERATION OUTPUT (Critical Priority): Examine <current_generation_output> to assess current character and worldbook progress
+       - Check character completion status and identify missing fields
+       - Check worldbook progress ONLY if character is 100% complete
+       - 🚫 CRITICAL: Character must be fully complete before any worldbook creation
+    
+    3. CURRENT TASK: Review <current_task_queue> to understand what specific work is planned
+    
+    4. CURRENT SUB-PROBLEM: Examine <current_sub_problem> to identify the immediate next step
+    
+    5. TOOL GUIDELINES: Apply the tool selection guidelines based on generation output analysis
+       - Use CHARACTER tool until all 8 required fields are complete
+       - Only use WORLDBOOK tool after character is 100% complete
+       - Follow the priority order and selection criteria
+    
+    6. KNOWLEDGE & CONTEXT: Review <existing_knowledge> and <conversation_context> for additional context
+    
+    7. TASK OPTIMIZATION: Evaluate if current task needs adjustment based on recent progress
+    
+    8. DECISION: Select the single most critical tool action to complete the current sub-problem
+    
+    🚫 MANDATORY CONSTRAINT: Character completion (all 8 fields) is REQUIRED before worldbook creation can begin.
+  </instructions>
 
   <output_specification>
     You MUST respond using the following XML format. Do not include any other text, explanations, or formatting outside of the <response> block.
@@ -610,27 +673,30 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
     <response>
       <think>
         Provide detailed reasoning in TWO parts:
-        1. TASK ADJUSTMENT ANALYSIS: Analyze if current tasks need adjustment based on recent tool results and progress.
+        1. TASK ADJUSTMENT ANALYSIS: Analyze current task and sub-problems based on recent tool results and progress.
         2. TOOL SELECTION: Explain your choice of the next tool action and how it helps achieve the main objective.
       </think>
       <task_adjustment>
-        Based on the last tool execution result, analyze if current task needs optimization:
-        <adjustment_type>perfect|optimize_task</adjustment_type>
-        <reasoning>Brief reasoning for the decision</reasoning>
-        <task_description>New task description if optimization needed</task_description>
-        <new_subproblems>New sub-problems separated by | (max 2, cannot exceed current count)</new_subproblems>
+        MANDATORY: Always analyze and optimize current task based on recent tool execution results:
+        <reasoning>Brief reasoning for why current task needs optimization based on recent progress</reasoning>
+        <task_description>New optimized task description that better reflects current progress</task_description>
+        <new_subproblems>New sub-problems separated by | (MUST be <= current sub-problem count, max 2)</new_subproblems>
         
-        Example 1 - Current task is perfect:
-        <adjustment_type>perfect</adjustment_type>
-        <reasoning>Character tool executed successfully, current task and sub-problems are perfectly aligned</reasoning>
-        <task_description></task_description>
-        <new_subproblems></new_subproblems>
+        RULES:
+        - task_description MUST be rewritten to reflect current progress and needs
+        - new_subproblems MUST be <= current sub-problem count
+        - new_subproblems MUST be focused and actionable based on recent tool results
+        - Maximum 3 sub-problems allowed
         
-        Example 2 - Task needs optimization:
-        <adjustment_type>optimize_task</adjustment_type>
-        <reasoning>Search provided sufficient background info, can simplify remaining sub-problems</reasoning>
-        <task_description>Create character personality and traits</task_description>
-        <new_subproblems>Define core personality traits</new_subproblems>
+        Example - After successful character tool execution:
+        <reasoning>Character name and description completed, need to focus on personality development</reasoning>
+        <task_description>Develop character personality and behavioral traits</task_description>
+        <new_subproblems>Define core personality traits|Create character background story</new_subproblems>
+        
+        Example - After search tool execution:
+        <reasoning>Background research completed, can now focus on specific character creation</reasoning>
+        <task_description>Create character based on researched background</task_description>
+        <new_subproblems>Design character appearance and personality</new_subproblems>
       </task_adjustment>
       <action>The name of the ONE tool you are choosing to use (e.g., SEARCH, CHARACTER, WORLDBOOK).</action>
       <parameters>
@@ -668,6 +734,9 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
           recent_conversation: this.buildRecentConversationSummary(context.message_history),
           task_queue_status: this.buildTaskQueueSummary(context),
           current_sub_problem: context.research_state.task_queue?.[0]?.sub_problems?.[0]?.description || "No current sub-problem",
+          character_progress: this.buildCharacterProgressSummary(context.generation_output),
+          worldbook_progress: this.buildWorldbookProgressSummary(context.generation_output),
+          completion_status: this.buildCompletionStatusSummary(context.generation_output)
         }),
       ]);
 
@@ -679,16 +748,14 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       const action = content.match(/<action>([\s\S]*?)<\/action>/)?.[1].trim() ?? 'null';
       
       // Parse task adjustment details
-      const adjustmentType = taskAdjustmentBlock.match(/<adjustment_type>([\s\S]*?)<\/adjustment_type>/)?.[1]?.trim() ?? 'none';
-      const adjustmentReasoning = taskAdjustmentBlock.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1]?.trim() ?? '';
+      const adjustmentReasoning = taskAdjustmentBlock.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1]?.trim() ?? 'Task optimization based on current progress';
       const newTaskDescription = taskAdjustmentBlock.match(/<task_description>([\s\S]*?)<\/task_description>/)?.[1]?.trim() ?? '';
       const newSubproblemsText = taskAdjustmentBlock.match(/<new_subproblems>([\s\S]*?)<\/new_subproblems>/)?.[1]?.trim() ?? '';
       
       const taskAdjustment = {
-        type: adjustmentType as 'perfect' | 'optimize_task',
         reasoning: adjustmentReasoning,
         taskDescription: newTaskDescription || undefined,
-        newSubproblems: newSubproblemsText ? newSubproblemsText.split('|').map(s => s.trim()).filter(s => s.length > 0).slice(0, 2) : undefined
+        newSubproblems: newSubproblemsText ? newSubproblemsText.split('|').map(s => s.trim()).filter(s => s.length > 0).slice(0, 3) : undefined
       };
       
       if (action === "null" || !action) {
@@ -874,47 +941,56 @@ Technical Details:
 
   /**
    * Apply task optimization based on planning analysis
+   * MANDATORY: Always optimize current task and sub-problems
    */
   private async applyTaskAdjustment(taskAdjustment: TaskAdjustment): Promise<void> {
     try {
-      console.log(`🔄 Processing task optimization: ${taskAdjustment.type}`);
+      console.log(`🔄 Processing MANDATORY task optimization: ${taskAdjustment.reasoning}`);
       
-      if (taskAdjustment.type === "optimize_task") {
-        // Get current task info to validate constraints
-        const currentTaskInfo = await ResearchSessionOperations.getCurrentSubProblem(this.conversationId);
-        const currentSubproblemCount = currentTaskInfo.task?.sub_problems?.length || 0;
-        
-        // Ensure new sub-problems don't exceed current count and max limit of 2
-        let finalSubproblems = taskAdjustment.newSubproblems || [];
-        if (finalSubproblems.length > currentSubproblemCount) {
-          finalSubproblems = finalSubproblems.slice(0, currentSubproblemCount);
-        }
-        if (finalSubproblems.length > 2) {
-          finalSubproblems = finalSubproblems.slice(0, 2);
-        }
-        
-        // Apply the optimization
-        await ResearchSessionOperations.modifyCurrentTaskAndSubproblems(
-          this.conversationId, 
-          taskAdjustment.taskDescription || currentTaskInfo.task?.description || '',
-          finalSubproblems
-        );
-        
-        console.log(`✅ Optimized current task: ${taskAdjustment.taskDescription || 'description unchanged'}`);
-        if (finalSubproblems.length > 0) {
-          console.log(`✅ Updated sub-problems (${finalSubproblems.length}): ${finalSubproblems.join(', ')}`);
-        }
+      // MANDATORY: Always apply optimization (no type checking needed)
+      // Get current task info to validate constraints
+      const currentTaskInfo = await ResearchSessionOperations.getCurrentSubProblem(this.conversationId);
+      const currentSubproblemCount = currentTaskInfo.task?.sub_problems?.length || 0;
+      
+      // ENFORCE CONSTRAINTS: Ensure new sub-problems don't exceed current count and max limit of 2
+      let finalSubproblems = taskAdjustment.newSubproblems || [];
+      
+      // Constraint 1: Cannot exceed current sub-problem count
+      if (finalSubproblems.length > currentSubproblemCount) {
+        console.log(`⚠️ Sub-problem count constraint: requested ${finalSubproblems.length}, current ${currentSubproblemCount}, truncating`);
+        finalSubproblems = finalSubproblems.slice(0, currentSubproblemCount);
       }
       
-      // Record the task optimization in conversation history
+      // Constraint 2: Maximum 2 sub-problems allowed
+      if (finalSubproblems.length > 3) {
+        console.log(`⚠️ Sub-problem max constraint: requested ${finalSubproblems.length}, max 3, truncating`);
+        finalSubproblems = finalSubproblems.slice(0, 3);
+      }
+      
+      // MANDATORY: Always rewrite task description
+      const newTaskDescription = taskAdjustment.taskDescription || currentTaskInfo.task?.description || 'Task optimization';
+      
+      // Apply the optimization
+      await ResearchSessionOperations.modifyCurrentTaskAndSubproblems(
+        this.conversationId, 
+        newTaskDescription,
+        finalSubproblems
+      );
+      
+      console.log(`✅ MANDATORY task optimization applied:`);
+      console.log(`   - New task description: ${newTaskDescription}`);
+      console.log(`   - New sub-problems (${finalSubproblems.length}): ${finalSubproblems.join(', ')}`);
+      console.log(`   - Constraints enforced: max ${Math.min(currentSubproblemCount, 2)} sub-problems`);
+      
+      // Record the mandatory task optimization in conversation history
       await ResearchSessionOperations.addMessage(this.conversationId, {
         role: "agent",
-        content: `Task optimization applied: ${taskAdjustment.type} - ${taskAdjustment.reasoning}`,
+        content: `MANDATORY task optimization applied: ${taskAdjustment.reasoning || 'Task refinement based on progress'}`,
         type: "system_info"
       });
       
     } catch (error) {
-      console.error("❌ Failed to apply task optimization:", error);
+      console.error("❌ Failed to apply mandatory task optimization:", error);
       // Don't throw - continue with execution even if optimization fails
     }
   }
@@ -1173,6 +1249,7 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
         session_id: this.conversationId,
         research_state: session.research_state,
         message_history: session.messages,
+        generation_output: session.generation_output,
         llm_config: session.llm_config,  
       };
     }
@@ -1227,6 +1304,101 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
       worldbook_data: session.generation_output.worldbook_data,
       knowledge_base: session.research_state.knowledge_base,
     };
+  }
+
+  private buildCharacterProgressSummary(generationOutput: GenerationOutput): string {
+    if (!generationOutput?.character_data) {
+      return "CHARACTER STATUS: Not started - No character data available";
+    }
+
+    const charData = generationOutput.character_data;
+    const requiredFields = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'creator_notes', 'tags'];
+    const completedFields = charData ? requiredFields.filter(field => charData[field] && charData[field].toString().trim() !== '') : [];
+    const missingFields = charData ? requiredFields.filter(field => !charData[field] || charData[field].toString().trim() === '') : requiredFields;
+    
+    const progressPercentage = Math.round((completedFields.length / requiredFields.length) * 100);
+    
+    let summary = `CHARACTER STATUS: ${progressPercentage}% Complete (${completedFields.length}/${requiredFields.length} fields)`;
+    
+    if (completedFields.length > 0) {
+      summary += `\n✅ Completed: ${completedFields.join(', ')}`;
+    }
+    
+    if (missingFields.length > 0) {
+      summary += `\n❌ Missing: ${missingFields.join(', ')}`;
+    }
+    
+    return summary;
+  }
+
+  private buildWorldbookProgressSummary(generationOutput: GenerationOutput): string {
+    if (!generationOutput?.worldbook_data || generationOutput.worldbook_data.length === 0) {
+      return "WORLDBOOK STATUS: Not started - No worldbook entries available";
+    }
+
+    const entries = generationOutput.worldbook_data;
+    const completedEntries = entries.filter(entry => entry.content && entry.content.trim() !== '').length;
+    const totalEntries = entries.length;
+    const progressPercentage = Math.round((completedEntries / totalEntries) * 100);
+    
+    let summary = `WORLDBOOK STATUS: ${progressPercentage}% Complete (${completedEntries}/${totalEntries} entries)`;
+    
+    // Show some example entry types
+    const entryTypes = entries.slice(0, 3).map(entry => entry.comment || 'Unnamed entry').join(', ');
+    if (entryTypes) {
+      summary += `\n📚 Sample entries: ${entryTypes}`;
+    }
+    
+    return summary;
+  }
+
+  private buildCompletionStatusSummary(generationOutput: GenerationOutput): string {
+    if (!generationOutput) {
+      return "OVERALL STATUS: No generation output available";
+    }
+
+    const hasCharacterData = !!generationOutput.character_data;
+    const hasWorldbookData = !!generationOutput.worldbook_data && generationOutput.worldbook_data.length > 0;
+    
+    if (!hasCharacterData && !hasWorldbookData) {
+      return "OVERALL STATUS: Generation not started - Start with CHARACTER tool";
+    }
+    
+    if (!hasCharacterData && hasWorldbookData) {
+      return "OVERALL STATUS: ⚠️ INVALID STATE - Worldbook exists but no character data. Character must be completed first before worldbook creation.";
+    }
+    
+    // Character exists, check completion
+    const charData = generationOutput.character_data;
+    const requiredCharFields = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'creator_notes', 'tags'];
+    const completedFields = charData ? requiredCharFields.filter(field => charData[field] && charData[field].toString().trim() !== '') : [];
+    const missingFields = charData ? requiredCharFields.filter(field => !charData[field] || charData[field].toString().trim() === '') : requiredCharFields;
+    const charComplete = missingFields.length === 0;
+    
+    if (!charComplete) {
+      let status = `OVERALL STATUS: Character incomplete - ${completedFields.length}/${requiredCharFields.length} fields done`;
+      status += `\n❌ MISSING CHARACTER FIELDS: ${missingFields.join(', ')}`;
+      status += `\n🚫 BLOCKED: Cannot create worldbook until ALL character fields are complete`;
+      status += `\n📋 NEXT ACTION: Use CHARACTER tool to complete missing fields`;
+      return status;
+    }
+    
+    // Character is complete, check worldbook
+    if (hasCharacterData && !hasWorldbookData) {
+      return "OVERALL STATUS: ✅ Character complete - Ready for worldbook creation. Use WORLDBOOK tool to start world-building.";
+    }
+    
+    // Both exist, check worldbook completion
+    const worldbookEntries = generationOutput.worldbook_data;
+    const worldbookComplete = worldbookEntries && worldbookEntries.length >= 5 && worldbookEntries.every(entry => entry.content && entry.content.trim() !== '');
+    
+    if (charComplete && worldbookComplete) {
+      return "OVERALL STATUS: ✅ Generation complete - Ready for final evaluation";
+    } else if (charComplete && !worldbookComplete) {
+      return "OVERALL STATUS: Character complete - Worldbook needs completion. Continue with WORLDBOOK tool.";
+    } else {
+      return "OVERALL STATUS: Both character and worldbook in progress - Focus on character completion first.";
+    }
   }
 } 
  

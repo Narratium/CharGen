@@ -31,7 +31,6 @@ export enum SessionStatus {
  * Task adjustment structure for planning analysis
  */
 export interface TaskAdjustment {
-  type: 'perfect' | 'optimize_task';
   reasoning: string;
   taskDescription?: string; // New task description if optimization needed
   newSubproblems?: string[]; // New sub-problems (max 2, cannot exceed current count)
@@ -115,10 +114,11 @@ export interface ExecutionResult {
  */
 export interface ExecutionContext {
   session_id: string;
-  
+  generation_output: GenerationOutput;
   // Current research state
   research_state: ResearchState;
   message_history: Message[];
+
   
   // LLM configuration
   llm_config: {
