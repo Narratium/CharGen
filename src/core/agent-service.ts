@@ -760,7 +760,7 @@ export class AgentService {
     }
 
     const prompt = ChatPromptTemplate.fromTemplate(`
-You are an expert at creating concise image search queries for character cards and story scenarios.
+You are an expert at creating optimal image search queries for character cards and story scenarios.
 
 CHARACTER DATA:
 {characterData}
@@ -770,16 +770,42 @@ WORLDBOOK DATA:
 
 TASK: Create ONE precise sentence that describes the ideal image for this character/story.
 
-REQUIREMENTS:
-1. Maximum 30 words
-2. Focus on key visual elements: art style, main subject, setting
-3. Include genre/style (anime, realistic, fantasy art, etc.)
-4. No explanations, no formatting, just the search phrase
+PRIORITY SEARCH STRATEGY:
+🎯 FIRST PRIORITY - Official Content Search:
+If the character/story is based on or inspired by existing works (anime, movies, TV shows, novels, games, documentaries), prioritize searching for official content:
 
-EXAMPLES:
+EXISTING CONTENT EXAMPLES:
+- "Attack on Titan poster" (for AOT-inspired characters)
+- "Spirited Away official artwork" (for Studio Ghibli-style content)
+- "Harry Potter movie poster" (for wizarding world content)
+- "Cyberpunk 2077 game cover" (for cyberpunk settings)
+- "Your Name anime poster" (for romantic anime content)
+- "Game of Thrones official poster" (for medieval fantasy)
+- "Demon Slayer anime cover" (for supernatural action)
+- "Studio Ghibli official art" (for magical/whimsical content)
+- "Final Fantasy game artwork" (for JRPG-style fantasy)
+- "Marvel movie poster" (for superhero content)
+
+🎨 SECOND PRIORITY - Custom Character Description:
+If NO existing work is referenced, create a detailed character description:
+
+CUSTOM DESCRIPTION EXAMPLES:
 - "Anime portrait of silver-haired mage girl in magical academy uniform"
-- "Fantasy artwork of cyberpunk detective in neon-lit city streets"
+- "Fantasy artwork of cyberpunk detective in neon-lit city streets"  
 - "Realistic painting of medieval knight in dark forest setting"
+
+SEARCH QUERY REQUIREMENTS:
+1. Maximum 30 words
+2. For existing works: Use format "[Work Name] + official/poster/cover/artwork"
+3. For custom content: Focus on art style, main subject, setting
+4. Include genre/style specification
+5. No explanations, no formatting, just the search phrase
+
+ANALYSIS PROCESS:
+1. Check if character/world references any existing anime, movies, games, novels, or documentaries
+2. If YES: Search for official content from that work
+3. If NO: Create custom character description
+4. Prioritize recognizable, official content over generic descriptions
 
 Generate ONE concise image search sentence:`);
 
@@ -905,10 +931,17 @@ Generate ONE concise image search sentence:`);
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
     const hasValidExtension = imageExtensions.some(ext => url.toLowerCase().includes(ext));
     
-    // Check for common image hosting domains
+    // Check for common image hosting domains and official content sources
     const validDomains = [
       'imgur.com', 'pixiv.net', 'deviantart.com', 'artstation.com',
-      'pinterest.com', 'flickr.com', 'wikimedia.org', 'githubusercontent.com'
+      'pinterest.com', 'flickr.com', 'wikimedia.org', 'githubusercontent.com',
+      // Official content sources
+      'imdb.com', 'themoviedb.org', 'myanimelist.net', 'anilist.co',
+      'crunchyroll.com', 'funimation.com', 'netflix.com', 'disney.com',
+      'marvel.com', 'dc.com', 'studio-ghibli.net', 'toei-anim.co.jp',
+      'bandainamco.com', 'square-enix.com', 'nintendo.com', 'playstation.com',
+      // Media wikis and databases
+      'fandom.com', 'wikia.com', 'wikipedia.org'
     ];
     const hasValidDomain = validDomains.some(domain => url.includes(domain));
     
@@ -962,14 +995,37 @@ CHARACTER INFO:
 CANDIDATE IMAGE URLS:
 {imageUrls}
 
-SELECTION CRITERIA:
-1. Quality: High resolution, clear, professional artwork
-2. Relevance: Matches the character/story description and genre
-3. Appropriateness: SFW, no watermarks, no text overlays
-4. Source reliability: Prefer art sites over generic hosting
-5. Style consistency: Matches the expected art style (anime, realistic, etc.)
+SELECTION CRITERIA (in priority order):
+🎯 HIGHEST PRIORITY - Official Content Recognition:
+- Official posters/covers from known anime, movies, games, shows
+- Professional promotional artwork from established franchises
+- Recognizable artwork from major studios (Studio Ghibli, Marvel, etc.)
+- Official character artwork from games/anime/movies
 
-TASK: Select the SINGLE best image URL from the candidates. Consider the domain reputation and file path quality.
+🏆 HIGH PRIORITY - Technical Quality:
+1. High resolution and image clarity
+2. Professional artwork quality
+3. Appropriate composition for avatar use
+4. Clean, non-pixelated images
+
+📍 MEDIUM PRIORITY - Content Appropriateness:
+1. SFW content only
+2. No watermarks or text overlays
+3. Matches character/story description and genre
+4. Style consistency (anime, realistic, fantasy art, etc.)
+
+🔗 SOURCE QUALITY PREFERENCES:
+- Prefer: pixiv.net, deviantart.com, artstation.com, wikimedia.org
+- Acceptable: imgur.com, pinterest.com, flickr.com
+- Avoid: low-quality hosting sites, ad domains
+
+ANALYSIS PROCESS:
+1. FIRST: Check if any images appear to be official content (posters, covers, promotional art)
+2. SECOND: Evaluate technical quality and resolution
+3. THIRD: Assess appropriateness and relevance
+4. FOURTH: Consider source domain reliability
+
+TASK: Select the SINGLE best image URL from the candidates. Prioritize official content over custom artwork when available.
 
 Respond with only the selected URL, nothing else:`);
 

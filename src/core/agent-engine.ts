@@ -110,7 +110,7 @@ These create immersive, comprehensive world foundations that provide rich contex
 1. **Dual Classification System**: Create two types of entries - (1) Essential fixed entries with specific comment values "STATUS" (comprehensive real-time interface), "USER_SETTING" (multi-dimensional player character profiling with hierarchical organization, timeline integration, psychological depth, systematic ability descriptions, dynamic character arc, and behavioral framework), "WORLD_VIEW" (systematic world-building with version control, historical timeline, hierarchical system categories, interconnected elements, and expansion interfaces for supplementary entries) all wrapped in proper XML tags containing 500-1500 words each of substantial, detailed content, and (2) Supplementary keyword-triggered entries that expand specific world elements (NPCs, locations, items, factions, technologies, events) referenced in the WORLD_VIEW foundation, each containing 500-1000 words of comprehensive detail
 2. **Strict Creation Order**: Follow this exact sequence - FIRST: STATUS entry (current game state), SECOND: USER_SETTING entry (player character info), THIRD: WORLD_VIEW entry (world background), ONLY THEN: supplementary keyword entries. Each essential entry must be completed with proper XML wrapping before proceeding to the next type
 3. **Quality over Quantity**: Focus on creating meaningful, well-crafted entries rather than numerous shallow ones
-4. **Systematic Expansion**: Supplementary entries should expand specific elements referenced in WORLD_VIEW foundation (e.g., if WORLD_VIEW mentions "资源集散地", create specific entries for individual locations; if it mentions factions, create detailed NPC entries for faction leaders)
+4. **Systematic Expansion**: Supplementary entries must include at least 5 diverse, detailed entries that expand WORLD_VIEW elements without repetition. Required types: Tools/Weapons (magical items, legendary equipment), Characters/NPCs (important figures, faction leaders), Buildings/Architecture (significant structures, magical buildings), Geography/Locations (specific places, dangerous areas), Astronomy/Celestial (moons, stars, prophecies), War History/Events (past conflicts, major battles), Organizations/Factions (detailed group profiles), Magic/Technology Systems (specific mechanisms, abilities), Cultural Elements (traditions, customs), Historical Figures (past heroes, legends)
 5. **Strategic Keywords**: Use discoverable, relevant keywords that naturally appear in conversations for supplementary entries
 6. **Content Depth**: Provide extensive, detailed information (500-1500 words per entry) that genuinely enhances storytelling and immersion. Each entry should be comprehensive and rich in detail, NOT brief summaries. Include multiple paragraphs with specific examples, extensive descriptions, and immersive world-building content
 7. **Strategic Positioning**: Use position 0-1 for foundational world info, position 2 for supplemental context, position 3-4 for immediate response relevance
@@ -627,10 +627,12 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       WORLDBOOK PROGRESS ANALYSIS (only if character is 100% complete):
       - If worldbook has 0 entries: Start with STATUS entry creation
       - If worldbook has 1-2 entries: Continue with missing essential entries (STATUS → USER_SETTING → WORLD_VIEW)
-      - If worldbook has 3 entries: Check if all essentials exist, then start supplementary entries
-      - If worldbook has 4-7 entries: Continue adding supplementary entries based on WORLD_VIEW structure
+      - If worldbook has 3 entries: Check if all essentials exist, then IMMEDIATELY start supplementary entries
+      - If worldbook has 4-7 entries: PRIORITY - Continue adding supplementary entries (need minimum 5 supplementary)
+      - If worldbook has exactly 8 entries: VERIFY completion - ensure 3 essential + 5 supplementary with proper content
       - If worldbook has 8+ entries: Focus on quality refinement and completion
-      - Minimum target: 8 total entries (3 essential + 5 supplementary)
+      - MANDATORY MINIMUM: 8 total entries (3 essential + 5 supplementary) - DO NOT mark complete with fewer
+      - Supplementary entries must be: Tools/Weapons, Characters/NPCs, Buildings, Geography, Astronomy, War History, Organizations, Systems, Culture, Historical Figures
       
       COMPLETION STATUS ANALYSIS:
       - If "Generation not started": Start with CHARACTER tool
@@ -709,10 +711,19 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - Avoid short, superficial descriptions - prioritize thorough, immersive content
         
         SUPPLEMENTARY ENTRY GUIDELINES:
-        - Create entries for hierarchical elements mentioned in WORLD_VIEW
-        - Examples: Factions, Locations, NPCs, Systems, Items, Events, Organizations
-        - Each supplementary entry should expand one specific aspect from WORLD_VIEW
-        - Use descriptive comment types: "Faction: Shadow Guild", "Location: Crystal Academy", etc.
+        - MANDATORY: At least 5 supplementary entries after the 3 essential ones
+        - Create specific, detailed entries that expand WORLD_VIEW elements WITHOUT repeating WORLD_VIEW content
+        - Entry types should include: Tools/Weapons, Characters/NPCs, Buildings/Architecture, Geography/Locations, Astronomy/Celestial, War History/Events, Organizations/Factions, Magic/Technology Systems, Cultural Elements, Historical Figures
+        - Each entry must have specific keywords in 'key' field and comprehensive detailed descriptions in 'content'
+        - Examples:
+          * Tool: key=["crimson blade", "legendary sword"], content=detailed weapon description, backstory, powers
+          * Character: key=["elder mage", "academy principal"], content=personality, appearance, background, abilities
+          * Building: key=["crystal tower", "academy spire"], content=architecture, history, magical properties
+          * Geography: key=["shadow valley", "forbidden forest"], content=terrain, dangers, resources, legends
+          * Astronomy: key=["twin moons", "eclipse prophecy"], content=celestial mechanics, cultural significance
+          * War History: key=["dragon war", "ancient conflict"], content=causes, battles, consequences, heroes
+        - Use descriptive comment types: "Weapon: Crimson Blade", "Character: Elder Mage", "Location: Crystal Tower", etc.
+        - CRITICAL: Do NOT duplicate or repeat content already covered in WORLD_VIEW - create NEW specific details
         
         PRIORITY: Essential entries first, then supplementary entries based on WORLD_VIEW structure
       </worldbook_when>
@@ -1272,10 +1283,12 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
     - Assess professional quality standards
 
     STEP 3: Supplementary Entry Assessment
-    - Verify minimum quantity requirements (at least 2 supplementary entries)
-    - Evaluate keyword strategies and discoverability
-    - Check content depth and narrative value
-    - Assess integration with WORLD_VIEW foundation
+    - Verify minimum quantity requirements (at least 5 supplementary entries for total of 8+ entries)
+    - Check entry diversity: Tools/Weapons, Characters/NPCs, Buildings, Geography, Astronomy, War History, Organizations, Systems, Culture, Historical Figures
+    - Evaluate keyword strategies and discoverability in 'key' field
+    - Check content depth and narrative value (500-1000 words per entry)
+    - Assess integration with WORLD_VIEW foundation WITHOUT content duplication
+    - Verify each entry provides NEW specific details not covered in WORLD_VIEW
 
     STEP 4: Overall Cohesion Analysis
     - Character-worldbook integration and compatibility
@@ -1330,7 +1343,7 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
       <character_quality_score>Character data quality score from 0 to 100</character_quality_score>
       <worldbook_quality_score>Worldbook data quality score from 0 to 100</worldbook_quality_score>
       <overall_quality_score>Overall quality score from 0 to 100</overall_quality_score>
-      <meets_professional_standards>true or false - only true if content meets commercial-grade standards (overall >= 90, worldbook >= 85, all essential entries present with proper XML and 500+ words)</meets_professional_standards>
+      <meets_professional_standards>true or false - only true if content meets commercial-grade standards (overall >= 90, worldbook >= 85, all essential entries present with proper XML and 500+ words, minimum 8 total entries with 5+ diverse supplementary entries)</meets_professional_standards>
       <critical_issues>
         <issue>Specific critical issue that must be addressed</issue>
         <issue>Another critical issue requiring immediate attention</issue>
@@ -1476,10 +1489,10 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
       };
     }
 
-    if (generationOutput.worldbook_data.length < 5) {
+    if (generationOutput.worldbook_data.length < 8) {
       return { 
         isValid: false, 
-        reason: `worldbook_data has only ${generationOutput.worldbook_data.length} entries, minimum 5 required. Next step: Call REFLECT tool to analyze and create new tasks to complete worldbook creation (need ${5 - generationOutput.worldbook_data.length} more entries)` 
+        reason: `worldbook_data has only ${generationOutput.worldbook_data.length} entries, minimum 8 required (3 essential + 5 supplementary). Next step: Call REFLECT tool to analyze and create new tasks to complete worldbook creation (need ${8 - generationOutput.worldbook_data.length} more entries)` 
       };
     }
     return { isValid: true };
@@ -1706,7 +1719,7 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
     
     // Both exist, check worldbook completion
     const worldbookEntries = generationOutput.worldbook_data;
-    const worldbookComplete = worldbookEntries && worldbookEntries.length >= 5 && worldbookEntries.every(entry => entry.content && entry.content.trim() !== '');
+    const worldbookComplete = worldbookEntries && worldbookEntries.length >= 8 && worldbookEntries.every(entry => entry.content && entry.content.trim() !== '');
     
     if (charComplete && worldbookComplete) {
       return "OVERALL STATUS: ✅ Generation complete - Ready for final evaluation";
