@@ -107,12 +107,12 @@ A high-quality USER_SETTING entry should provide comprehensive player character 
 These create immersive, comprehensive world foundations that provide rich context for AI responses and clear expansion opportunities for supplementary worldbook entries.
 
 #### Worldbook Best Practices:
-1. **Dual Classification System**: Create two types of entries - (1) Essential fixed entries with specific comment values "STATUS" (comprehensive real-time interface), "USER_SETTING" (multi-dimensional player character profiling with hierarchical organization, timeline integration, psychological depth, systematic ability descriptions, dynamic character arc, and behavioral framework), "WORLD_VIEW" (systematic world-building with version control, historical timeline, hierarchical system categories, interconnected elements, and expansion interfaces for supplementary entries) all wrapped in proper XML tags containing 200-1000 words each, and (2) Supplementary keyword-triggered entries that expand specific world elements (NPCs, locations, items, factions, technologies, events) referenced in the WORLD_VIEW foundation
+1. **Dual Classification System**: Create two types of entries - (1) Essential fixed entries with specific comment values "STATUS" (comprehensive real-time interface), "USER_SETTING" (multi-dimensional player character profiling with hierarchical organization, timeline integration, psychological depth, systematic ability descriptions, dynamic character arc, and behavioral framework), "WORLD_VIEW" (systematic world-building with version control, historical timeline, hierarchical system categories, interconnected elements, and expansion interfaces for supplementary entries) all wrapped in proper XML tags containing 500-1500 words each of substantial, detailed content, and (2) Supplementary keyword-triggered entries that expand specific world elements (NPCs, locations, items, factions, technologies, events) referenced in the WORLD_VIEW foundation, each containing 500-1000 words of comprehensive detail
 2. **Strict Creation Order**: Follow this exact sequence - FIRST: STATUS entry (current game state), SECOND: USER_SETTING entry (player character info), THIRD: WORLD_VIEW entry (world background), ONLY THEN: supplementary keyword entries. Each essential entry must be completed with proper XML wrapping before proceeding to the next type
 3. **Quality over Quantity**: Focus on creating meaningful, well-crafted entries rather than numerous shallow ones
 4. **Systematic Expansion**: Supplementary entries should expand specific elements referenced in WORLD_VIEW foundation (e.g., if WORLD_VIEW mentions "资源集散地", create specific entries for individual locations; if it mentions factions, create detailed NPC entries for faction leaders)
 5. **Strategic Keywords**: Use discoverable, relevant keywords that naturally appear in conversations for supplementary entries
-6. **Content Depth**: Provide useful, detailed information that genuinely enhances storytelling and immersion
+6. **Content Depth**: Provide extensive, detailed information (500-1500 words per entry) that genuinely enhances storytelling and immersion. Each entry should be comprehensive and rich in detail, NOT brief summaries. Include multiple paragraphs with specific examples, extensive descriptions, and immersive world-building content
 7. **Strategic Positioning**: Use position 0-1 for foundational world info, position 2 for supplemental context, position 3-4 for immediate response relevance
 8. **Scenario Integration**: Ensure entries complement and enhance the character card's scenario and tone
 9. **Token Management**: Balance information richness with efficient token usage for optimal performance
@@ -574,10 +574,17 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
     {knowledge_base}
   </existing_knowledge>
 
-  <conversation_context>
-    // The recent conversation history of the agent, which is used to store the conversation history of the agent
+  <full_conversation_history>
+    // Complete conversation history excluding the recent 5 turns
+    // This provides comprehensive context for understanding the entire generation process
+    {full_conversation}
+  </full_conversation_history>
+
+  <recent_conversation>
+    // The most recent 5 conversation turns with emphasis on quality_evaluation and tool_failure messages
+    // This provides immediate feedback and execution context for decision making
     {recent_conversation}
-  </conversation_context>
+  </recent_conversation>
 
   <current_task_queue>
     // The current task queue of the agent, which is used to store the current task queue of the agent
@@ -618,9 +625,12 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       - Character completion is mandatory before worldbook creation
       
       WORLDBOOK PROGRESS ANALYSIS (only if character is 100% complete):
-      - If worldbook has < 3 entries: Focus on creating core world elements
-      - If worldbook has 3-7 entries: Add supporting character relationships and world rules
-      - If worldbook has > 7 entries: Focus on quality refinement and completion
+      - If worldbook has 0 entries: Start with STATUS entry creation
+      - If worldbook has 1-2 entries: Continue with missing essential entries (STATUS → USER_SETTING → WORLD_VIEW)
+      - If worldbook has 3 entries: Check if all essentials exist, then start supplementary entries
+      - If worldbook has 4-7 entries: Continue adding supplementary entries based on WORLD_VIEW structure
+      - If worldbook has 8+ entries: Focus on quality refinement and completion
+      - Minimum target: 8 total entries (3 essential + 5 supplementary)
       
       COMPLETION STATUS ANALYSIS:
       - If "Generation not started": Start with CHARACTER tool
@@ -678,12 +688,33 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - Use ONLY AFTER character creation is 100% complete
         - ALL character fields must be present: name, description, personality, scenario, first_mes, mes_example, alternate_greetings, creator_notes, tags
         - Do NOT use if any character field is missing or empty
-        - Follow STRICT CREATION ORDER: FIRST create STATUS entry, SECOND create USER_SETTING entry, THIRD create WORLD_VIEW entry, ONLY THEN create supplementary entries
-        - Check existing worldbook for missing essential entries: if STATUS missing, create STATUS; if USER_SETTING missing, create USER_SETTING; if WORLD_VIEW missing, create WORLD_VIEW
-        - Essential entries must use proper XML wrapping: STATUS uses <status>content</status>, USER_SETTING uses <user_setting>content</user_setting>, WORLD_VIEW uses <world_view>content</world_view>
-        - Create 1-3 high-quality entries per call, prioritizing missing essential entries first
-        - Only create supplementary keyword entries (NPCs, locations, items) after all three essential entries exist
-        - Entries should complement and enhance the established character
+        
+        WORLDBOOK STRUCTURE REQUIREMENTS:
+        - ESSENTIAL ENTRIES (exactly 1 each): STATUS, USER_SETTING, WORLD_VIEW
+        - SUPPLEMENTARY ENTRIES (minimum 5): Based on WORLD_VIEW hierarchical structure elements
+        - Total minimum: 8 worldbook entries (3 essential + 5+ supplementary)
+        
+        CREATION ORDER:
+        1. FIRST: STATUS entry (1 required) - comprehensive real-time game state interface
+        2. SECOND: USER_SETTING entry (1 required) - detailed player character profiling  
+        3. THIRD: WORLD_VIEW entry (1 required) - systematic world-building foundation
+        4. THEN: Supplementary entries (5+ required) - expand specific WORLD_VIEW elements
+        
+        CONTENT FORMAT REQUIREMENTS:
+        - Each entry: 500-1500 words of substantial, detailed content (NOT brief summaries)
+        - ESSENTIAL entries: XML wrapper with Markdown inside (e.g., <status>## Current Status\n\n**Location:** Academy\n\n...</status>)
+        - SUPPLEMENTARY entries: Rich Markdown formatting with headers, lists, comprehensive descriptions
+        - Content must be comprehensive world-building material with extensive detail and depth
+        - Include multiple paragraphs, specific examples, and rich contextual information
+        - Avoid short, superficial descriptions - prioritize thorough, immersive content
+        
+        SUPPLEMENTARY ENTRY GUIDELINES:
+        - Create entries for hierarchical elements mentioned in WORLD_VIEW
+        - Examples: Factions, Locations, NPCs, Systems, Items, Events, Organizations
+        - Each supplementary entry should expand one specific aspect from WORLD_VIEW
+        - Use descriptive comment types: "Faction: Shadow Guild", "Location: Crystal Academy", etc.
+        
+        PRIORITY: Essential entries first, then supplementary entries based on WORLD_VIEW structure
       </worldbook_when>
 
       <reflect_when>
@@ -710,26 +741,38 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
     1. MAIN OBJECTIVE (Highest Priority): Analyze <main_objective> to understand the user's core request and desired outcome
        - If genre/tone unclear from user description, consider ASK_USER tool first
     
-    2. GENERATION OUTPUT (Critical Priority): Examine <current_generation_output> to assess current character and worldbook progress
+    2. RECENT CONVERSATION (Critical Priority): Examine <recent_conversation> for immediate feedback and status
+       - Pay SPECIAL ATTENTION to recent messages with type "quality_evaluation" or "tool_failure"
+       - quality_evaluation messages indicate generation quality issues that need addressing
+       - tool_failure messages indicate previous tool execution problems that must be resolved
+       - Recent conversation shows the last 5 conversation turns for immediate context
+       - Adjust strategy based on recent feedback and execution results
+    
+    3. GENERATION OUTPUT (Critical Priority): Examine <current_generation_output> to assess current character and worldbook progress
        - Check character completion status and identify missing fields
        - Check worldbook progress ONLY if character is 100% complete
        - 🚫 CRITICAL: Character must be fully complete before any worldbook creation
     
-    3. CURRENT TASK: Review <current_task_queue> to understand what specific work is planned
+    4. CURRENT TASK: Review <current_task_queue> to understand what specific work is planned
     
-    4. CURRENT SUB-PROBLEM: Examine <current_sub_problem> to identify the immediate next step
+    5. CURRENT SUB-PROBLEM: Examine <current_sub_problem> to identify the immediate next step
     
-    5. TOOL GUIDELINES: Apply the tool selection guidelines based on generation output analysis
+    6. TOOL GUIDELINES: Apply the tool selection guidelines based on generation output analysis
        - Use CHARACTER tool until all 8 required fields are complete
        - Only use WORLDBOOK tool after character is 100% complete
        - Use REFLECT ONLY when task queue is empty but generation output is incomplete
        - Follow the priority order and selection criteria
     
-    6. KNOWLEDGE & CONTEXT: Review <existing_knowledge> and <conversation_context> for additional context
+    7. KNOWLEDGE & CONTEXT: Review <existing_knowledge> for background information and research results
     
-    7. TASK OPTIMIZATION: Evaluate if current task needs adjustment based on recent progress
+    8. FULL CONVERSATION HISTORY: Review <full_conversation_history> for comprehensive understanding
+       - Provides complete context of the entire generation process (excluding recent 5 turns)
+       - Helps understand user preferences, previous decisions, and evolution of requirements
+       - Use for understanding long-term patterns and maintaining consistency
     
-    8. DECISION: Select the single most critical tool action to complete the current sub-problem
+    9. TASK OPTIMIZATION: Evaluate if current task needs adjustment based on recent progress and feedback
+    
+    10. DECISION: Select the single most critical tool action to complete the current sub-problem
     
     🚫 MANDATORY CONSTRAINT: Character completion (all 8 fields) is REQUIRED before worldbook creation can begin.
   </instructions>
@@ -799,6 +842,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
           completed_tasks: this.buildCompletedTasksSummary(context),
           knowledge_base: this.buildKnowledgeBaseSummary(context.research_state.knowledge_base),
           recent_conversation: this.buildRecentConversationSummary(context.message_history),
+          full_conversation: this.buildFullConversationSummary(context.message_history),
           task_queue_status: this.buildTaskQueueSummary(context),
           current_sub_problem: context.research_state.task_queue?.[0]?.sub_problems?.[0]?.description || "No current sub-problem",
           character_progress: this.buildCharacterProgressSummary(context.generation_output),
@@ -1160,11 +1204,11 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
 
     console.log("✅ Basic validation passed, proceeding with LLM quality assessment");
 
-    // If basic validation passes, use LLM for quality assessment
+    // If basic validation passes, use LLM for strict quality assessment
     const prompt = createStandardPromptTemplate(`
 <prompt>
   <system_role>
-    You are an expert quality assurance agent for character and worldbook generation. Your task is to evaluate the GenerationOutput and determine if it meets high-quality standards for completion.
+    You are an expert quality assurance specialist for professional character AI content generation. Your role is to conduct rigorous, detailed quality assessment of worldbook entries and character data to ensure they meet industry excellence standards. You must be extremely thorough and demanding in your evaluation.
   </system_role>
 
   <evaluation_context>
@@ -1173,56 +1217,128 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
     </generation_output>
   </evaluation_context>
 
-  <evaluation_criteria>
-    <character_data_criteria>
-      - All required fields must be complete and non-empty
-      - Character personality should be distinctive, engaging, and well-developed
-      - Scenario should be compelling and provide clear context
-      - First message should be engaging and in-character
-      - Example messages should demonstrate consistent personality and writing style
-      - Creator notes should provide useful guidance
-    </character_data_criteria>
-    
-    <worldbook_criteria>
-      - MANDATORY: Must contain exactly THREE essential fixed entries with proper XML wrapping: (1) comment="STATUS" with <status>content</status> containing comprehensive real-time interface, (2) comment="USER_SETTING" with <user_setting>content</user_setting> containing multi-dimensional player character profiling with hierarchical organization, timeline integration, psychological depth, systematic ability descriptions, dynamic character arc, and behavioral framework, (3) comment="WORLD_VIEW" with <world_view>content</world_view> containing systematic world-building with version control, historical timeline, hierarchical system categories, interconnected elements, and expansion interfaces
-      - STATUS entry must demonstrate excellence standard: immersive game-like interface with organized sections, dynamic values, clear formatting with symbols, and comprehensive real-time information display
-      - USER_SETTING entry must demonstrate excellence standard: multi-dimensional character profiling with basic info, appearance, personality layers (surface vs inner), life circumstances, special experiences, abilities with detailed mechanisms, timeline integration showing character development, psychological depth including motivations and plans, and behavioral framework for decision-making patterns
-      - WORLD_VIEW entry must demonstrate excellence standard: systematic world-building with version control, detailed chronological development, comprehensive system coverage (technology, politics, economics, society, environment), hierarchical structure, interconnected elements, and clear expansion interfaces for supplementary entries
-      - Essential entries must contain substantial content (200-1000 words each) within their respective XML tags
-      - Must have at least 5 total high-quality entries (3 essential + minimum 2 supplementary)
-      - Supplementary entries must include: character relationships, world information, world rules, NPCs, locations, or items
-      - Each supplementary entry should have appropriate keywords for discovery
-      - All content should be detailed, useful, and consistent
-      - All entries should complement the character and enhance the storytelling experience
-      - STRICT ENFORCEMENT: Worldbook is considered INCOMPLETE if any of the three essential entries are missing, lack proper XML wrapping, or fail to meet excellence standards
-    </worldbook_criteria>
-    
-    <overall_quality_standards>
-      - Content should be engaging, creative, and well-written
-      - All elements should work together cohesively
-      - Quality should meet professional standards for character AI applications
-    </overall_quality_standards>
-  </evaluation_criteria>
+  <strict_evaluation_criteria>
+    <worldbook_structure_analysis>
+      MANDATORY STRUCTURAL REQUIREMENTS:
+      1. Essential Entry Validation:
+         - STATUS entry: Must have comment="STATUS" with XML wrapper <status>content</status>
+         - USER_SETTING entry: Must have comment="USER_SETTING" with XML wrapper <user_setting>content</user_setting>  
+         - WORLD_VIEW entry: Must have comment="WORLD_VIEW" with XML wrapper <world_view>content</world_view>
+      
+      2. Content Length Assessment:
+         - Each essential entry: Minimum 500 words, optimal 800-1500 words
+         - Supplementary entries: Minimum 300 words, optimal 500-1000 words
+         - Calculate actual word count for each entry and compare to requirements
+      
+      3. Content Quality Standards:
+         - STATUS: Must be comprehensive real-time interface with organized sections, dynamic values, clear formatting with symbols, temporal/spatial context, character statistics, interactive elements
+         - USER_SETTING: Must include multi-dimensional profiling (basic info, appearance, personality layers, life circumstances, abilities with mechanisms, timeline integration, psychological depth, behavioral framework)
+         - WORLD_VIEW: Must contain systematic world-building (version control, historical timeline, system categories, hierarchical structure, interconnected elements, expansion interfaces)
+         - Supplementary: Must expand specific WORLD_VIEW elements with rich detail
+    </worldbook_structure_analysis>
+
+    <content_depth_analysis>
+      CONTENT QUALITY METRICS:
+      1. Detail Density: Are descriptions comprehensive and immersive, not superficial summaries?
+      2. World Coherence: Do all entries work together to create a logical, consistent world?
+      3. Narrative Utility: Does each entry provide actionable information for storytelling?
+      4. Professional Standards: Does content meet commercial-grade character AI expectations?
+      5. XML Format Compliance: Are essential entries properly wrapped in their specific XML tags?
+      6. Keyword Strategy: Do supplementary entries have discoverable, relevant keywords?
+    </content_depth_analysis>
+
+    <character_data_analysis>
+      CHARACTER EXCELLENCE STANDARDS:
+      - Personality: Multi-layered, distinctive, engaging personality with depth
+      - Scenario: Compelling context that provides clear roleplay direction
+      - First Message: Engaging, in-character, sets proper tone and context
+      - Example Messages: Consistent personality demonstration across multiple scenarios
+      - Creator Notes: Practical guidance for users and character behavior
+      - Description: Vivid, detailed character presentation
+    </character_data_analysis>
+  </strict_evaluation_criteria>
+
+  <critical_assessment_process>
+    STEP 1: Essential Entry Audit
+    - Verify presence of all 3 essential entries with exact comment names
+    - Check XML wrapper format compliance for each essential entry
+    - Measure word count in each essential entry's content
+    - Assess content quality against excellence standards
+
+    STEP 2: Content Depth Evaluation
+    - Analyze detail density and comprehensiveness of each entry
+    - Evaluate world coherence and logical consistency
+    - Check narrative utility and storytelling enhancement value
+    - Assess professional quality standards
+
+    STEP 3: Supplementary Entry Assessment
+    - Verify minimum quantity requirements (at least 2 supplementary entries)
+    - Evaluate keyword strategies and discoverability
+    - Check content depth and narrative value
+    - Assess integration with WORLD_VIEW foundation
+
+    STEP 4: Overall Cohesion Analysis
+    - Character-worldbook integration and compatibility
+    - Consistency across all content elements
+    - Professional quality and commercial viability
+  </critical_assessment_process>
 
   <instructions>
-    Evaluate the GenerationOutput strictly based on the criteria above. Focus on content quality, completeness, and overall excellence. Be thorough but demanding in your assessment.
+    Conduct a RIGOROUS and DEMANDING evaluation. You must:
+    1. Actually count words in each entry content section
+    2. Specifically identify any missing essential entries or XML format issues
+    3. Evaluate content depth - reject superficial or brief content
+    4. Assess professional quality standards strictly
+    5. Provide specific, actionable improvement suggestions for REFLECT tool usage
     
-    IMPORTANT: When providing improvement suggestions, focus on actionable tasks that can be used with the REFLECT tool to generate new tasks. Each suggestion should be specific enough to create concrete sub-problems for task planning.
+    FAIL any worldbook that lacks comprehensive, detailed content or proper structure.
+    PASS only content that meets professional industry standards for character AI applications.
   </instructions>
 
   <output_specification>
     You MUST respond using the following XML format. Do not include any other text outside this block.
 
     <evaluation_response>
-      <reasoning>Detailed explanation of your assessment, covering character data quality, worldbook quality, and overall cohesion.</reasoning>
-      <character_quality_score>Character data quality score from 0 to 100.</character_quality_score>
-      <worldbook_quality_score>Worldbook data quality score from 0 to 100.</worldbook_quality_score>
-      <overall_quality_score>Overall quality score from 0 to 100.</overall_quality_score>
-      <is_sufficient>true or false, based on whether the generation meets high-quality completion standards (overall_quality_score >= 85).</is_sufficient>
-      <improvement_suggestions>
-        <suggestion>Specific improvement suggestion that can be used with REFLECT tool to create new tasks</suggestion>
-        <suggestion>Another specific improvement suggestion for REFLECT tool task generation</suggestion>
-      </improvement_suggestions>
+      <detailed_analysis>
+        <essential_entries_status>
+          <status_entry>
+            <present>true/false</present>
+            <xml_format_correct>true/false</xml_format_correct>
+            <word_count>actual number</word_count>
+            <quality_assessment>detailed quality analysis</quality_assessment>
+          </status_entry>
+          <user_setting_entry>
+            <present>true/false</present>
+            <xml_format_correct>true/false</xml_format_correct>
+            <word_count>actual number</word_count>
+            <quality_assessment>detailed quality analysis</quality_assessment>
+          </user_setting_entry>
+          <world_view_entry>
+            <present>true/false</present>
+            <xml_format_correct>true/false</xml_format_correct>
+            <word_count>actual number</word_count>
+            <quality_assessment>detailed quality analysis</quality_assessment>
+          </world_view_entry>
+        </essential_entries_status>
+        <supplementary_entries_assessment>
+          <count>actual number of supplementary entries</count>
+          <average_word_count>average words per supplementary entry</average_word_count>
+          <quality_summary>overall quality assessment of supplementary content</quality_summary>
+        </supplementary_entries_assessment>
+        <content_depth_evaluation>Comprehensive analysis of content depth, detail density, and professional quality</content_depth_evaluation>
+      </detailed_analysis>
+      <character_quality_score>Character data quality score from 0 to 100</character_quality_score>
+      <worldbook_quality_score>Worldbook data quality score from 0 to 100</worldbook_quality_score>
+      <overall_quality_score>Overall quality score from 0 to 100</overall_quality_score>
+      <meets_professional_standards>true or false - only true if content meets commercial-grade standards (overall >= 90, worldbook >= 85, all essential entries present with proper XML and 500+ words)</meets_professional_standards>
+      <critical_issues>
+        <issue>Specific critical issue that must be addressed</issue>
+        <issue>Another critical issue requiring immediate attention</issue>
+      </critical_issues>
+      <improvement_tasks>
+        <task>Specific task for REFLECT tool to generate concrete action items</task>
+        <task>Another specific task for REFLECT tool task generation</task>
+      </improvement_tasks>
     </evaluation_response>
   </output_specification>
 </prompt>`);
@@ -1236,35 +1352,80 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
         generation_output: JSON.stringify(generationOutput, null, 2)
       });
 
-      // Parse XML response directly
-      const reasoning = response.match(/<reasoning>([\s\S]*?)<\/reasoning>/)?.[1].trim() ?? 'No reasoning provided';
+      // Parse detailed XML response
       const character_quality_score = parseInt(response.match(/<character_quality_score>(\d+)<\/character_quality_score>/)?.[1] ?? '0', 10);
       const worldbook_quality_score = parseInt(response.match(/<worldbook_quality_score>(\d+)<\/worldbook_quality_score>/)?.[1] ?? '0', 10);
       const overall_quality_score = parseInt(response.match(/<overall_quality_score>(\d+)<\/overall_quality_score>/)?.[1] ?? '0', 10);
-      const is_sufficient = response.match(/<is_sufficient>(true|false)<\/is_sufficient>/)?.[1] === 'true';
+      const meets_professional_standards = response.match(/<meets_professional_standards>(true|false)<\/meets_professional_standards>/)?.[1] === 'true';
 
-      const improvement_suggestions: string[] = [];
-      const suggestionsMatch = response.match(/<improvement_suggestions>([\s\S]*?)<\/improvement_suggestions>/)?.[1] ?? '';
-      const suggestionRegex = /<suggestion>([\s\S]*?)<\/suggestion>/g;
-      let match;
-      while ((match = suggestionRegex.exec(suggestionsMatch)) !== null) {
-          improvement_suggestions.push(match[1].trim());
+      // Extract detailed analysis sections
+      const content_depth_evaluation = response.match(/<content_depth_evaluation>([\s\S]*?)<\/content_depth_evaluation>/)?.[1].trim() ?? 'No content depth evaluation provided';
+      
+      // Extract critical issues
+      const critical_issues: string[] = [];
+      const issuesMatch = response.match(/<critical_issues>([\s\S]*?)<\/critical_issues>/)?.[1] ?? '';
+      const issueRegex = /<issue>([\s\S]*?)<\/issue>/g;
+      let issueMatch;
+      while ((issueMatch = issueRegex.exec(issuesMatch)) !== null) {
+        critical_issues.push(issueMatch[1].trim());
       }
 
-      console.log(`📊 Quality Assessment - Character: ${character_quality_score}%, Worldbook: ${worldbook_quality_score}%, Overall: ${overall_quality_score}%`);
+      // Extract improvement tasks
+      const improvement_tasks: string[] = [];
+      const tasksMatch = response.match(/<improvement_tasks>([\s\S]*?)<\/improvement_tasks>/)?.[1] ?? '';
+      const taskRegex = /<task>([\s\S]*?)<\/task>/g;
+      let taskMatch;
+      while ((taskMatch = taskRegex.exec(tasksMatch)) !== null) {
+        improvement_tasks.push(taskMatch[1].trim());
+      }
+
+      // Extract essential entries analysis for detailed logging
+      const status_present = response.match(/<status_entry>[\s\S]*?<present>(true|false)<\/present>[\s\S]*?<\/status_entry>/)?.[1] === 'true';
+      const status_word_count = response.match(/<status_entry>[\s\S]*?<word_count>(\d+)<\/word_count>[\s\S]*?<\/status_entry>/)?.[1] ?? '0';
+      const user_setting_present = response.match(/<user_setting_entry>[\s\S]*?<present>(true|false)<\/present>[\s\S]*?<\/user_setting_entry>/)?.[1] === 'true';
+      const user_setting_word_count = response.match(/<user_setting_entry>[\s\S]*?<word_count>(\d+)<\/word_count>[\s\S]*?<\/user_setting_entry>/)?.[1] ?? '0';
+      const world_view_present = response.match(/<world_view_entry>[\s\S]*?<present>(true|false)<\/present>[\s\S]*?<\/world_view_entry>/)?.[1] === 'true';
+      const world_view_word_count = response.match(/<world_view_entry>[\s\S]*?<word_count>(\d+)<\/word_count>[\s\S]*?<\/world_view_entry>/)?.[1] ?? '0';
+
+      console.log(`📊 Detailed Quality Assessment:`);
+      console.log(`   Character: ${character_quality_score}%, Worldbook: ${worldbook_quality_score}%, Overall: ${overall_quality_score}%`);
+      console.log(`   Essential Entries: STATUS(${status_present ? '✅' : '❌'}, ${status_word_count}w), USER_SETTING(${user_setting_present ? '✅' : '❌'}, ${user_setting_word_count}w), WORLD_VIEW(${world_view_present ? '✅' : '❌'}, ${world_view_word_count}w)`);
+      console.log(`   Professional Standards: ${meets_professional_standards ? '✅ MET' : '❌ NOT MET'}`);
       
-      if (is_sufficient) {
-        // Generation meets completion standards
+      if (meets_professional_standards) {
+        // Generation meets professional completion standards
+        console.log("✅ Content meets professional standards - Generation complete");
         return null;
       } else {
-        // Generation needs improvement - return suggestions
-        const improvementMsg = `Quality assessment indicates improvements needed (Overall: ${overall_quality_score}%):\n${reasoning}\n\nSpecific suggestions:\n${improvement_suggestions.map(s => `- ${s}`).join('\n')}\n\n🚨 IMMEDIATE ACTION: Use REFLECT tool to generate new tasks based on the following optimization suggestions:\n${improvement_suggestions.map(s => `- ${s}`).join('\n')}`;
+        // Generation needs improvement - return detailed analysis
+        const improvementMsg = `🔍 RIGOROUS QUALITY ASSESSMENT RESULTS (Overall: ${overall_quality_score}%):
 
-      await ResearchSessionOperations.addMessage(this.conversationId, {
-        role: "agent",
-        content: improvementMsg,
-        type: "quality_evaluation",
-      }); 
+📊 SCORES:
+• Character Quality: ${character_quality_score}%
+• Worldbook Quality: ${worldbook_quality_score}%
+• Overall Quality: ${overall_quality_score}%
+• Professional Standards: ${meets_professional_standards ? '✅ MET' : '❌ NOT MET'}
+
+🔍 ESSENTIAL ENTRIES STATUS:
+• STATUS: ${status_present ? '✅ Present' : '❌ Missing'} (${status_word_count} words)
+• USER_SETTING: ${user_setting_present ? '✅ Present' : '❌ Missing'} (${user_setting_word_count} words) 
+• WORLD_VIEW: ${world_view_present ? '✅ Present' : '❌ Missing'} (${world_view_word_count} words)
+
+📝 CONTENT DEPTH EVALUATION:
+${content_depth_evaluation}
+
+🚨 CRITICAL ISSUES:
+${critical_issues.length > 0 ? critical_issues.map(issue => `• ${issue}`).join('\n') : '• No critical issues identified'}
+
+🎯 IMMEDIATE ACTION REQUIRED:
+Use REFLECT tool to generate new tasks based on these specific improvement requirements:
+${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
+
+        await ResearchSessionOperations.addMessage(this.conversationId, {
+          role: "agent",
+          content: improvementMsg,
+          type: "quality_evaluation",
+        }); 
 
         return improvementMsg;
       }
@@ -1366,7 +1527,65 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
   }
 
   private buildRecentConversationSummary(messages: Message[]): string {
-    return messages.slice(-5).map(m => `${m.type}: ${m.content}`).join("\n");
+    const recentMessages = messages.slice(-5);
+    
+    if (recentMessages.length === 0) {
+      return "No recent conversation history available";
+    }
+    
+    let summary = "RECENT CONVERSATION (Last 5 turns):\n";
+    
+    // Check for critical message types first
+    const criticalMessages = recentMessages.filter(m => 
+      m.type === "quality_evaluation" || m.type === "tool_failure"
+    );
+    
+    if (criticalMessages.length > 0) {
+      summary += "\n🚨 CRITICAL RECENT FEEDBACK:\n";
+      criticalMessages.forEach(m => {
+        summary += `⚠️ ${m.type.toUpperCase()}: ${m.content.substring(0, 200)}...\n`;
+      });
+      summary += "\n";
+    }
+    
+    // Add all recent messages
+    summary += recentMessages.map(m => {
+      const prefix = (m.type === "quality_evaluation" || m.type === "tool_failure") ? "🚨 " : "";
+      return `${prefix}${m.type}: ${m.content}`;
+    }).join("\n");
+    
+    return summary;
+  }
+
+  private buildFullConversationSummary(messages: Message[]): string {
+    // Get all messages except the last 5
+    const fullMessages = messages.slice(0, -5);
+    
+    if (fullMessages.length === 0) {
+      return "No earlier conversation history available";
+    }
+    
+    let summary = `FULL CONVERSATION HISTORY (${fullMessages.length} earlier messages):\n`;
+    
+    // Group messages by type for better organization
+    const messagesByType = fullMessages.reduce((acc, msg) => {
+      if (!acc[msg.type]) acc[msg.type] = [];
+      acc[msg.type].push(msg);
+      return acc;
+    }, {} as Record<string, Message[]>);
+    
+    // Show summary by message types
+    Object.entries(messagesByType).forEach(([type, msgs]) => {
+      summary += `\n${type.toUpperCase()} (${msgs.length} messages):\n`;
+      msgs.slice(0, 3).forEach((msg, idx) => {
+        summary += `  ${idx + 1}. ${msg.content.substring(0, 150)}...\n`;
+      });
+      if (msgs.length > 3) {
+        summary += `  ... and ${msgs.length - 3} more ${type} messages\n`;
+      }
+    });
+    
+    return summary;
   }
 
   private buildKnowledgeBaseSummary(knowledgeBase: KnowledgeEntry[]): string {
