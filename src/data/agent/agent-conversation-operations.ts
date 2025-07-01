@@ -246,7 +246,7 @@ export class ResearchSessionOperations {
   /**
    * Record error
    */
-  static async recordError(sessionId: string, error: string): Promise<void> {
+  static async recinsert_orderror(sessionId: string, error: string): Promise<void> {
     const session = await this.getSessionById(sessionId);
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);

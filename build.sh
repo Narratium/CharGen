@@ -32,10 +32,10 @@ if [ -f "dist/index.js" ]; then
     echo ""
     echo "📝 Or install globally with:"
     echo "   npm link"
-    echo "   char-gen --help"
+    echo "   ./start.sh --help"
     echo ""
     echo "💡 To get started:"
-    echo "   char-gen generate --interactive"
+    echo "   ./start.sh generate --interactive"
 else
     echo "❌ Build failed - output file not found"
     exit 1

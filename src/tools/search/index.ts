@@ -52,7 +52,7 @@ export class SearchTool extends BaseSimpleTool {
     // Check if Tavily API key is configured
     const tavilyApiKey = context.llm_config.tavily_api_key;
     if (!tavilyApiKey || tavilyApiKey.trim() === '') {
-      return this.createFailureResult("Tavily API key not configured. Please run 'char-gen config' to set up your Tavily API key.");
+      return this.createFailureResult("Tavily API key not configured. Please run './start.sh config' to set up your Tavily API key.");
     }
 
     console.log("Tavily API key:", tavilyApiKey);

@@ -7,7 +7,7 @@ import { CharacterGeneratorCLI } from './cli/character-generator';
 const program = new Command();
 
 program
-  .name('char-gen')
+  .name('./start.sh')
   .description('AI-powered character card and worldbook generator')
   .version('1.0.0');
 

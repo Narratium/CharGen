@@ -144,12 +144,12 @@ flowchart TD
 
 2. **配置默认设置**:
    ```bash
-   char-gen config
+   ./start.sh config
    ```
 
 3. **开始生成**:
    ```bash
-   char-gen generate
+   ./start.sh generate
    ```
 
 ## 🚀 使用方法
@@ -158,13 +158,13 @@ flowchart TD
 
 ```bash
 # 交互模式（推荐）
-char-gen generate
+./start.sh generate
 ```
 
 ### 配置设置
 
 ```bash
-char-gen config
+./start.sh config
 ```
 
 配置选项包括：
@@ -179,7 +179,7 @@ char-gen config
 
 ```bash
 # 列出所有生成
-char-gen list
+./start.sh list
 ```
 
 ## 🎭 角色卡生成
@@ -218,7 +218,7 @@ char-gen list
   "content": "条目内容",
   "comment": "条目描述",
   "constant": false,
-  "order": 100
+  "insert_order": 100
 }
 ```
 
@@ -281,7 +281,7 @@ output/
 
 1. **配置问题**:
    ```bash
-   char-gen config
+   ./start.sh config
    ```
 
 2. **构建问题**:

@@ -42,6 +42,7 @@ export class AgentService {
       temperature?: number;
       max_tokens?: number;
       tavily_api_key?: string;
+      jina_api_key?: string;
     },
     userInputCallback?: UserInputCallback,
   ): Promise<{
@@ -62,6 +63,7 @@ export class AgentService {
           temperature: llmConfig.temperature || 0.7,
           max_tokens: llmConfig.max_tokens,
           tavily_api_key: llmConfig.tavily_api_key,
+          jina_api_key: llmConfig.jina_api_key,
         },
         initialUserRequest // Story description as user request
       );
@@ -488,7 +490,7 @@ export class AgentService {
       }
 
       const characterData = session.generation_output.character_data;
-      const worldbookData = session.generation_output.worldbook_data;
+      const mainObjective = session.generation_output.character_data?.name || '';
 
       if (!characterData) {
         return { success: false, error: 'No character data found for avatar generation' };
@@ -504,7 +506,7 @@ export class AgentService {
         imageDescription = 'Using existing avatar URL from character data';
       } else {
         // Step 1: Generate image description
-        imageDescription = await this.generateImageDescription(characterData, worldbookData || [], session.llm_config);
+        imageDescription = await this.generateImageDescription(mainObjective, characterData, session.llm_config);
         
         // Step 2: Search for images
         const imageResults = await this.searchImages(imageDescription, session.llm_config.tavily_api_key || '');
@@ -678,7 +680,7 @@ export class AgentService {
         position: entry.position,
         constant: entry.constant,
         key: entry.key,
-        order: entry.order || index + 1,
+        insert_order: entry.insert_order || index + 1,
         depth: 4 // Default depth
       }));
 
@@ -736,7 +738,7 @@ export class AgentService {
   /**
    * Generate precise image description based on character and worldbook data
    */
-  private async generateImageDescription(characterData: any, worldbookData: any[], llmConfig: any): Promise<string> {
+  private async generateImageDescription(mainObjective: string, characterData: any, llmConfig: any): Promise<string> {
     const { ChatOpenAI } = await import("@langchain/openai");
     const { ChatOllama } = await import("@langchain/ollama");
     const { ChatPromptTemplate } = await import("@langchain/core/prompts");
@@ -760,59 +762,86 @@ export class AgentService {
     }
 
     const prompt = ChatPromptTemplate.fromTemplate(`
-You are an expert at creating optimal image search queries for character cards and story scenarios.
-
-CHARACTER DATA:
-{characterData}
-
-WORLDBOOK DATA:
-{worldbookData}
-
-TASK: Create ONE precise sentence that describes the ideal image for this character/story.
-
-PRIORITY SEARCH STRATEGY:
-🎯 FIRST PRIORITY - Official Content Search:
-If the character/story is based on or inspired by existing works (anime, movies, TV shows, novels, games, documentaries), prioritize searching for official content:
-
-EXISTING CONTENT EXAMPLES:
-- "Attack on Titan poster" (for AOT-inspired characters)
-- "Spirited Away official artwork" (for Studio Ghibli-style content)
-- "Harry Potter movie poster" (for wizarding world content)
-- "Cyberpunk 2077 game cover" (for cyberpunk settings)
-- "Your Name anime poster" (for romantic anime content)
-- "Game of Thrones official poster" (for medieval fantasy)
-- "Demon Slayer anime cover" (for supernatural action)
-- "Studio Ghibli official art" (for magical/whimsical content)
-- "Final Fantasy game artwork" (for JRPG-style fantasy)
-- "Marvel movie poster" (for superhero content)
-
-🎨 SECOND PRIORITY - Custom Character Description:
-If NO existing work is referenced, create a detailed character description:
-
-CUSTOM DESCRIPTION EXAMPLES:
-- "Anime portrait of silver-haired mage girl in magical academy uniform"
-- "Fantasy artwork of cyberpunk detective in neon-lit city streets"  
-- "Realistic painting of medieval knight in dark forest setting"
-
-SEARCH QUERY REQUIREMENTS:
-1. Maximum 30 words
-2. For existing works: Use format "[Work Name] + official/poster/cover/artwork"
-3. For custom content: Focus on art style, main subject, setting
-4. Include genre/style specification
-5. No explanations, no formatting, just the search phrase
-
-ANALYSIS PROCESS:
-1. Check if character/world references any existing anime, movies, games, novels, or documentaries
-2. If YES: Search for official content from that work
-3. If NO: Create custom character description
-4. Prioritize recognizable, official content over generic descriptions
-
-Generate ONE concise image search sentence:`);
+      You are an expert at generating high-quality image search queries for character cards and story-based AI applications.
+      
+      ==============================
+      🎯 MAIN OBJECTIVE
+      
+      Your ONLY task is to generate ONE concise, effective image search phrase (max 30 words) that best matches the **core visual representation** of the story or character. 
+      
+      You MUST treat **MAIN OBJECTIVE** as the **primary signal** for identifying whether the content is based in the real world or fictional imagination. It usually contains the highest-level topic and should guide your output strategy.
+      
+      ==============================
+      📥 INPUTS:
+      - MAIN OBJECTIVE: {mainObjective}
+      - CHARACTER/STORY DATA: {characterData}
+      
+      ==============================
+      🧭 DECISION STRATEGY:
+      
+      Step 1: Determine if this content is **REAL-WORLD RELATED**.
+      A topic is considered **real-world** if MAIN OBJECTIVE or CHARACTER DATA refers to:
+      - actual people (e.g. Elon Musk, Marie Curie, Bear Grylls)
+      - real places (e.g. New York, Amazon rainforest)
+      - nonfiction works (e.g. documentaries, biographies)
+      - historical events (e.g. WWII, 9/11)
+      - known real-world media (e.g. Breaking Bad, Planet Earth, Chernobyl)
+      
+      ✅ IF REAL-WORLD:
+      → DO NOT describe what happens in the scene.
+      → DO NOT generate stylized descriptions.
+      → INSTEAD: Use known names of works or people.
+      → Use one of the following formats:
+         - "[TV show or documentary name] poster"
+         - "[Real person name] portrait/photo"
+         - "[Known event/place] documentary cover"
+      
+      Example outputs:
+      - "Man vs Wild TV show poster"
+      - "Bear Grylls portrait"
+      - "Planet Earth BBC documentary cover"
+      - "New York skyline aerial photo"
+      - "Marie Curie historical photo"
+      
+      ---
+      
+      ❌ IF NO clear real-world signals are found:
+      Treat as **FICTIONAL/NARRATIVE CONTENT**.
+      
+      ✅ FOR FICTIONAL/NARRATIVE:
+      → Create a **visual scene description** with:
+        - Art style: anime, fantasy, cinematic, oil painting, etc.
+        - Main subject: character, setting, or iconic moment
+        - Mood, setting, visual traits
+      
+      Example outputs:
+      - "Anime portrait of silver-haired mage in glowing forest"
+      - "Fantasy artwork of dragon flying over snow-covered village"
+      - "Sci-fi cinematic shot of space traveler entering wormhole"
+      - "Dark gothic painting of vampire queen on a crimson throne"
+      
+      ==============================
+      🧪 RULES FOR OUTPUT:
+      
+      - Output MUST be a single search phrase
+      - No extra formatting (no markdown, no quotes, no explanations)
+      - Max 30 words
+      - For real-world: use name + poster/photo/cover
+      - For fictional: be visually rich and genre-aware
+      - NO generic phrases like “character image” or “beautiful artwork”
+      
+      ==============================
+      ✍️ FINAL TASK:
+      
+      Analyze MAIN OBJECTIVE first, then CHARACTER DATA.
+      
+      Then output ONE final search query:
+      `);      
 
     const response = await model.invoke([
       await prompt.format({
+        mainObjective: mainObjective,
         characterData: JSON.stringify(characterData, null, 2),
-        worldbookData: JSON.stringify(worldbookData, null, 2)
       }),
     ]);
 
@@ -955,15 +984,120 @@ Generate ONE concise image search sentence:`);
     return (hasValidExtension || hasValidDomain) && !hasAdDomain;
   }
 
+
+
   /**
-   * Use LLM to select the best image from search results
+   * Use Jina AI multimodal embeddings to select the best image from search results
    */
   private async selectBestImage(imageUrls: string[], description: string, llmConfig: any, characterData: any): Promise<string | null> {
     if (imageUrls.length === 0) return null;
     
+    // Check if Jina API key is available
+    const jinaApiKey = llmConfig.jina_api_key;
+    if (!jinaApiKey) {
+      console.log("⚠️ No Jina API key found, using URL-based selection");
+      return await this.selectImageByUrl(imageUrls, description, llmConfig, characterData);
+    }
+
+    console.log("🔍 Using Jina AI multimodal embeddings to analyze images...");
+
+    try {
+      // Prepare input for Jina AI embeddings
+      const imagesToAnalyze = imageUrls.slice(0, 8); // Analyze up to 8 images
+      const input = [
+        { text: description }, // The target description
+        ...imagesToAnalyze.map(url => ({ image: url })) // All candidate images
+      ];
+
+      const response = await fetch('https://api.jina.ai/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${jinaApiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'jina-embeddings-v4',
+          task: 'text-matching',
+          input: input
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Jina API error: ${response.status} ${response.statusText}`);
+      }
+
+      const result: any = await response.json();
+      const embeddings = result.data;
+
+      if (!embeddings || embeddings.length < 2) {
+        throw new Error("Invalid embeddings response from Jina AI");
+      }
+
+      // Calculate cosine similarity between description and each image
+      const descriptionEmbedding = embeddings[0].embedding; // First embedding is the text description
+      const imageEmbeddings = embeddings.slice(1); // Rest are image embeddings
+
+      let bestImageIndex = 0;
+      let bestSimilarity = -1;
+
+      imageEmbeddings.forEach((imageEmb: { embedding: number[]; }, index: number) => {
+        const similarity = this.cosineSimilarity(descriptionEmbedding, imageEmb.embedding);
+        console.log(`📊 Image ${index + 1} similarity: ${similarity.toFixed(4)} - ${imagesToAnalyze[index]}`);
+        
+        if (similarity > bestSimilarity) {
+          bestSimilarity = similarity;
+          bestImageIndex = index;
+        }
+      });
+
+      const selectedUrl = imagesToAnalyze[bestImageIndex];
+      console.log(`✅ Jina AI selected best match (similarity: ${bestSimilarity.toFixed(4)}): ${selectedUrl}`);
+      
+      return selectedUrl;
+      
+    } catch (error) {
+      console.error("❌ Jina AI embeddings failed:", error);
+      console.log("🔄 Falling back to URL-based selection");
+      return await this.selectImageByUrl(imageUrls, description, llmConfig, characterData);
+    }
+  }
+
+  /**
+   * Calculate cosine similarity between two vectors
+   */
+  private cosineSimilarity(vecA: number[], vecB: number[]): number {
+    if (vecA.length !== vecB.length) {
+      throw new Error("Vectors must have the same length");
+    }
+
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+
+    for (let i = 0; i < vecA.length; i++) {
+      dotProduct += vecA[i] * vecB[i];
+      normA += vecA[i] * vecA[i];
+      normB += vecB[i] * vecB[i];
+    }
+
+    normA = Math.sqrt(normA);
+    normB = Math.sqrt(normB);
+
+    if (normA === 0 || normB === 0) {
+      return 0;
+    }
+
+    return dotProduct / (normA * normB);
+  }
+
+  /**
+   * Fallback method: Use LLM to select image based on URL analysis only
+   */
+  private async selectImageByUrl(imageUrls: string[], description: string, llmConfig: any, characterData: any): Promise<string | null> {
+    if (imageUrls.length === 0) return null;
+    
     const { ChatOpenAI } = await import("@langchain/openai");
     const { ChatOllama } = await import("@langchain/ollama");
-    const { ChatPromptTemplate } = await import("@langchain/core/prompts");
 
     // Create LLM instance
     let model: any;
@@ -983,76 +1117,30 @@ Generate ONE concise image search sentence:`);
       });
     }
 
-    const prompt = ChatPromptTemplate.fromTemplate(`
-You are an image quality expert selecting the best avatar image for a character card.
-
-DESIRED IMAGE DESCRIPTION:
-{description}
-
-CHARACTER INFO:
-{characterName}: {characterTags}
-
-CANDIDATE IMAGE URLS:
-{imageUrls}
-
-SELECTION CRITERIA (in priority order):
-🎯 HIGHEST PRIORITY - Official Content Recognition:
-- Official posters/covers from known anime, movies, games, shows
-- Professional promotional artwork from established franchises
-- Recognizable artwork from major studios (Studio Ghibli, Marvel, etc.)
-- Official character artwork from games/anime/movies
-
-🏆 HIGH PRIORITY - Technical Quality:
-1. High resolution and image clarity
-2. Professional artwork quality
-3. Appropriate composition for avatar use
-4. Clean, non-pixelated images
-
-📍 MEDIUM PRIORITY - Content Appropriateness:
-1. SFW content only
-2. No watermarks or text overlays
-3. Matches character/story description and genre
-4. Style consistency (anime, realistic, fantasy art, etc.)
-
-🔗 SOURCE QUALITY PREFERENCES:
-- Prefer: pixiv.net, deviantart.com, artstation.com, wikimedia.org
-- Acceptable: imgur.com, pinterest.com, flickr.com
-- Avoid: low-quality hosting sites, ad domains
-
-ANALYSIS PROCESS:
-1. FIRST: Check if any images appear to be official content (posters, covers, promotional art)
-2. SECOND: Evaluate technical quality and resolution
-3. THIRD: Assess appropriateness and relevance
-4. FOURTH: Consider source domain reliability
-
-TASK: Select the SINGLE best image URL from the candidates. Prioritize official content over custom artwork when available.
-
-Respond with only the selected URL, nothing else:`);
-
     try {
-      const response = await model.invoke([
-        await prompt.format({
-          description: description,
-          characterName: characterData?.name || 'Character',
-          characterTags: characterData?.tags?.join(', ') || 'No tags',
-          imageUrls: imageUrls.slice(0, 8).map((url, index) => `${index + 1}. ${url}`).join('\n')
-        }),
-      ]);
+      const prompt = `Select the best image URL for: ${description}
 
+Character: ${characterData?.name || 'Character'}
+
+URLs:
+${imageUrls.slice(0, 8).map((url, index) => `${index + 1}. ${url}`).join('\n')}
+
+Prioritize official content (posters, covers) and quality domains. Respond with only the full URL.`;
+
+      const response = await model.invoke([{ role: "user", content: prompt }]);
       const selectedUrl = (response.content as string).trim();
       
-      // Validate that the selected URL is actually from our candidates
       if (imageUrls.includes(selectedUrl)) {
-        console.log(`✅ Selected image: ${selectedUrl}`);
+        console.log(`✅ URL analysis selected: ${selectedUrl}`);
         return selectedUrl;
       } else {
-        console.log(`⚠️ LLM selected invalid URL, using first candidate`);
+        console.log(`⚠️ Invalid URL selection, using first candidate`);
         return imageUrls[0];
       }
       
     } catch (error) {
-      console.error("❌ Image selection failed:", error);
-      return imageUrls[0]; // Fallback to first image
+      console.error("❌ URL-based selection failed:", error);
+      return imageUrls[0];
     }
   }
 

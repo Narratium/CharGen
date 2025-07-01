@@ -76,7 +76,7 @@ export interface TaskEntry {
   id: string;
   description: string;
   reasoning?: string; // Why this task was created/updated
-  sub_problems: SubProblem[]; // Ordered list of sub-problems to solve
+  sub_problems: SubProblem[]; // insert_ordered list of sub-problems to solve
 }
 
 /**
@@ -90,7 +90,7 @@ export interface ResearchState {
   main_objective: string;
   
   // Sequential task management
-  task_queue: TaskEntry[];        // Pending tasks in execution order
+  task_queue: TaskEntry[];        // Pending tasks in execution insert_order
   completed_tasks: string[];      // Descriptions of finished tasks
   
   // Research artifacts
@@ -130,6 +130,7 @@ export interface ExecutionContext {
     temperature: number;
     max_tokens?: number;
     tavily_api_key?: string; // Add Tavily API key support
+    jina_api_key?: string; // Add Jina AI API key support
   };
 
 }
@@ -178,7 +179,7 @@ export interface WorldbookEntry {
   content: string;
   constant: boolean;
   selective: boolean;
-  order: number;
+  insert_order: number;
   position: number;
   disable: boolean;
 }
@@ -210,6 +211,7 @@ export interface ResearchSession {
     temperature: number;
     max_tokens?: number;
     tavily_api_key?: string; // Add Tavily API key support
+    jina_api_key?: string; // Add Jina AI API key support
   };
   
   // Execution tracking

@@ -46,16 +46,16 @@ export class WorldbookTool extends BaseSimpleTool {
       description: "Whether this entry should always be active. Use TRUE for ESSENTIAL entries (STATUS, USER_SETTING, WORLD_VIEW) and important global information. Use FALSE (default) for SUPPLEMENTARY entries that appear in specific contexts.",
       required: false
     },
-    {
-      name: "position",
-      type: "number",
+         {
+       name: "position",
+       type: "number",
       description: "Controls where this worldbook entry is inserted in the AI conversation context. ESSENTIAL entries (STATUS, USER_SETTING, WORLD_VIEW): use 0-1 for foundational positioning. SUPPLEMENTARY entries: use 2-3 for contextual relevance. Values: 0-1 (at story beginning), 2 (at story end), 3 (before user input), 4 (after user input). Default: 0",
       required: false
     },
     {
-      name: "order",
+      name: "insert_order",
       type: "number",
-      description: "Processing priority order. ESSENTIAL entries: 1-3 (STATUS=1, USER_SETTING=2, WORLD_VIEW=3). SUPPLEMENTARY entries: 10+ for proper ordering. Default: 100",
+      description: "Processing priority insert_order. ESSENTIAL entries: 1-3 (STATUS=1, USER_SETTING=2, WORLD_VIEW=3). SUPPLEMENTARY entries: 10+ for proper insert_ordering. Default: 100",
       required: false
     },
   ];
@@ -100,7 +100,7 @@ export class WorldbookTool extends BaseSimpleTool {
     // Determine if this is an essential entry and set appropriate defaults
     const isEssentialEntry = ['STATUS', 'USER_SETTING', 'WORLD_VIEW'].includes(comment.toUpperCase());
     const defaultConstant = isEssentialEntry;
-    const defaultOrder = isEssentialEntry ? 
+    const defaultinsert_order = isEssentialEntry ? 
       (comment.toUpperCase() === 'STATUS' ? 1 : 
        comment.toUpperCase() === 'USER_SETTING' ? 2 : 
        comment.toUpperCase() === 'WORLD_VIEW' ? 3 : 100) : 100;
@@ -115,7 +115,7 @@ export class WorldbookTool extends BaseSimpleTool {
       content: content,
       constant: parameters.constant !== undefined ? parameters.constant : defaultConstant,
       selective: true,
-      order: parameters.order || defaultOrder,
+      insert_order: parameters.insert_order || defaultinsert_order,
       position: parameters.position !== undefined ? parameters.position : (isEssentialEntry ? 0 : 2),
       disable: false,
       probability: 100,

@@ -4,7 +4,7 @@
   "description": "AI-powered character card and worldbook generator CLI tool",
   "main": "dist/index.js",
   "bin": {
-    "char-gen": "dist/index.js"
+    "./start.sh": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",

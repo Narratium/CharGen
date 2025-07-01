@@ -22,6 +22,7 @@ interface Config {
   temperature?: number;
   maxTokens?: number;
   tavilyApiKey?: string; // Add Tavily API key support
+  jinaApiKey?: string; // Add Jina AI API key support
 }
 
 export class CharacterGeneratorCLI {
@@ -255,7 +256,7 @@ export class CharacterGeneratorCLI {
         console.log(chalk.yellow(`⚠️  ${avatarResult.error}`));
         
         if (avatarResult.error?.includes('Tavily API key')) {
-          console.log(chalk.gray('💡 Run "char-gen config" to set up your Tavily API key for image search.'));
+          console.log(chalk.gray('💡 Run "./start.sh config" to set up your Tavily API key for image search.'));
         }
       }
     } catch (error) {
@@ -302,7 +303,7 @@ export class CharacterGeneratorCLI {
         position: entry.position,
         constant: entry.constant,
         key: entry.key,
-        order: entry.order || index + 1,
+        insert_order: entry.insert_order || index + 1,
         depth: 4 // Default depth
       }));
 
@@ -379,6 +380,145 @@ export class CharacterGeneratorCLI {
   async configureSettings(): Promise<void> {
     console.log(chalk.blue.bold('⚙️  Configuration Setup\n'));
     
+    // Debug: show current config
+    console.log(chalk.gray('Current config:'), JSON.stringify(this.config, null, 2));
+
+    
+    const modeChoice = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'mode',
+        message: '选择配置模式:',
+        choices: [
+          {
+            name: `📝 补充缺失配置`,
+            value: 'supplement',
+          },
+          {
+            name: '🔄 重新配置全部 (重新设置所有配置)',
+            value: 'full',
+          },
+        ],
+        default: 'full',
+      },
+    ]);
+    
+    if (modeChoice.mode === 'supplement') {
+      await this.configureSupplementMode();
+    } else {
+      await this.configureFullMode();
+    }
+
+    await this.saveConfig();
+    console.log(chalk.green('✅ Configuration saved!'));
+  }
+
+  /**
+   * Configure only missing fields
+   */
+  private async configureSupplementMode(): Promise<void> {
+    // missingFields.forEach(field => console.log(chalk.gray(`  - ${field}`)));
+    console.log('');
+
+    const questions: any[] = [];
+
+    if (!this.config.defaultType) {
+      questions.push({
+        type: 'list',
+        name: 'llmType',
+        message: 'Default AI service:',
+        choices: [
+          { name: 'OpenAI (GPT models)', value: 'openai' },
+          { name: 'Ollama (Local models)', value: 'ollama' },
+        ],
+        default: 'openai',
+      });
+    }
+
+    if (!this.config.defaultModel) {
+      questions.push({
+        type: 'input',
+        name: 'model',
+        message: 'Default model:',
+        default: this.config.defaultType === 'openai' ? 'gpt-4' : 'llama2',
+      });
+    }
+
+    if (!this.config.defaultApiKey) {
+      questions.push({
+        type: 'password',
+        name: 'apiKey',
+        message: 'API key:',
+        validate: (input: string) => input.trim().length > 0 || 'API key is required',
+      });
+    }
+
+    if (!this.config.defaultBaseUrl) {
+      questions.push({
+        type: 'input',
+        name: 'baseUrl',
+        message: 'Default base URL (optional):',
+      });
+    }
+
+    if (!this.config.temperature && this.config.temperature !== 0) {
+      questions.push({
+        type: 'number',
+        name: 'temperature',
+        message: 'Default temperature (0-1):',
+        default: 0.7,
+        validate: (input: number) => (input >= 0 && input <= 1) || 'Temperature must be between 0 and 1',
+      });
+    }
+
+    if (!this.config.maxTokens) {
+      questions.push({
+        type: 'number',
+        name: 'maxTokens',
+        message: 'Default max tokens:',
+        default: 4000,
+        validate: (input: number) => input > 0 || 'Max tokens must be positive',
+      });
+    }
+
+    if (!this.config.tavilyApiKey) {
+      questions.push({
+        type: 'password',
+        name: 'tavilyApiKey',
+        message: 'Tavily API key (for enhanced search, optional):',
+      });
+    }
+
+    if (!this.config.jinaApiKey) {
+      questions.push({
+        type: 'password',
+        name: 'jinaApiKey',
+        message: 'Jina AI API key (for smart image selection, optional):',
+      });
+    }
+
+    const answers = await inquirer.prompt(questions);
+
+    // Merge with existing config
+    this.config = {
+      ...this.config,
+      ...(answers.llmType && { defaultType: answers.llmType }),
+      ...(answers.model && { defaultModel: answers.model }),
+      ...(answers.apiKey && { defaultApiKey: answers.apiKey }),
+      ...(answers.baseUrl !== undefined && { defaultBaseUrl: answers.baseUrl }),
+      ...(answers.temperature !== undefined && { temperature: answers.temperature }),
+      ...(answers.maxTokens && { maxTokens: answers.maxTokens }),
+      ...(answers.tavilyApiKey !== undefined && { tavilyApiKey: answers.tavilyApiKey }),
+      ...(answers.jinaApiKey !== undefined && { jinaApiKey: answers.jinaApiKey }),
+    };
+  }
+
+  /**
+   * Configure all fields from scratch
+   */
+  private async configureFullMode(): Promise<void> {
+    console.log(chalk.blue('🔄 重新配置所有设置:\n'));
+
     const answers = await inquirer.prompt([
       {
         type: 'list',
@@ -429,6 +569,12 @@ export class CharacterGeneratorCLI {
         message: 'Tavily API key (for enhanced search, optional):',
         default: this.config.tavilyApiKey,
       },
+      {
+        type: 'password',
+        name: 'jinaApiKey',
+        message: 'Jina AI API key (for smart image selection, optional):',
+        default: this.config.jinaApiKey,
+      },
     ]);
 
     this.config = {
@@ -439,10 +585,8 @@ export class CharacterGeneratorCLI {
       temperature: answers.temperature,
       maxTokens: answers.maxTokens,
       tavilyApiKey: answers.tavilyApiKey,
+      jinaApiKey: answers.jinaApiKey,
     };
-
-    await this.saveConfig();
-    console.log(chalk.green('✅ Configuration saved!'));
   }
 
   /**
@@ -556,16 +700,16 @@ export class CharacterGeneratorCLI {
     if (!llmType || !model) {
       console.log(chalk.yellow('⚠️  No LLM configuration found.'));
       console.log(chalk.gray('Please run the following command to configure:'));
-      console.log(chalk.cyan('  char-gen config'));
-      throw new Error('LLM configuration required. Please run "char-gen config" first.');
+      console.log(chalk.cyan('  ./start.sh config'));
+      throw new Error('LLM configuration required. Please run "./start.sh config" first.');
     }
 
     // Check API key for OpenAI
     if (llmType === 'openai' && !apiKey) {
       console.log(chalk.yellow('⚠️  OpenAI API key not configured.'));
       console.log(chalk.gray('Please run the following command to configure:'));
-      console.log(chalk.cyan('  char-gen config'));
-      throw new Error('OpenAI API key required. Please run "char-gen config" first.');
+      console.log(chalk.cyan('  ./start.sh config'));
+      throw new Error('OpenAI API key required. Please run "./start.sh config" first.');
     }
 
     return {
@@ -576,23 +720,8 @@ export class CharacterGeneratorCLI {
       temperature: this.config.temperature || 0.7,
       max_tokens: this.config.maxTokens || 4000,
       tavily_api_key: this.config.tavilyApiKey || '',
+      jina_api_key: this.config.jinaApiKey || '',
     };
-  }
-
-  /**
-   * Helper methods
-   */
-  private async promptIfMissing(message: string, defaultValue?: string): Promise<string> {
-    if (process.stdin.isTTY) {
-      const answer = await inquirer.prompt([{
-        type: 'input',
-        name: 'value',
-        message,
-        default: defaultValue,
-      }]);
-      return answer.value;
-    }
-    return defaultValue || '';
   }
 
   private async loadConfig(): Promise<void> {
@@ -759,6 +888,8 @@ export class CharacterGeneratorCLI {
           return answer.input;
         }
       };
+
+      console.log("action",selection.action);
 
       if (selection.action === 'view') {
         // Just show the complete generation details

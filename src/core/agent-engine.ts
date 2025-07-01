@@ -42,7 +42,7 @@ A character card is a structured data format that defines AI roleplay scenarios.
 - **avatar**: Visual representation - character portrait or scenario artwork [OPTIONAL]
 - **alternate_greetings**: Array of comprehensive alternative opening scenarios (typically 3-5 entries, each 150-600 words) providing entirely different narrative starting points, worldlines, or timeline variations with unique atmospheric settings, character contexts, and story hooks for meaningful player choice [REQUIRED]
 
-**CRITICAL**: All eight core fields (name through tags) must be completed in the specified order for a professional-quality character card. The CHARACTER tool should be used systematically to build these fields incrementally across multiple tool calls until all required fields are present.
+**CRITICAL**: All eight core fields (name through tags) must be completed in the specified insert_order for a professional-quality character card. The CHARACTER tool should be used systematically to build these fields incrementally across multiple tool calls until all required fields are present.
 
 #### Character Card Types & Applications:
 1. **Individual Characters**: Focused on a specific person with defined personality, background, and traits
@@ -72,7 +72,7 @@ Worldbooks are dynamic knowledge systems that provide contextual information to 
 - **keysecondary**: Secondary keywords for conditional or refined activation logic
 - **content**: The actual information inserted into the prompt when triggered
 - **comment**: Internal organizational notes for creators and maintainers
-- **order**: Priority level determining insertion sequence when multiple entries activate
+- **insert_order**: Priority level determining insertion sequence when multiple entries activate
 - **position**: Controls context insertion placement (0-1: story beginning, 2: story end, 3: before user input, 4: after user input)
 - **constant**: Controls whether entry remains permanently active regardless of keywords
 - **selective**: Enables advanced keyword logic with AND/OR/NOT operations for precise activation
@@ -108,7 +108,7 @@ These create immersive, comprehensive world foundations that provide rich contex
 
 #### Worldbook Best Practices:
 1. **Dual Classification System**: Create two types of entries - (1) Essential fixed entries with specific comment values "STATUS" (comprehensive real-time interface), "USER_SETTING" (multi-dimensional player character profiling with hierarchical organization, timeline integration, psychological depth, systematic ability descriptions, dynamic character arc, and behavioral framework), "WORLD_VIEW" (systematic world-building with version control, historical timeline, hierarchical system categories, interconnected elements, and expansion interfaces for supplementary entries) all wrapped in proper XML tags containing 500-1500 words each of substantial, detailed content, and (2) Supplementary keyword-triggered entries that expand specific world elements (NPCs, locations, items, factions, technologies, events) referenced in the WORLD_VIEW foundation, each containing 500-1000 words of comprehensive detail
-2. **Strict Creation Order**: Follow this exact sequence - FIRST: STATUS entry (current game state), SECOND: USER_SETTING entry (player character info), THIRD: WORLD_VIEW entry (world background), ONLY THEN: supplementary keyword entries. Each essential entry must be completed with proper XML wrapping before proceeding to the next type
+2. **Strict Creation insert_order**: Follow this exact sequence - FIRST: STATUS entry (current game state), SECOND: USER_SETTING entry (player character info), THIRD: WORLD_VIEW entry (world background), ONLY THEN: supplementary keyword entries. Each essential entry must be completed with proper XML wrapping before proceeding to the next type
 3. **Quality over Quantity**: Focus on creating meaningful, well-crafted entries rather than numerous shallow ones
 4. **Systematic Expansion**: Supplementary entries must include at least 5 diverse, detailed entries that expand WORLD_VIEW elements without repetition. Required types: Tools/Weapons (magical items, legendary equipment), Characters/NPCs (important figures, faction leaders), Buildings/Architecture (significant structures, magical buildings), Geography/Locations (specific places, dangerous areas), Astronomy/Celestial (moons, stars, prophecies), War History/Events (past conflicts, major battles), Organizations/Factions (detailed group profiles), Magic/Technology Systems (specific mechanisms, abilities), Cultural Elements (traditions, customs), Historical Figures (past heroes, legends)
 5. **Strategic Keywords**: Use discoverable, relevant keywords that naturally appear in conversations for supplementary entries
@@ -643,7 +643,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
     </generation_based_tool_selection>
     
     <tool_priority_and_criteria>
-      TOOL PRIORITY ORDER:
+      TOOL PRIORITY insert_order:
       1. ASK_USER: Use for fundamental uncertainties about story direction, genre, tone, or core creative decisions - prioritize early in generation
       2. SEARCH: Use when referencing existing anime/novels/games or needing factual information
       3. CHARACTER: Primary tool - complete character development BEFORE worldbook
@@ -679,7 +679,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
 
       <character_when>
         - Most frequently used tool
-        - Build incrementally in REQUIRED order: name → description → personality → scenario → first_mes → alternate_greetings → mes_example → creator_notes → tags
+        - Build incrementally in REQUIRED insert_order: name → description → personality → scenario → first_mes → alternate_greetings → mes_example → creator_notes → tags
         - ALL EIGHT FIELDS ARE MANDATORY for complete character card
         - Use multiple tool calls to build systematically, adding one or more fields each time
         - Must have ALL required fields complete BEFORE starting worldbook
@@ -696,7 +696,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - SUPPLEMENTARY ENTRIES (minimum 5): Based on WORLD_VIEW hierarchical structure elements
         - Total minimum: 8 worldbook entries (3 essential + 5+ supplementary)
         
-        CREATION ORDER:
+        CREATION insert_order:
         1. FIRST: STATUS entry (1 required) - comprehensive real-time game state interface
         2. SECOND: USER_SETTING entry (1 required) - detailed player character profiling  
         3. THIRD: WORLD_VIEW entry (1 required) - systematic world-building foundation
@@ -747,7 +747,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
   </tool_usage_guidelines>
 
   <instructions>
-    CRITICAL DECISION PROCESS - Follow this order of importance:
+    CRITICAL DECISION PROCESS - Follow this insert_order of importance:
     
     1. MAIN OBJECTIVE (Highest Priority): Analyze <main_objective> to understand the user's core request and desired outcome
        - If genre/tone unclear from user description, consider ASK_USER tool first
@@ -772,7 +772,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
        - Use CHARACTER tool until all 8 required fields are complete
        - Only use WORLDBOOK tool after character is 100% complete
        - Use REFLECT ONLY when task queue is empty but generation output is incomplete
-       - Follow the priority order and selection criteria
+       - Follow the priority insert_order and selection criteria
     
     7. KNOWLEDGE & CONTEXT: Review <existing_knowledge> for background information and research results
     
@@ -829,7 +829,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - Example for SEARCH: <query><![CDATA["dragon mythology", "magic system"]]]></query>
         - Example for ASK_USER: <question>What genre style do you prefer?</question><options><![CDATA[["Fantasy adventure", "Modern romance", "Sci-fi thriller"]]]></options>
         - Example for CHARACTER: <name>Elara</name><description>A cunning sorceress...</description><alternate_greetings><![CDATA[["Summer festival version", "Library encounter", "Rainy day meeting", "Battle aftermath scenario"]]]></alternate_greetings><tags><![CDATA[["fantasy", "sorceress"]]]></tags>
-        - Example for WORLDBOOK: <key><![CDATA[["magic", "spell"]]]></key><content>Details...</content><comment>Magic system</comment><constant>false</constant><position>0</position><order>100</order>
+        - Example for WORLDBOOK: <key><![CDATA[["magic", "spell"]]]></key><content>Details...</content><comment>Magic system</comment><constant>false</constant><position>0</position><insert_order>100</insert_order>
         - Example for REFLECT: <new_tasks>
             <task>
               <description>Research character background</description>
@@ -1434,11 +1434,11 @@ ${critical_issues.length > 0 ? critical_issues.map(issue => `• ${issue}`).join
 Use REFLECT tool to generate new tasks based on these specific improvement requirements:
 ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
 
-        await ResearchSessionOperations.addMessage(this.conversationId, {
-          role: "agent",
-          content: improvementMsg,
-          type: "quality_evaluation",
-        }); 
+      await ResearchSessionOperations.addMessage(this.conversationId, {
+        role: "agent",
+        content: improvementMsg,
+        type: "quality_evaluation",
+      }); 
 
         return improvementMsg;
       }
