@@ -3,7 +3,7 @@ import { ResearchSessionOperations } from "../data/agent/agent-conversation-oper
 import { ResearchSession, SessionStatus } from "../models/agent-model";
 
 // Define user input callback type
-type UserInputCallback = (message?: string) => Promise<string>;
+type UserInputCallback = (message?: string, options?: string[]) => Promise<string>;
 
 /**
  * Agent Service - Simplified for Real-time Decision Architecture

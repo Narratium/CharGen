@@ -145,8 +145,8 @@ ${specificPrompt}`;
 // AGENT ENGINE
 // ============================================================================
 
-// Define user input callback type
-type UserInputCallback = (message?: string) => Promise<string>;
+// Define user input callback type with optional choice options
+type UserInputCallback = (message?: string, options?: string[]) => Promise<string>;
 
 /**
  * Agent Engine - Real-time Decision Architecture
@@ -433,7 +433,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
 
         await ResearchSessionOperations.updateStatus(this.conversationId, SessionStatus.WAITING_USER);
         
-        const userInput = await this.userInputCallback(result.result?.message);
+        const userInput = await this.userInputCallback(result.result?.message, result.result?.options);
 
         await ResearchSessionOperations.addMessage(this.conversationId, {
           role: "agent",
@@ -632,7 +632,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
     
     <tool_priority_and_criteria>
       TOOL PRIORITY ORDER:
-      1. ASK_USER: Use ONLY for fundamental uncertainties about story direction, genre, or core creative decisions
+      1. ASK_USER: Use for fundamental uncertainties about story direction, genre, tone, or core creative decisions - prioritize early in generation
       2. SEARCH: Use when referencing existing anime/novels/games or needing factual information
       3. CHARACTER: Primary tool - complete character development BEFORE worldbook
       4. WORLDBOOK: Secondary tool - use ONLY AFTER character is 100% complete
@@ -641,11 +641,21 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
 
       TOOL SELECTION CRITERIA:
       <ask_user_when>
-        - Uncertain about story genre/style (Cthulhu, romance, campus, etc.)
-        - Unclear if single character or world scenario
-        - Major creative direction affects entire generation
-        - Cannot determine user's fundamental preferences
-        DO NOT use for details that can be inferred or creatively determined
+        - Uncertain about story genre or style (e.g., fantasy, romance, school, isekai, urban, sci-fi, etc.)
+        - Unclear whether the focus is on a single character or a broader world scenario
+        - Story tone or atmosphere needs clarification (e.g., lighthearted, serious, comedic, healing, tense, etc.)
+        - Major creative direction decisions that impact the entire generation process
+        - Unable to determine the user's fundamental preferences
+        - User's initial description is vague or lacks specific genre information
+        USE EARLY in the generation process when the story direction is ambiguous
+        DO NOT use for details that can be reasonably inferred or creatively determined
+
+        ENHANCED OPTIONS SUPPORT:
+        - Provide 2-4 predefined choice options using the 'options' parameter
+        - Include common genre categories: ["Xianxia Fantasy", "Modern Urban", "School Youth", "Isekai/Rebirth"]
+        - Or story tones: ["Lighthearted & Humorous", "Sweet Romance", "Passionate Adventure", "Warm & Healing"]
+        - Options help users make quick decisions with arrow key navigation
+        - Users can still provide custom input if none of the options fit
       </ask_user_when>
 
       <search_when>
@@ -698,6 +708,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
     CRITICAL DECISION PROCESS - Follow this order of importance:
     
     1. MAIN OBJECTIVE (Highest Priority): Analyze <main_objective> to understand the user's core request and desired outcome
+       - If genre/tone unclear from user description, consider ASK_USER tool first
     
     2. GENERATION OUTPUT (Critical Priority): Examine <current_generation_output> to assess current character and worldbook progress
        - Check character completion status and identify missing fields
@@ -762,7 +773,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - For array parameters, use CDATA format: <param_name><![CDATA[["item1", "item2"]]]></param_name>
         - For other parameters, use simple values: <param_name>value</param_name>
         - Example for SEARCH: <query><![CDATA["dragon mythology", "magic system"]]]></query>
-        - Example for ASK_USER: <question>What genre style do you prefer?</question>
+        - Example for ASK_USER: <question>What genre style do you prefer?</question><options><![CDATA[["Fantasy adventure", "Modern romance", "Sci-fi thriller"]]]></options>
         - Example for CHARACTER: <name>Elara</name><description>A cunning sorceress...</description><alternate_greetings><![CDATA[["Summer festival version", "Library encounter", "Rainy day meeting", "Battle aftermath scenario"]]]></alternate_greetings><tags><![CDATA[["fantasy", "sorceress"]]]></tags>
         - Example for WORLDBOOK: <key><![CDATA[["magic", "spell"]]]></key><content>Details...</content><comment>Magic system</comment><constant>false</constant><position>0</position><order>100</order>
         - Example for REFLECT: <new_tasks>

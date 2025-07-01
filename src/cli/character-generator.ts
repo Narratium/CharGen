@@ -101,23 +101,58 @@ export class CharacterGeneratorCLI {
     const spinner = ora('Initializing character generation...').start();
 
     try {
-      // Create user input callback function
-      const userInputCallback = async (message?: string): Promise<string> => {
+      // Create user input callback function with support for choice options
+      const userInputCallback = async (message?: string, options?: string[]): Promise<string> => {
         spinner.stop(); // Stop spinner before user input
         console.log(chalk.yellow('\n💬 Need more information:'));
         if (message) {
           console.log(chalk.gray(`${message}`));
         }
         
-        const answer = await inquirer.prompt([{
-          type: 'input',
-          name: 'input',
-          message: 'Please provide more details:',
-          validate: (input: string) => input.trim().length > 0 || 'Please provide input',
-        }]);
-        
-        spinner.start('Continuing...'); // Restart spinner
-        return answer.input;
+        // If options are provided, offer choice selection with custom input option
+        if (options && options.length > 0) {
+          const choices = [
+            ...options,
+            new inquirer.Separator(),
+            'Custom input (type your own answer)'
+          ];
+          
+          const selectionAnswer = await inquirer.prompt([{
+            type: 'list',
+            name: 'selection',
+            message: 'Please choose an option or select custom input:',
+            choices: choices,
+            pageSize: Math.min(choices.length + 2, 10) // Adjust page size based on options
+          }]);
+          
+          // If user selected custom input, prompt for it
+          if (selectionAnswer.selection === 'Custom input (type your own answer)') {
+            const customAnswer = await inquirer.prompt([{
+              type: 'input',
+              name: 'input',
+              message: 'Please provide your custom answer:',
+              validate: (input: string) => input.trim().length > 0 || 'Please provide input',
+            }]);
+            
+            spinner.start('Continuing...'); // Restart spinner
+            return customAnswer.input;
+          } else {
+            // User selected one of the predefined options
+            spinner.start('Continuing...'); // Restart spinner
+            return selectionAnswer.selection;
+          }
+        } else {
+          // No options provided, use traditional text input
+          const answer = await inquirer.prompt([{
+            type: 'input',
+            name: 'input',
+            message: 'Please provide more details:',
+            validate: (input: string) => input.trim().length > 0 || 'Please provide input',
+          }]);
+          
+          spinner.start('Continuing...'); // Restart spinner
+          return answer.input;
+        }
       };
 
       // Start the generation with user input callback
@@ -671,23 +706,58 @@ export class CharacterGeneratorCLI {
     const spinner = ora('Loading session...').start();
 
     try {
-      // Create user input callback for resume operations
-      const userInputCallback = async (message?: string): Promise<string> => {
+      // Create user input callback for resume operations with support for choice options
+      const userInputCallback = async (message?: string, options?: string[]): Promise<string> => {
         spinner.stop();
         console.log(chalk.yellow('\n💬 Need more information:'));
         if (message) {
           console.log(chalk.gray(`${message}`));
         }
         
-        const answer = await inquirer.prompt([{
-          type: 'input',
-          name: 'input',
-          message: 'Please provide more details:',
-          validate: (input: string) => input.trim().length > 0 || 'Please provide input',
-        }]);
-        
-        spinner.start('Continuing...');
-        return answer.input;
+        // If options are provided, offer choice selection with custom input option
+        if (options && options.length > 0) {
+          const choices = [
+            ...options,
+            new inquirer.Separator(),
+            'Custom input (type your own answer)'
+          ];
+          
+          const selectionAnswer = await inquirer.prompt([{
+            type: 'list',
+            name: 'selection',
+            message: 'Please choose an option or select custom input:',
+            choices: choices,
+            pageSize: Math.min(choices.length + 2, 10) // Adjust page size based on options
+          }]);
+          
+          // If user selected custom input, prompt for it
+          if (selectionAnswer.selection === 'Custom input (type your own answer)') {
+            const customAnswer = await inquirer.prompt([{
+              type: 'input',
+              name: 'input',
+              message: 'Please provide your custom answer:',
+              validate: (input: string) => input.trim().length > 0 || 'Please provide input',
+            }]);
+            
+            spinner.start('Continuing...');
+            return customAnswer.input;
+          } else {
+            // User selected one of the predefined options
+            spinner.start('Continuing...');
+            return selectionAnswer.selection;
+          }
+        } else {
+          // No options provided, use traditional text input
+          const answer = await inquirer.prompt([{
+            type: 'input',
+            name: 'input',
+            message: 'Please provide more details:',
+            validate: (input: string) => input.trim().length > 0 || 'Please provide input',
+          }]);
+          
+          spinner.start('Continuing...');
+          return answer.input;
+        }
       };
 
       if (selection.action === 'view') {
