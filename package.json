@@ -4,20 +4,25 @@
   "description": "AI-powered character card and worldbook generator CLI tool",
   "main": "dist/index.js",
   "bin": {
-    "./start.sh": "dist/index.js"
+    "chargen": "dist/index.js",
+    "character-generator": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "character",
     "worldbook",
     "ai",
     "generator",
-    "cli"
+    "cli",
+    "roleplaying",
+    "rpg"
   ],
   "author": "Character Generator",
   "license": "MIT",

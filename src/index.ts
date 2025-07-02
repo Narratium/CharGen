@@ -84,5 +84,22 @@ program.parse();
 
 // Show help if no command provided
 if (!process.argv.slice(2).length) {
+  // Display welcome screen
+  console.clear();
+  
+  const dragon = chalk.cyan(`
+ _______                              __  .__                          .__ 
+ \      \ _____ ___________________ _/  |_|__|__ __  _____      _____  |__|
+ /   |   \\__  \\_  __ \_  __ \__  \\   __\  |  |  \/     \     \__  \ |  |
+/    |    \/ __ \|  | \/|  | \// __ \|  | |  |  |  /  Y Y  \     / __ \|  |
+\____|__  (____  /__|   |__|  (____  /__| |__|____/|__|_|  / /\ (____  /__|
+        \/     \/                  \/                    \/  \/      \/    
+  `);
+
+  console.log(dragon);
+  console.log(chalk.bold.cyan('                    AI CHARACTER & WORLDBOOK GENERATOR'));
+  console.log(chalk.gray('                           Powered by Advanced AI'));
+  console.log('');
+  
   program.outputHelp();
 } 

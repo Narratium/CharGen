@@ -37,6 +37,27 @@ export class CharacterGeneratorCLI {
   }
 
   /**
+   * Display welcome screen with dragon ASCII art
+   */
+  private displayWelcome(): void {
+    console.clear();
+    
+    const dragon = chalk.cyan(`
+ _______                              __  .__                          .__ 
+ \      \ _____ ___________________ _/  |_|__|__ __  _____      _____  |__|
+ /   |   \\__  \\_  __ \_  __ \__  \\   __\  |  |  \/     \     \__  \ |  |
+/    |    \/ __ \|  | \/|  | \// __ \|  | |  |  |  /  Y Y  \     / __ \|  |
+\____|__  (____  /__|   |__|  (____  /__| |__|____/|__|_|  / /\ (____  /__|
+        \/     \/                  \/                    \/  \/      \/    
+    `);
+
+    console.log(dragon);
+    console.log(chalk.bold.cyan('                    AI CHARACTER & WORLDBOOK GENERATOR'));
+    console.log(chalk.gray('                           Powered by Advanced AI'));
+    console.log('');
+  }
+
+  /**
    * Initialize CLI with storage and configuration
    */
   private async initialize(): Promise<void> {
@@ -62,14 +83,14 @@ export class CharacterGeneratorCLI {
    * Run the generator with simplified interface
    */
   async runDirect(options: CLIOptions): Promise<void> {
-    console.log(chalk.cyan('🎭 Character & Worldbook Generator\n'));
+    this.displayWelcome();
 
     // Single story question  
     const storyAnswer = await inquirer.prompt([
       {
         type: 'input',
         name: 'story',
-        message: 'What kind of story would you like to create?',
+        message: chalk.cyan('What kind of story would you like to create?'),
         validate: (input: string) => input.trim().length > 0 || 'Please describe the story you want to create',
       }
     ]);
@@ -94,21 +115,27 @@ export class CharacterGeneratorCLI {
     llmConfig: any;
     outputDir: string;
   }): Promise<void> {
-    console.log(chalk.blue('\n🎯 Generation Configuration:'));
-    console.log(chalk.gray(`  Story: ${params.story}`));
-    console.log(chalk.gray(`  AI Model: ${params.llmConfig.llm_type} - ${params.llmConfig.model_name}`));
-    console.log(chalk.gray(`  Output: ${params.outputDir}`));
+    console.log(chalk.bold.blue('\nGENERATION CONFIGURATION'));
+    console.log(chalk.gray('─'.repeat(50)));
+    console.log(chalk.white(`Story: ${params.story}`));
+    console.log(chalk.white(`AI Model: ${params.llmConfig.llm_type} - ${params.llmConfig.model_name}`));
+    console.log(chalk.white(`Output: ${params.outputDir}`));
+    console.log(chalk.gray('─'.repeat(50)));
     console.log('');
 
-    const spinner = ora('Initializing character generation...').start();
+    const spinner = ora({
+      text: 'Initializing character generation...',
+      color: 'cyan'
+    }).start();
 
     try {
       // Create user input callback function with support for choice options
       const userInputCallback = async (message?: string, options?: string[]): Promise<string> => {
         spinner.stop(); // Stop spinner before user input
-        console.log(chalk.yellow('\n💬 Need more information:'));
+        console.log(chalk.bold.yellow('\nINPUT REQUIRED'));
+        console.log(chalk.gray('─'.repeat(30)));
         if (message) {
-          console.log(chalk.gray(`${message}`));
+          console.log(chalk.white(`${message}`));
         }
         
         // If options are provided, offer choice selection with custom input option
@@ -158,17 +185,15 @@ export class CharacterGeneratorCLI {
       };
 
       // Start the generation with user input callback
-      console.log('🚀 [CLI] Starting agent service...');
       const result = await this.agentService.startGeneration(
         params.story,
         params.llmConfig,
         userInputCallback // Pass the callback
       );
-      console.log(`📋 [CLI] Generation result: Success=${result.success}`);
 
       if (!result.success) {
-        spinner.fail('Failed to start generation');
-        console.error(chalk.red('Error:'), result.error);
+        spinner.fail(chalk.red('Failed to start generation'));
+        console.log(chalk.red(`Error: ${result.error}`));
         return;
       }
 
@@ -176,7 +201,7 @@ export class CharacterGeneratorCLI {
       const status = await this.agentService.getSessionStatus(result.conversationId);
       
       if (status.hasResult && status.result) {
-        spinner.succeed('Character generation completed!');
+        spinner.succeed(chalk.green('Character generation completed!'));
         
         // Post-processing: Generate avatar image
         await this.handleAvatarGeneration(result.conversationId, spinner);
@@ -186,12 +211,12 @@ export class CharacterGeneratorCLI {
         // Show generation statistics
         await this.showGenerationStats(result.conversationId);
       } else {
-        spinner.fail('Generation completed but no results found');
+        spinner.fail(chalk.red('Generation completed but no results found'));
       }
 
     } catch (error) {
-      spinner.fail('Generation failed');
-      console.error(chalk.red('Error:'), error instanceof Error ? error.message : error);
+      spinner.fail(chalk.red('Generation failed'));
+      console.log(chalk.red(`Error: ${error instanceof Error ? error.message : error}`));
     }
   }
 
@@ -206,24 +231,27 @@ export class CharacterGeneratorCLI {
       const avatarAnswer = await inquirer.prompt([{
         type: 'confirm',
         name: 'generateAvatar',
-        message: 'Would you like to search for an avatar image for this character?',
+        message: chalk.cyan('Would you like to generate an avatar image for this character?'),
         default: true,
       }]);
 
       if (!avatarAnswer.generateAvatar) {
-        console.log(chalk.gray('Skipping avatar generation.'));
+        console.log(chalk.gray('Skipping avatar generation'));
         return;
       }
 
-      spinner = ora('Generating avatar image...').start();
-      spinner.text = 'Analyzing character data to create image description...';
+      spinner = ora({
+        text: 'Analyzing character data...',
+        color: 'cyan'
+      }).start();
 
       // Create user input callback for avatar generation
       const userInputCallback = async (message?: string, options?: string[]): Promise<string> => {
         spinner.stop(); // Stop spinner before user input
-        console.log(chalk.yellow('\n💬 Avatar Generation Choice:'));
+        console.log(chalk.bold.cyan('\nAVATAR GENERATION'));
+        console.log(chalk.gray('─'.repeat(30)));
         if (message) {
-          console.log(chalk.gray(`${message}`));
+          console.log(chalk.white(`${message}`));
         }
         
         // If options are provided, offer choice selection
@@ -236,67 +264,69 @@ export class CharacterGeneratorCLI {
             pageSize: Math.min(options.length + 2, 10)
           }]);
           
-          spinner.start('Continuing avatar generation...'); // Restart spinner
-          return selectionAnswer.selection;
-        } else {
-          // No options provided, use traditional text input
-          const answer = await inquirer.prompt([{
-            type: 'input',
-            name: 'input',
-            message: 'Please provide more details:',
-            validate: (input: string) => input.trim().length > 0 || 'Please provide input',
-          }]);
-          
-          spinner.start('Continuing avatar generation...'); // Restart spinner
-          return answer.input;
-        }
-      };
+                      spinner.start('Continuing avatar generation...'); // Restart spinner
+            return selectionAnswer.selection;
+          } else {
+            // No options provided, use traditional text input
+            const answer = await inquirer.prompt([{
+              type: 'input',
+              name: 'input',
+              message: 'Please provide more details:',
+              validate: (input: string) => input.trim().length > 0 || 'Please provide input',
+            }]);
+            
+            spinner.start('Continuing avatar generation...'); // Restart spinner
+            return answer.input;
+          }
+        };
 
-      const avatarResult = await this.agentService.generateAvatar(conversationId, userInputCallback);
-      
-      if (avatarResult.success) {
-        spinner.succeed('Avatar generation completed!');
+        const avatarResult = await this.agentService.generateAvatar(conversationId, userInputCallback);
         
-        console.log(chalk.blue('\n🖼️  Avatar Generation Results:'));
-        console.log(chalk.gray(`  Image Description: ${avatarResult.imageDescription}`));
-        
-        if (avatarResult.localImagePath) {
-          console.log(chalk.green(`  ✅ Downloaded Image: ${avatarResult.localImagePath}`));
-        }
-        
-        if (avatarResult.outputFilePath) {
-          console.log(chalk.green(`  📋 Character Card: ${avatarResult.outputFilePath}`));
-        }
-        
-        if (avatarResult.candidateImages && avatarResult.candidateImages.length > 1) {
-          console.log(chalk.gray(`  📸 Found ${avatarResult.candidateImages.length} candidate images`));
+        if (avatarResult.success) {
+          spinner.succeed(chalk.green('Avatar generation completed!'));
           
-          // Optionally show candidates
-          const showCandidates = await inquirer.prompt([{
-            type: 'confirm',
-            name: 'showCandidates',
-            message: 'Would you like to see all candidate images?',
-            default: false,
-          }]);
+          console.log(chalk.bold.blue('\nAVATAR RESULTS'));
+          console.log(chalk.gray('─'.repeat(30)));
+          console.log(chalk.white(`Description: ${avatarResult.imageDescription}`));
           
-          if (showCandidates.showCandidates) {
-            console.log(chalk.blue('\n📸 Candidate Images:'));
-            avatarResult.candidateImages.forEach((url, index) => {
-              console.log(chalk.gray(`  ${index + 1}. ${url}`));
-            });
+          if (avatarResult.localImagePath) {
+            console.log(chalk.green(`Image: ${avatarResult.localImagePath}`));
+          }
+          
+          if (avatarResult.outputFilePath) {
+            console.log(chalk.green(`Character Card: ${avatarResult.outputFilePath}`));
+          }
+          
+          if (avatarResult.candidateImages && avatarResult.candidateImages.length > 1) {
+            console.log(chalk.white(`Found ${avatarResult.candidateImages.length} candidate images`));
+            
+            // Optionally show candidates
+            const showCandidates = await inquirer.prompt([{
+              type: 'confirm',
+              name: 'showCandidates',
+              message: chalk.cyan('Would you like to see all candidate images?'),
+              default: false,
+            }]);
+            
+            if (showCandidates.showCandidates) {
+              console.log(chalk.bold.blue('\nCANDIDATE IMAGES'));
+              console.log(chalk.gray('─'.repeat(30)));
+              avatarResult.candidateImages.forEach((url, index) => {
+                console.log(chalk.white(`${index + 1}. ${url}`));
+              });
+            }
+          }
+        } else {
+          spinner.fail(chalk.red('Avatar generation failed'));
+          console.log(chalk.red(`Error: ${avatarResult.error}`));
+          
+          if (avatarResult.error?.includes('Tavily API key')) {
+            console.log(chalk.gray('Hint: Run "./start.sh config" to set up your Tavily API key for image search'));
           }
         }
-      } else {
-        spinner.fail('Avatar generation failed');
-        console.log(chalk.yellow(`⚠️  ${avatarResult.error}`));
-        
-        if (avatarResult.error?.includes('Tavily API key')) {
-          console.log(chalk.gray('💡 Run "./start.sh config" to set up your Tavily API key for image search.'));
-        }
-      }
     } catch (error) {
-      spinner.fail('Avatar generation failed');
-      console.error(chalk.red('Avatar generation error:'), error instanceof Error ? error.message : error);
+      spinner.fail(chalk.red('Avatar generation failed'));
+      console.log(chalk.red(`Error: ${error instanceof Error ? error.message : error}`));
     }
   }
 
@@ -309,11 +339,13 @@ export class CharacterGeneratorCLI {
       const progress = await this.agentService.getGenerationOutput(conversationId);
       
       if (summary && progress) {
-        console.log(chalk.blue('\n📊 Generation Statistics:'));
-        console.log(chalk.gray(`  Messages: ${summary.messageCount}`));
+        console.log(chalk.bold.blue('\nGENERATION STATISTICS'));
+        console.log(chalk.gray('─'.repeat(30)));
+        console.log(chalk.white(`Messages: ${summary.messageCount}`));
+        console.log(chalk.white(`Completion: ${progress.completionPercentage}%`));
       }
     } catch (error) {
-      console.error('Failed to show stats:', error);
+      console.log(chalk.red(`Failed to show stats: ${error}`));
     }
   }
 
@@ -323,7 +355,8 @@ export class CharacterGeneratorCLI {
   private async saveResults(result: any, outputDir: string): Promise<void> {
     await fs.ensureDir(outputDir);
     
-    console.log(chalk.blue('\n💾 Saving results...'));
+    console.log(chalk.bold.blue('\nSAVING RESULTS'));
+    console.log(chalk.gray('─'.repeat(30)));
 
     // Generate standard format character card first
     if (result.character_data) {
@@ -372,18 +405,18 @@ export class CharacterGeneratorCLI {
 
       const standardPath = path.join(outputDir, `${safeFileName}_card.json`);
       await fs.writeJson(standardPath, standardFormat, { spaces: 2 });
-      console.log(chalk.green('  ✅ Standard character card:'), chalk.cyan(standardPath));
+      console.log(chalk.green(`Character card: ${standardPath}`));
     }
     
     // Save individual files for reference
     if (result.character_data) {
       const characterFile = path.join(outputDir, 'character.json');
       await fs.writeJson(characterFile, result.character_data, { spaces: 2 });
-      console.log(chalk.gray('  📄 Character data:'), characterFile);
+      console.log(chalk.white(`Character data: ${characterFile}`));
       
       // Show avatar info if present
       if (result.character_data.avatar) {
-        console.log(chalk.green('  🖼️  Avatar image:'), result.character_data.avatar);
+        console.log(chalk.green(`Avatar image: ${result.character_data.avatar}`));
       }
     }
     
@@ -391,32 +424,34 @@ export class CharacterGeneratorCLI {
     if (result.worldbook_data) {
       const worldbookFile = path.join(outputDir, 'worldbook.json');
       await fs.writeJson(worldbookFile, result.worldbook_data, { spaces: 2 });
-      console.log(chalk.gray('  📚 Worldbook:'), worldbookFile);
+      console.log(chalk.white(`Worldbook: ${worldbookFile}`));
     }
     
     // Save knowledge base (new feature)
     if (result.knowledge_base && result.knowledge_base.length > 0) {
       const knowledgeFile = path.join(outputDir, 'knowledge_base.json');
       await fs.writeJson(knowledgeFile, result.knowledge_base, { spaces: 2 });
-      console.log(chalk.gray('  🧠 Knowledge base:'), knowledgeFile);
+      console.log(chalk.white(`Knowledge base: ${knowledgeFile}`));
     }
     
     // Save complete result
     const fullResultFile = path.join(outputDir, 'complete_result.json');
     await fs.writeJson(fullResultFile, result, { spaces: 2 });
-    console.log(chalk.gray('  💾 Complete result:'), fullResultFile);
+    console.log(chalk.white(`Complete result: ${fullResultFile}`));
 
-    console.log(chalk.blue('\n✨ All files saved to:'), chalk.cyan(path.resolve(outputDir)));
+    console.log(chalk.gray('─'.repeat(50)));
+    console.log(chalk.bold.green(`All files saved to: ${path.resolve(outputDir)}`));
   }
 
   /**
    * Configure default settings
    */
   async configureSettings(): Promise<void> {
-    console.log(chalk.blue.bold('⚙️  Configuration Setup\n'));
+    this.displayWelcome();
     
-    // Debug: show current config
-    console.log(chalk.gray('Current config:'), JSON.stringify(this.config, null, 2));
+    console.log(chalk.bold.blue('CONFIGURATION SETUP'));
+    console.log(chalk.gray('─'.repeat(50)));
+    console.log('');
 
     
     const modeChoice = await inquirer.prompt([
@@ -426,11 +461,11 @@ export class CharacterGeneratorCLI {
         message: '选择配置模式:',
         choices: [
           {
-            name: `📝 补充缺失配置`,
+            name: '补充缺失配置',
             value: 'supplement',
           },
           {
-            name: '🔄 重新配置全部 (重新设置所有配置)',
+            name: '重新配置全部 (重新设置所有配置)',
             value: 'full',
           },
         ],
@@ -445,7 +480,7 @@ export class CharacterGeneratorCLI {
     }
 
     await this.saveConfig();
-    console.log(chalk.green('✅ Configuration saved!'));
+    console.log(chalk.green('Configuration saved!'));
   }
 
   /**
@@ -561,7 +596,9 @@ export class CharacterGeneratorCLI {
    * Configure all fields from scratch
    */
   private async configureFullMode(): Promise<void> {
-    console.log(chalk.blue('🔄 重新配置所有设置:\n'));
+    console.log(chalk.bold.blue('RECONFIGURE ALL SETTINGS'));
+    console.log(chalk.gray('─'.repeat(40)));
+    console.log('');
 
     const answers = await inquirer.prompt([
       {
@@ -644,7 +681,11 @@ export class CharacterGeneratorCLI {
    * List previous generations
    */
   async listGenerations(): Promise<void> {
-    console.log(chalk.blue.bold('📋 Previous Generations\n'));
+    this.displayWelcome();
+    
+    console.log(chalk.bold.blue('PREVIOUS GENERATIONS'));
+    console.log(chalk.gray('─'.repeat(50)));
+    console.log('');
     
     const conversations = await this.agentService.listConversations();
     
@@ -658,8 +699,8 @@ export class CharacterGeneratorCLI {
       ID: conv.id.slice(0, 8),
       Title: conv.title,
       Status: conv.status,
-      'Has Character': conv.generation_output.character_data ? '✅' : '❌',
-      'Has Worldbook': (conv.generation_output.worldbook_data && conv.generation_output.worldbook_data.length > 0) ? '✅' : '❌',
+              'Has Character': conv.generation_output.character_data ? 'Yes' : 'No',
+        'Has Worldbook': (conv.generation_output.worldbook_data && conv.generation_output.worldbook_data.length > 0) ? 'Yes' : 'No',
       'Knowledge': conv.research_state.knowledge_base.length,
     })));
 
@@ -678,62 +719,88 @@ export class CharacterGeneratorCLI {
    * Export a specific generation
    */
   async exportGeneration(id: string, options: { format?: string; output?: string }): Promise<void> {
+    this.displayWelcome();
+    
+    console.log(chalk.bold.blue('EXPORT GENERATION'));
+    console.log(chalk.gray('─'.repeat(50)));
+    console.log('');
+    
     const conversations = await this.agentService.listConversations();
     const conversation = conversations.find(c => c.id.startsWith(id));
     
     if (!conversation) {
-      console.error(chalk.red('❌ Generation not found with ID:'), id);
+      console.log(chalk.red(`Generation not found with ID: ${id}`));
       return;
     }
 
     const outputFile = options.output || `export_${id.slice(0, 8)}.${options.format || 'json'}`;
     
-    // Updated to use new data structure
-    if (options.format === 'card' && conversation.generation_output.character_data) {
-      await fs.writeJson(outputFile, conversation.generation_output.character_data, { spaces: 2 });
-    } else if (options.format === 'worldbook' && conversation.generation_output.worldbook_data) {
-      await fs.writeJson(outputFile, conversation.generation_output.worldbook_data, { spaces: 2 });
-    } else {
-      // Export both character progress and task state
-      const exportData = {
-        generation_output: conversation.generation_output,
-        research_state: conversation.research_state,
-        conversation_info: {
-          id: conversation.id,
-          title: conversation.title,
-          status: conversation.status,
-        },
-      };
-      await fs.writeJson(outputFile, exportData, { spaces: 2 });
-    }
+    const spinner = ora({
+      text: 'Exporting generation...',
+      color: 'cyan'
+    }).start();
     
-    console.log(chalk.green('✅ Exported to:'), chalk.cyan(outputFile));
+    try {
+      // Updated to use new data structure
+      if (options.format === 'card' && conversation.generation_output.character_data) {
+        await fs.writeJson(outputFile, conversation.generation_output.character_data, { spaces: 2 });
+      } else if (options.format === 'worldbook' && conversation.generation_output.worldbook_data) {
+        await fs.writeJson(outputFile, conversation.generation_output.worldbook_data, { spaces: 2 });
+      } else {
+        // Export both character progress and task state
+        const exportData = {
+          generation_output: conversation.generation_output,
+          research_state: conversation.research_state,
+          conversation_info: {
+            id: conversation.id,
+            title: conversation.title,
+            status: conversation.status,
+          },
+        };
+        await fs.writeJson(outputFile, exportData, { spaces: 2 });
+      }
+      
+      spinner.succeed(chalk.green('Export completed'));
+      console.log(chalk.white(`File: ${outputFile}`));
+    } catch (error) {
+      spinner.fail(chalk.red('Export failed'));
+      console.log(chalk.red(`Error: ${error}`));
+    }
   }
 
   /**
    * Clear all generation history
    */
   async clearHistory(): Promise<void> {
+    this.displayWelcome();
+    
+    console.log(chalk.bold.red('CLEAR ALL HISTORY'));
+    console.log(chalk.gray('─'.repeat(50)));
+    console.log('');
+    
     const { confirm } = await inquirer.prompt([
       {
         type: 'confirm',
         name: 'confirm',
-        message: 'Are you sure you want to delete all generation history? This action cannot be undone.',
+        message: chalk.red('Are you sure you want to delete all generation history? This action cannot be undone.'),
         default: false,
       },
     ]);
 
     if (confirm) {
-      const spinner = ora('Clearing history...').start();
+      const spinner = ora({
+        text: 'Clearing history...',
+        color: 'red'
+      }).start();
       try {
         await this.agentService.clearAllSessions();
-        spinner.succeed('All generation history has been cleared.');
+        spinner.succeed(chalk.green('All generation history has been cleared'));
       } catch (error) {
-        spinner.fail('Failed to clear history.');
-        console.error(chalk.red('Error:'), error);
+        spinner.fail(chalk.red('Failed to clear history'));
+        console.log(chalk.red(`Error: ${error}`));
       }
     } else {
-      console.log(chalk.gray('Operation cancelled.'));
+      console.log(chalk.gray('Operation cancelled'));
     }
   }
 
@@ -749,7 +816,7 @@ export class CharacterGeneratorCLI {
 
     // Check if we have required configuration
     if (!llmType || !model) {
-      console.log(chalk.yellow('⚠️  No LLM configuration found.'));
+      console.log(chalk.yellow('Warning: No LLM configuration found.'));
       console.log(chalk.gray('Please run the following command to configure:'));
       console.log(chalk.cyan('  ./start.sh config'));
       throw new Error('LLM configuration required. Please run "./start.sh config" first.');
@@ -757,7 +824,7 @@ export class CharacterGeneratorCLI {
 
     // Check API key for OpenAI
     if (llmType === 'openai' && !apiKey) {
-      console.log(chalk.yellow('⚠️  OpenAI API key not configured.'));
+      console.log(chalk.yellow('Warning: OpenAI API key not configured.'));
       console.log(chalk.gray('Please run the following command to configure:'));
       console.log(chalk.cyan('  ./start.sh config'));
       throw new Error('OpenAI API key required. Please run "./start.sh config" first.');
@@ -800,7 +867,11 @@ export class CharacterGeneratorCLI {
    * Resume a previous generation
    */
   async resumeGeneration(): Promise<void> {
-    console.log(chalk.blue.bold('🔄 Resume Previous Generation\n'));
+    this.displayWelcome();
+    
+    console.log(chalk.bold.cyan('RESUME GENERATION'));
+    console.log(chalk.gray('─'.repeat(50)));
+    console.log('');
     
     const conversations = await this.agentService.listConversations();
     
@@ -820,7 +891,7 @@ export class CharacterGeneratorCLI {
     const choices: any[] = [];
     
           if (incompleteConversations.length > 0) {
-        choices.push(new inquirer.Separator(chalk.yellow('📝 Incomplete Generations (can be continued):')));
+        choices.push(new inquirer.Separator(chalk.yellow('Incomplete Generations (can be continued):')));
         incompleteConversations.forEach(conv => {
           const completionInfo = this.getCompletionInfo(conv);
           choices.push({
@@ -832,7 +903,7 @@ export class CharacterGeneratorCLI {
       }
 
       if (completeWithoutAvatar.length > 0) {
-        choices.push(new inquirer.Separator(chalk.blue('🖼️  Complete (needs local download):')));
+        choices.push(new inquirer.Separator(chalk.blue('Complete (needs avatar download):')));
         completeWithoutAvatar.forEach(conv => {
           choices.push({
             name: `${conv.id.slice(0, 8)} - ${conv.title} (download avatar)`,
@@ -843,7 +914,7 @@ export class CharacterGeneratorCLI {
       }
 
       if (fullyComplete.length > 0) {
-        choices.push(new inquirer.Separator(chalk.green('✅ Fully Complete (with local files):')));
+        choices.push(new inquirer.Separator(chalk.green('Fully Complete (with local files):')));
         fullyComplete.forEach(conv => {
           choices.push({
             name: `${conv.id.slice(0, 8)} - ${conv.title} (view only)`,
@@ -884,15 +955,19 @@ export class CharacterGeneratorCLI {
    * Handle the resume action based on selection
    */
   private async handleResumeAction(selection: { id: string; action: string }): Promise<void> {
-    const spinner = ora('Loading session...').start();
+    const spinner = ora({
+      text: 'Loading session...',
+      color: 'cyan'
+    }).start();
 
     try {
       // Create user input callback for resume operations with support for choice options
       const userInputCallback = async (message?: string, options?: string[]): Promise<string> => {
         spinner.stop();
-        console.log(chalk.yellow('\n💬 Need more information:'));
+        console.log(chalk.bold.yellow('\nINPUT REQUIRED'));
+        console.log(chalk.gray('─'.repeat(30)));
         if (message) {
-          console.log(chalk.gray(`${message}`));
+          console.log(chalk.white(`${message}`));
         }
         
         // If options are provided, offer choice selection with custom input option
@@ -941,7 +1016,7 @@ export class CharacterGeneratorCLI {
         }
       };
 
-      console.log("action",selection.action);
+
 
       if (selection.action === 'view') {
         // Just show the complete generation details
@@ -949,7 +1024,8 @@ export class CharacterGeneratorCLI {
         spinner.succeed('Generation loaded!');
         
         if (status.hasResult && status.result) {
-          console.log(chalk.green('\n✅ Complete Generation:'));
+          console.log(chalk.bold.green('\nCOMPLETE GENERATION'));
+          console.log(chalk.gray('─'.repeat(30)));
           await this.showGenerationResults(status.result);
         }
         return;
@@ -960,16 +1036,16 @@ export class CharacterGeneratorCLI {
       const result = await this.agentService.resumeSession(selection.id, userInputCallback);
 
       if (!result.success) {
-        spinner.fail('Failed to resume generation');
-        console.error(chalk.red('Error:'), result.error);
+        spinner.fail(chalk.red('Failed to resume generation'));
+        console.log(chalk.red(`Error: ${result.error}`));
         return;
       }
 
       // Handle different resume results
       switch (result.action) {
         case 'continued':
-          spinner.succeed('Generation resumed and completed!');
-          console.log(chalk.green('\n🎉 Generation continued successfully!'));
+          spinner.succeed(chalk.green('Generation resumed and completed!'));
+          console.log(chalk.bold.green('\nGeneration continued successfully!'));
           
           // Show final results
           const status = await this.agentService.getSessionStatus(selection.id);
@@ -984,26 +1060,28 @@ export class CharacterGeneratorCLI {
           break;
 
         case 'avatar_generated':
-          spinner.succeed('Avatar generation completed!');
-          console.log(chalk.blue('\n🖼️  Avatar Generation Results:'));
+          spinner.succeed(chalk.green('Avatar generation completed!'));
+          console.log(chalk.bold.blue('\nAVATAR GENERATION RESULTS'));
+          console.log(chalk.gray('─'.repeat(40)));
           
           if (result.result?.imageDescription) {
-            console.log(chalk.gray(`  Description: ${result.result.imageDescription}`));
+            console.log(chalk.white(`Description: ${result.result.imageDescription}`));
           }
           if (result.result?.localImagePath) {
-            console.log(chalk.green(`  ✅ Downloaded Image: ${result.result.localImagePath}`));
+            console.log(chalk.green(`Downloaded Image: ${result.result.localImagePath}`));
           }
           if (result.result?.outputFilePath) {
-            console.log(chalk.green(`  📋 Character Card: ${result.result.outputFilePath}`));
+            console.log(chalk.green(`Character Card: ${result.result.outputFilePath}`));
           }
           if (result.result?.candidateImages) {
-            console.log(chalk.gray(`  📸 Found ${result.result.candidateImages.length} candidate images`));
+            console.log(chalk.white(`Found ${result.result.candidateImages.length} candidate images`));
           }
           break;
 
         case 'already_complete':
-          spinner.succeed('Generation is already complete!');
-          console.log(chalk.green('\n✅ This generation is already fully complete:'));
+          spinner.succeed(chalk.green('Generation is already complete!'));
+          console.log(chalk.bold.green('\nGENERATION ALREADY COMPLETE'));
+          console.log(chalk.gray('─'.repeat(40)));
           await this.showGenerationResults(result.result);
           break;
       }
@@ -1012,8 +1090,8 @@ export class CharacterGeneratorCLI {
       await this.showGenerationStats(selection.id);
 
     } catch (error) {
-      spinner.fail('Resume operation failed');
-      console.error(chalk.red('Error:'), error instanceof Error ? error.message : error);
+      spinner.fail(chalk.red('Resume operation failed'));
+      console.log(chalk.red(`Error: ${error instanceof Error ? error.message : error}`));
     }
   }
 
@@ -1101,13 +1179,13 @@ export class CharacterGeneratorCLI {
     const avatar = conversation.generation_output.character_data?.avatar;
     
     const indicators = [];
-    if (hasCharacter) indicators.push('📝');
-    if (hasWorldbook) indicators.push('🌍');
-    if (avatar) indicators.push('🔗'); // Show link icon for avatar URL
+    if (hasCharacter) indicators.push('C');
+    if (hasWorldbook) indicators.push('W');
+    if (avatar) indicators.push('A');
     
-    const status = conversation.status === 'completed' ? '✅' : '⏳';
+    const status = conversation.status === 'completed' ? 'DONE' : 'PROG';
     
-    return `${status} [${indicators.join('')}]`;
+    return `[${status}] [${indicators.join('|')}]`;
   }
 
   /**
@@ -1115,18 +1193,18 @@ export class CharacterGeneratorCLI {
    */
   private async showGenerationResults(result: any): Promise<void> {
     if (result.character_data) {
-      console.log(chalk.blue('  📝 Character Card:'), chalk.cyan(result.character_data.name || 'Unnamed'));
+      console.log(chalk.white(`Character: ${result.character_data.name || 'Unnamed'}`));
       if (result.character_data.avatar) {
-        console.log(chalk.blue('  🖼️  Avatar:'), chalk.cyan(result.character_data.avatar));
+        console.log(chalk.green(`Avatar: ${result.character_data.avatar}`));
       }
     }
     
     if (result.worldbook_data) {
-      console.log(chalk.blue('  🌍 Worldbook:'), chalk.cyan(`${result.worldbook_data.length} entries`));
+      console.log(chalk.white(`Worldbook: ${result.worldbook_data.length} entries`));
     }
     
     if (result.knowledge_base) {
-      console.log(chalk.blue('  📚 Knowledge Base:'), chalk.cyan(`${result.knowledge_base.length} entries`));
+      console.log(chalk.white(`Knowledge Base: ${result.knowledge_base.length} entries`));
     }
   }
 } 

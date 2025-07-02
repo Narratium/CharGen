@@ -613,12 +613,12 @@ export class AgentService {
     // If we have a user input callback, use it for interaction
     if (userInputCallback) {
       const choice = await userInputCallback(
-        '🖼️ How would you like to get the character image?',
-        ['🔍 Search for existing images online (faster, uses web search)', '🎨 Generate new image with AI (slower, creates unique image)']
+        'How would you like to get the character image?',
+        ['Search for existing images online (faster, uses web search)', 'Generate new image with AI (slower, creates unique image)']
       );
       
       // Map the choice to our return type
-      if (choice.includes('Generate') || choice.includes('🎨')) {
+      if (choice.includes('Generate')) {
         return 'generate';
       } else {
         return 'search';
@@ -632,14 +632,14 @@ export class AgentService {
       {
         type: 'list',
         name: 'choice',
-        message: '🖼️ How would you like to get the character image?',
+        message: 'How would you like to get the character image?',
         choices: [
           {
-            name: '🔍 Search for existing images online (faster, uses web search)',
+            name: 'Search for existing images online (faster, uses web search)',
             value: 'search'
           },
           {
-            name: '🎨 Generate new image with AI (slower, creates unique image)',
+            name: 'Generate new image with AI (slower, creates unique image)',
             value: 'generate'
           }
         ],
@@ -668,7 +668,7 @@ export class AgentService {
         };
       }
 
-      console.log('🎨 Generating image with AI...');
+      console.log('Generating image with AI...');
       
       // Import fal-ai client
       const { fal } = await import('@fal-ai/client');
@@ -693,7 +693,7 @@ export class AgentService {
         logs: true,
         onQueueUpdate: (update) => {
           if (update.status === "IN_PROGRESS") {
-            console.log('🔄 Generation in progress...');
+            console.log('Generation in progress...');
             if (update.logs) {
               update.logs.map((log) => log.message).forEach(console.log);
             }
@@ -703,7 +703,7 @@ export class AgentService {
 
       if (result.data && result.data.images && result.data.images.length > 0) {
         const imageUrl = result.data.images[0].url;
-        console.log('✅ Image generated successfully:', imageUrl);
+        console.log('Image generated successfully:', imageUrl);
         
         return {
           success: true,
@@ -717,7 +717,7 @@ export class AgentService {
       }
       
     } catch (error) {
-      console.error('❌ AI image generation failed:', error);
+      console.error('AI image generation failed:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error during AI image generation'
