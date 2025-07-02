@@ -22,6 +22,7 @@
   "author": "Character Generator",
   "license": "MIT",
   "dependencies": {
+    "@fal-ai/client": "^1.5.0",
     "@langchain/community": "^0.2.0",
     "@langchain/core": "^0.2.0",
     "@langchain/ollama": "^0.0.4",

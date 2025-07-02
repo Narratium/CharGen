@@ -23,6 +23,7 @@ interface Config {
   maxTokens?: number;
   tavilyApiKey?: string; // Add Tavily API key support
   jinaApiKey?: string; // Add Jina AI API key support
+  falApiKey?: string; // Add FAL API key support for AI image generation
 }
 
 export class CharacterGeneratorCLI {
@@ -217,7 +218,41 @@ export class CharacterGeneratorCLI {
       spinner = ora('Generating avatar image...').start();
       spinner.text = 'Analyzing character data to create image description...';
 
-      const avatarResult = await this.agentService.generateAvatar(conversationId);
+      // Create user input callback for avatar generation
+      const userInputCallback = async (message?: string, options?: string[]): Promise<string> => {
+        spinner.stop(); // Stop spinner before user input
+        console.log(chalk.yellow('\n💬 Avatar Generation Choice:'));
+        if (message) {
+          console.log(chalk.gray(`${message}`));
+        }
+        
+        // If options are provided, offer choice selection
+        if (options && options.length > 0) {
+          const selectionAnswer = await inquirer.prompt([{
+            type: 'list',
+            name: 'selection',
+            message: 'Please choose an option:',
+            choices: options,
+            pageSize: Math.min(options.length + 2, 10)
+          }]);
+          
+          spinner.start('Continuing avatar generation...'); // Restart spinner
+          return selectionAnswer.selection;
+        } else {
+          // No options provided, use traditional text input
+          const answer = await inquirer.prompt([{
+            type: 'input',
+            name: 'input',
+            message: 'Please provide more details:',
+            validate: (input: string) => input.trim().length > 0 || 'Please provide input',
+          }]);
+          
+          spinner.start('Continuing avatar generation...'); // Restart spinner
+          return answer.input;
+        }
+      };
+
+      const avatarResult = await this.agentService.generateAvatar(conversationId, userInputCallback);
       
       if (avatarResult.success) {
         spinner.succeed('Avatar generation completed!');
@@ -497,6 +532,14 @@ export class CharacterGeneratorCLI {
       });
     }
 
+    if (!this.config.falApiKey) {
+      questions.push({
+        type: 'password',
+        name: 'falApiKey',
+        message: 'FAL API key (for AI image generation, optional):',
+      });
+    }
+
     const answers = await inquirer.prompt(questions);
 
     // Merge with existing config
@@ -510,6 +553,7 @@ export class CharacterGeneratorCLI {
       ...(answers.maxTokens && { maxTokens: answers.maxTokens }),
       ...(answers.tavilyApiKey !== undefined && { tavilyApiKey: answers.tavilyApiKey }),
       ...(answers.jinaApiKey !== undefined && { jinaApiKey: answers.jinaApiKey }),
+      ...(answers.falApiKey !== undefined && { falApiKey: answers.falApiKey }),
     };
   }
 
@@ -575,6 +619,12 @@ export class CharacterGeneratorCLI {
         message: 'Jina AI API key (for smart image selection, optional):',
         default: this.config.jinaApiKey,
       },
+      {
+        type: 'password',
+        name: 'falApiKey',
+        message: 'FAL API key (for AI image generation, optional):',
+        default: this.config.falApiKey,
+      },
     ]);
 
     this.config = {
@@ -586,6 +636,7 @@ export class CharacterGeneratorCLI {
       maxTokens: answers.maxTokens,
       tavilyApiKey: answers.tavilyApiKey,
       jinaApiKey: answers.jinaApiKey,
+      falApiKey: answers.falApiKey,
     };
   }
 
@@ -721,6 +772,7 @@ export class CharacterGeneratorCLI {
       max_tokens: this.config.maxTokens || 4000,
       tavily_api_key: this.config.tavilyApiKey || '',
       jina_api_key: this.config.jinaApiKey || '',
+      fal_api_key: this.config.falApiKey || '',
     };
   }
 

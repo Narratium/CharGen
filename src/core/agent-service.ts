@@ -473,13 +473,14 @@ export class AgentService {
   /**
    * Generate avatar image with download and file output
    */
-  async generateAvatar(conversationId: string): Promise<{
+  async generateAvatar(conversationId: string, userInputCallback?: UserInputCallback): Promise<{
     success: boolean;
     imageDescription?: string;
     imageUrl?: string;
     localImagePath?: string;
     outputFilePath?: string;
     candidateImages?: string[];
+    generatedImage?: boolean;
     error?: string;
   }> {
     try {
@@ -499,6 +500,7 @@ export class AgentService {
       let selectedImageUrl: string;
       let imageDescription: string = '';
       let candidateImages: string[] = [];
+      let generatedImage: boolean = false;
 
       // Check if character already has an avatar URL (resume mode)
       if (characterData.avatar && this.isValidImageUrl(characterData.avatar)) {
@@ -508,32 +510,51 @@ export class AgentService {
         // Step 1: Generate image description
         imageDescription = await this.generateImageDescription(mainObjective, characterData, session.llm_config);
         
-        // Step 2: Search for images
-        const imageResults = await this.searchImages(imageDescription, session.llm_config.tavily_api_key || '');
+        // Step 2: Ask user to choose between search and generation
+        const choice = await this.askUserForImageChoice(userInputCallback);
         
-        if (!imageResults.success || !imageResults.images || imageResults.images.length === 0) {
-          return { 
-            success: false, 
-            error: imageResults.error || 'No images found',
-            imageDescription 
-          };
-        }
+        if (choice === 'generate') {
+          // Generate image using AI
+          const generationResult = await this.generateImageWithAI(imageDescription, session.llm_config);
+          
+          if (!generationResult.success || !generationResult.imageUrl) {
+            return {
+              success: false,
+              error: generationResult.error || 'Image generation failed',
+              imageDescription
+            };
+          }
+          
+          selectedImageUrl = generationResult.imageUrl;
+          generatedImage = true;
+        } else {
+          // Search for images (original behavior)
+          const imageResults = await this.searchImages(imageDescription, session.llm_config.tavily_api_key || '');
+          
+          if (!imageResults.success || !imageResults.images || imageResults.images.length === 0) {
+            return { 
+              success: false, 
+              error: imageResults.error || 'No images found',
+              imageDescription 
+            };
+          }
 
-        candidateImages = imageResults.images;
+          candidateImages = imageResults.images;
 
-        // Step 3: Select best image
-        const selectedUrl = await this.selectBestImage(imageResults.images, imageDescription, session.llm_config, characterData);
-        
-        if (!selectedUrl) {
-          return { 
-            success: false, 
-            error: 'No suitable image could be selected',
-            imageDescription,
-            candidateImages: candidateImages
-          };
+          // Step 3: Select best image using Jina AI
+          const selectedUrl = await this.selectBestImage(imageResults.images, imageDescription, session.llm_config, characterData);
+          
+          if (!selectedUrl) {
+            return { 
+              success: false, 
+              error: 'No suitable image could be selected',
+              imageDescription,
+              candidateImages: candidateImages
+            };
+          }
+          
+          selectedImageUrl = selectedUrl;
         }
-        
-        selectedImageUrl = selectedUrl;
       }
 
       // Step 4: Download image and convert to PNG
@@ -545,7 +566,8 @@ export class AgentService {
           error: downloadResult.error,
           imageDescription,
           imageUrl: selectedImageUrl,
-          candidateImages: candidateImages
+          candidateImages: candidateImages,
+          generatedImage
         };
       }
 
@@ -571,7 +593,8 @@ export class AgentService {
         imageUrl: selectedImageUrl,
         localImagePath: downloadResult.localPath,
         outputFilePath: outputResult.outputPath,
-        candidateImages: candidateImages
+        candidateImages: candidateImages,
+        generatedImage
       };
 
     } catch (error) {
@@ -579,6 +602,125 @@ export class AgentService {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error during avatar generation'
+      };
+    }
+  }
+
+  /**
+   * Ask user to choose between searching for images or generating them with AI
+   */
+  private async askUserForImageChoice(userInputCallback?: UserInputCallback): Promise<'search' | 'generate'> {
+    // If we have a user input callback, use it for interaction
+    if (userInputCallback) {
+      const choice = await userInputCallback(
+        '🖼️ How would you like to get the character image?',
+        ['🔍 Search for existing images online (faster, uses web search)', '🎨 Generate new image with AI (slower, creates unique image)']
+      );
+      
+      // Map the choice to our return type
+      if (choice.includes('Generate') || choice.includes('🎨')) {
+        return 'generate';
+      } else {
+        return 'search';
+      }
+    }
+    
+    // Fallback to inquirer if no callback provided
+    const inquirer = await import('inquirer');
+    
+    const answer = await inquirer.default.prompt([
+      {
+        type: 'list',
+        name: 'choice',
+        message: '🖼️ How would you like to get the character image?',
+        choices: [
+          {
+            name: '🔍 Search for existing images online (faster, uses web search)',
+            value: 'search'
+          },
+          {
+            name: '🎨 Generate new image with AI (slower, creates unique image)',
+            value: 'generate'
+          }
+        ],
+        default: 'search'
+      }
+    ]);
+    
+    return answer.choice;
+  }
+
+  /**
+   * Generate image using fal-ai Stable Diffusion API
+   */
+  private async generateImageWithAI(description: string, llmConfig: any): Promise<{
+    success: boolean;
+    imageUrl?: string;
+    error?: string;
+  }> {
+    try {
+      // Check if FAL API key is configured
+      const falApiKey = llmConfig.fal_api_key;
+      if (!falApiKey || falApiKey.trim() === '') {
+        return {
+          success: false,
+          error: 'FAL API key not configured. Please run \'./start.sh config\' to set up your FAL API key.'
+        };
+      }
+
+      console.log('🎨 Generating image with AI...');
+      
+      // Import fal-ai client
+      const { fal } = await import('@fal-ai/client');
+      
+      // Configure fal client
+      fal.config({
+        credentials: falApiKey
+      });
+
+      // Generate image using Stable Diffusion 3.5 Large
+      const result = await fal.subscribe("fal-ai/stable-diffusion-v35-large", {
+        input: {
+          prompt: description,
+          negative_prompt: "blurry, low quality, distorted, deformed, bad anatomy, ugly, worst quality, low resolution, watermark, text, signature",
+          num_inference_steps: 28,
+          guidance_scale: 3.5,
+          num_images: 1,
+          enable_safety_checker: true,
+          output_format: "jpeg",
+          image_size: "portrait_4_3" // Good for character portraits
+        },
+        logs: true,
+        onQueueUpdate: (update) => {
+          if (update.status === "IN_PROGRESS") {
+            console.log('🔄 Generation in progress...');
+            if (update.logs) {
+              update.logs.map((log) => log.message).forEach(console.log);
+            }
+          }
+        },
+      });
+
+      if (result.data && result.data.images && result.data.images.length > 0) {
+        const imageUrl = result.data.images[0].url;
+        console.log('✅ Image generated successfully:', imageUrl);
+        
+        return {
+          success: true,
+          imageUrl: imageUrl
+        };
+      } else {
+        return {
+          success: false,
+          error: 'No image generated by AI'
+        };
+      }
+      
+    } catch (error) {
+      console.error('❌ AI image generation failed:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error during AI image generation'
       };
     }
   }
@@ -828,7 +970,7 @@ export class AgentService {
       - Max 30 words
       - For real-world: use name + poster/photo/cover
       - For fictional: be visually rich and genre-aware
-      - NO generic phrases like “character image” or “beautiful artwork”
+      - NO generic phrases like "character image" or "beautiful artwork"
       
       ==============================
       ✍️ FINAL TASK:
@@ -983,8 +1125,6 @@ export class AgentService {
     
     return (hasValidExtension || hasValidDomain) && !hasAdDomain;
   }
-
-
 
   /**
    * Use Jina AI multimodal embeddings to select the best image from search results
@@ -1178,7 +1318,7 @@ Prioritize official content (posters, covers) and quality domains. Respond with 
           return await this.continueGeneration(session, userInputCallback);
           
         case 'generate_avatar':
-          return await this.generateAvatarForSession(session);
+          return await this.generateAvatarForSession(session, userInputCallback);
           
         case 'already_complete':
           return {
@@ -1304,14 +1444,14 @@ Prioritize official content (posters, covers) and quality domains. Respond with 
   /**
    * Generate avatar for a complete session
    */
-  private async generateAvatarForSession(session: ResearchSession): Promise<{
+  private async generateAvatarForSession(session: ResearchSession, userInputCallback?: UserInputCallback): Promise<{
     success: boolean;
     action: 'avatar_generated';
     result?: any;
     error?: string;
   }> {
     try {
-      const avatarResult = await this.generateAvatar(session.id);
+      const avatarResult = await this.generateAvatar(session.id, userInputCallback);
       
       return {
         success: avatarResult.success,
