@@ -10,10 +10,10 @@ import { BaseSimpleTool, ToolParameter } from "../base-tool";
  * Handles worldbook generation based on provided parameters from planner
  * Creates comprehensive worldbook entries with substantial content using XML outer structure and Markdown inner format
  */
-export class WorldbookTool extends BaseSimpleTool {
-  readonly toolType = ToolType.WORLDBOOK;
-  readonly name = "WORLDBOOK";
-  readonly description = "Generate comprehensive worldbook entries with substantial content (500-1500 words each) to enhance storytelling. Use ONLY AFTER character creation is 100% complete. ESSENTIAL ENTRIES REQUIRED: STATUS (1), USER_SETTING (1), WORLD_VIEW (1). SUPPLEMENTARY ENTRIES: Minimum 5 additional entries based on WORLD_VIEW hierarchical structure. Content format: XML outer wrapper with Markdown internal formatting for rich, detailed descriptions.";
+export class SupplementTool extends BaseSimpleTool {
+  readonly toolType = ToolType.SUPPLEMENT;
+  readonly name = "SUPPLEMENT";
+  readonly description = "Create supplementary worldbook entries that expand on elements defined in the WORLD_VIEW hierarchy. Minimum 5 entries required. Each entry should focus on specific elements like locations, characters, systems, factions, items, or other detailed aspects mentioned in WORLD_VIEW. Automatically determines appropriate entry type based on content.";
   
   readonly parameters: ToolParameter[] = [
     {
@@ -66,7 +66,7 @@ export class WorldbookTool extends BaseSimpleTool {
     const comment = parameters.comment;
     
     if (!key) {
-      return this.createFailureResult("WORLDBOOK tool requires 'key' parameter.");
+      return this.createFailureResult("SUPPLEMENT tool requires 'key' parameter.");
     }
 
     // Handle key parameter - support both array and comma-separated string
@@ -76,15 +76,15 @@ export class WorldbookTool extends BaseSimpleTool {
     } else if (typeof key === 'string') {
       keyArray = key.split(',').map((k: string) => k.trim()).filter((k: string) => k.length > 0);
     } else {
-      return this.createFailureResult("WORLDBOOK tool requires 'key' parameter as an array or comma-separated string.");
+      return this.createFailureResult("SUPPLEMENT tool requires 'key' parameter as an array or comma-separated string.");
     }
 
     if (!content || typeof content !== 'string') {
-      return this.createFailureResult("WORLDBOOK tool requires 'content' parameter as a string.");
+      return this.createFailureResult("SUPPLEMENT tool requires 'content' parameter as a string.");
     }
 
     if (!comment || typeof comment !== 'string') {
-      return this.createFailureResult("WORLDBOOK tool requires 'comment' parameter as a string.");
+      return this.createFailureResult("SUPPLEMENT tool requires 'comment' parameter as a string.");
     }
 
     // Handle keysecondary parameter - support both array and comma-separated string

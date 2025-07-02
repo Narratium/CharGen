@@ -12,7 +12,10 @@ export enum ToolType {
   SEARCH = "SEARCH",     // Search and gather information
   ASK_USER = "ASK_USER", // Get user input
   CHARACTER = "CHARACTER", // Generate/update character card
-  WORLDBOOK = "WORLDBOOK", // Generate worldbook entries
+  STATUS = "STATUS", // Create world status entry (mandatory)
+  USER_SETTING = "USER_SETTING", // Create player setting entry (mandatory)
+  WORLD_VIEW = "WORLD_VIEW", // Create world structure entry (mandatory)
+  SUPPLEMENT = "SUPPLEMENT", // Create supplementary entries (minimum 5)
   REFLECT = "REFLECT",    // Reflect on progress and update tasks
   COMPLETE = "COMPLETE"   // Final completion - clear all tasks and end session
 }

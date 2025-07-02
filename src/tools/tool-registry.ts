@@ -8,7 +8,10 @@ import { SimpleTool} from "./base-tool";
 import { SearchTool } from "./search";
 import { AskUserTool } from "./ask-user";
 import { CharacterTool } from "./character";
-import { WorldbookTool } from "./worldbook";
+import { StatusTool } from "./status";
+import { UserSettingTool } from "./user-setting";
+import { WorldViewTool } from "./world-view";
+import { SupplementTool } from "./supplement";
 import { ReflectTool } from "./reflect";
 import { CompleteTool } from "./complete";
 
@@ -30,12 +33,15 @@ export class ToolRegistry {
     this.tools.set(ToolType.SEARCH, new SearchTool());
     this.tools.set(ToolType.ASK_USER, new AskUserTool());
     this.tools.set(ToolType.CHARACTER, new CharacterTool());
-    this.tools.set(ToolType.WORLDBOOK, new WorldbookTool());
+    this.tools.set(ToolType.STATUS, new StatusTool());
+    this.tools.set(ToolType.USER_SETTING, new UserSettingTool());
+    this.tools.set(ToolType.WORLD_VIEW, new WorldViewTool());
+    this.tools.set(ToolType.SUPPLEMENT, new SupplementTool());
     this.tools.set(ToolType.REFLECT, new ReflectTool());
     this.tools.set(ToolType.COMPLETE, new CompleteTool());
 
     this.initialized = true;
-    console.log("🔧 Tool Registry initialized with 6 tools (including enhanced search and completion)");
+    console.log("🔧 Tool Registry initialized with 9 tools (including 4 specialized worldbook tools)");
   }
 
   /**

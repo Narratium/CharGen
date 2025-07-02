@@ -462,7 +462,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       }
 
       // Handle CHARACTER or WORLDBOOK tool - data updates and task completion evaluation
-      if ((decision.tool === ToolType.CHARACTER || decision.tool === ToolType.WORLDBOOK) && result.success) {
+      if ((decision.tool === ToolType.CHARACTER || decision.tool === ToolType.WORLD_VIEW || decision.tool === ToolType.USER_SETTING || decision.tool === ToolType.STATUS) && result.success) {
         console.log(`✅ ${decision.tool} execution completed with generated content`);
         
         // Update generation output with new data
@@ -473,7 +473,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
           });
         }
         
-        if (decision.tool === ToolType.WORLDBOOK && result.result?.worldbook_data) {
+        if (decision.tool === ToolType.WORLD_VIEW || decision.tool === ToolType.USER_SETTING || decision.tool === ToolType.STATUS && result.result?.worldbook_data) {
           console.log("🔄 Updating generation output with worldbook data");
           
           // Use the new simplified method for appending worldbook data
