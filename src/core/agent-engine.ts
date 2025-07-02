@@ -15,6 +15,7 @@ import { ChatOpenAI } from "@langchain/openai";
 import { ChatOllama } from "@langchain/ollama";
 import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { StringOutputParser } from "@langchain/core/output_parsers";
+import { ConfigManager } from "./config-manager";
 
 // ============================================================================
 // BACKGROUND KNOWLEDGE - CHARACTER CARDS AND WORLDBOOKS
@@ -158,10 +159,12 @@ export class AgentEngine {
   private conversationId: string;
   private userInputCallback?: UserInputCallback;
   private model: any; // LLM model instance
+  private configManager: ConfigManager;
 
   constructor(conversationId: string, userInputCallback?: UserInputCallback) {
     this.conversationId = conversationId;
     this.userInputCallback = userInputCallback;
+    this.configManager = ConfigManager.getInstance();
   }
 
   /**
@@ -173,6 +176,11 @@ export class AgentEngine {
     error?: string;
   }> {
     try {
+      // Initialize ConfigManager if not already initialized
+      if (!this.configManager.isConfigured()) {
+        await this.configManager.initialize();
+      }
+
       if (userInputCallback) {
         this.userInputCallback = userInputCallback;
       }
@@ -181,7 +189,7 @@ export class AgentEngine {
       
       // Initialize the model and perform task decomposition
       const context = await this.buildExecutionContext();
-      this.model = this.createLLM(context.llm_config);
+      this.model = this.createLLM();
       
       // Initialize with task decomposition - inspired by DeepResearch
       await this.initialize(context);
@@ -1357,7 +1365,7 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
 </prompt>`);
 
     const context = await this.buildExecutionContext();
-    const llm = this.createLLM(context.llm_config);
+    const llm = this.createLLM();
     const chain = prompt.pipe(llm).pipe(new StringOutputParser());
 
     try {
@@ -1506,37 +1514,39 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
     const session = await ResearchSessionOperations.getSessionById(this.conversationId);
     if (!session) throw new Error("Session not found");
 
-      return {
-        session_id: this.conversationId,
-        research_state: session.research_state,
-        message_history: session.messages,
-        generation_output: session.generation_output,
-        llm_config: session.llm_config,  
-      };
-    }
+    return {
+      session_id: this.conversationId,
+      research_state: session.research_state,
+      message_history: session.messages,
+      generation_output: session.generation_output
+    };
+  }
 
-  private createLLM(config: ExecutionContext["llm_config"]) {
-    if (config.llm_type === "openai") {
+  private createLLM() {
+    // Get LLM configuration directly from ConfigManager
+    const llmConfig = this.configManager.getLLMConfig();
+
+    if (llmConfig.llm_type === "openai") {
       return new ChatOpenAI({
-        modelName: config.model_name,
-        openAIApiKey: config.api_key,
+        modelName: llmConfig.model_name,
+        openAIApiKey: llmConfig.api_key,
         configuration: {
-          baseURL: config.base_url,
+          baseURL: llmConfig.base_url,
         },
-        temperature: config.temperature,
-        maxTokens: config.max_tokens,
+        temperature: llmConfig.temperature,
+        maxTokens: llmConfig.max_tokens,
         streaming: false,
       });
-    } else if (config.llm_type === "ollama") {
+    } else if (llmConfig.llm_type === "ollama") {
       return new ChatOllama({
-        model: config.model_name,
-        baseUrl: config.base_url || "http://localhost:11434",
-        temperature: config.temperature,
+        model: llmConfig.model_name,
+        baseUrl: llmConfig.base_url || "http://localhost:11434",
+        temperature: llmConfig.temperature,
         streaming: false,
       });
     }
 
-    throw new Error(`Unsupported LLM type: ${config.llm_type}`);
+    throw new Error(`Unsupported LLM type: ${llmConfig.llm_type}`);
   }
 
   private buildRecentConversationSummary(messages: Message[]): string {

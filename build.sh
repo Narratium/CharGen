@@ -79,7 +79,7 @@ if [ -f "dist/index.js" ]; then
 else
     echo "❌ Build failed - output file not found"
     exit 1
-fi
+fi 
 
 # Handle different build modes
 if [ "$CREATE_PACKAGE" = true ]; then

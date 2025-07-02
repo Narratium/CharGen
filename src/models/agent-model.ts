@@ -4,7 +4,10 @@
  * Optimized naming conventions for clarity
  */
 
-// Tool types - pure execution units
+// ============================================================================
+// TOOL TYPES AND ENUMS
+// ============================================================================
+
 export enum ToolType {
   SEARCH = "SEARCH",     // Search and gather information
   ASK_USER = "ASK_USER", // Get user input
@@ -14,7 +17,9 @@ export enum ToolType {
   COMPLETE = "COMPLETE"   // Final completion - clear all tasks and end session
 }
 
-// Session execution status
+/**
+ * Session status enum
+ */
 export enum SessionStatus {
   IDLE = "idle",
   THINKING = "thinking",
@@ -25,7 +30,7 @@ export enum SessionStatus {
 }
 
 // ============================================================================
-// CORE DECISION STRUCTURES
+// PLANNING AND DECISION STRUCTURES
 // ============================================================================
 
 /**
@@ -112,6 +117,7 @@ export interface ExecutionResult {
 
 /**
  * Tool execution context - unified for all tools
+ * Configuration (API keys, etc.) should be injected from external config
  */
 export interface ExecutionContext {
   session_id: string;
@@ -119,20 +125,6 @@ export interface ExecutionContext {
   // Current research state
   research_state: ResearchState;
   message_history: Message[];
-
-  
-  // LLM configuration
-  llm_config: {
-    model_name: string;
-    api_key: string;
-    base_url?: string;
-    llm_type: "openai" | "ollama";
-    temperature: number;
-    max_tokens?: number;
-    tavily_api_key?: string; // Add Tavily API key support
-    jina_api_key?: string; // Add Jina AI API key support
-  };
-
 }
 
 // ============================================================================
@@ -191,6 +183,7 @@ export interface WorldbookEntry {
 /**
  * Research Session - the main data container
  * Represents a complete research/generation session
+ * LLM configuration is not stored here - it's injected at runtime from ConfigManager
  */
 export interface ResearchSession {
   id: string;
@@ -201,18 +194,6 @@ export interface ResearchSession {
   messages: Message[];
   research_state: ResearchState;
   generation_output: GenerationOutput;
-  
-  // LLM configuration
-  llm_config: {
-    model_name: string;
-    api_key: string;
-    base_url?: string;
-    llm_type: "openai" | "ollama";
-    temperature: number;
-    max_tokens?: number;
-    tavily_api_key?: string; // Add Tavily API key support
-    jina_api_key?: string; // Add Jina AI API key support
-  };
   
   // Execution tracking
   execution_info: {

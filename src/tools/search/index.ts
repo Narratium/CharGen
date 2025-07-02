@@ -5,6 +5,7 @@ import {
 } from "../../models/agent-model";
 import { BaseSimpleTool, ToolParameter } from "../base-tool";
 import { TavilySearch } from "@langchain/tavily";
+import { ConfigManager } from "../../core/config-manager";
 
 /**
  * Enhanced Search Tool - Tavily API implementation
@@ -25,11 +26,13 @@ export class SearchTool extends BaseSimpleTool {
   ];
 
   private tavilySearch: TavilySearch;
+  private configManager: ConfigManager;
 
   constructor() {
     super();
-    // Note: Tavily Search will be initialized with API key from context in doWork method
-    this.tavilySearch = null as any; // Will be initialized with API key from context
+    this.configManager = ConfigManager.getInstance();
+    // Note: Tavily Search will be initialized with API key from ConfigManager in doWork method
+    this.tavilySearch = null as any; // Will be initialized with API key from ConfigManager
   }
 
   protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<ExecutionResult> {
@@ -49,8 +52,9 @@ export class SearchTool extends BaseSimpleTool {
       return this.createFailureResult("SEARCH tool requires at least one valid query string.");
     }
 
-    // Check if Tavily API key is configured
-    const tavilyApiKey = context.llm_config.tavily_api_key;
+    // Get LLM configuration from ConfigManager
+    const llmConfig = this.configManager.getLLMConfig();
+    const tavilyApiKey = llmConfig.tavily_api_key;
     if (!tavilyApiKey || tavilyApiKey.trim() === '') {
       return this.createFailureResult("Tavily API key not configured. Please run './start.sh config' to set up your Tavily API key.");
     }

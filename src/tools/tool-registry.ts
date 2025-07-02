@@ -55,8 +55,6 @@ export class ToolRegistry {
       };
     }
 
-    console.log(`🛠️ [${tool.name}] Executing with parameters:`, decision.parameters);
-    
     try {
       const result = await tool.execute(context, decision.parameters);
       

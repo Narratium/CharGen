@@ -58,7 +58,6 @@ export abstract class BaseSimpleTool implements SimpleTool {
    */
   async execute(context: ExecutionContext, parameters: Record<string, any>): Promise<ExecutionResult> {
     try {
-      console.log(`🛠️ [${this.name}] Executing with parameters:`, parameters);
       
       // Direct execution with provided parameters
       const result = await this.doWork(parameters, context);

@@ -20,7 +20,6 @@ export class ResearchSessionOperations {
    */
   static async createSession(
     title: string,
-    llmConfig: ResearchSession["llm_config"],
     initialUserRequest: string
   ): Promise<ResearchSession> {
     const conversationId = uuidv4();
@@ -55,7 +54,6 @@ export class ResearchSessionOperations {
       messages: [initialMessage],
       research_state: ResearchState,
       generation_output: GenerationOutput,
-      llm_config: llmConfig,
       execution_info: {
         current_iteration: 0,
         max_iterations: 50,

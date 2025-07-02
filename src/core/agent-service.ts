@@ -1,6 +1,7 @@
 import { AgentEngine } from "./agent-engine";
 import { ResearchSessionOperations } from "../data/agent/agent-conversation-operations";
 import { ResearchSession, SessionStatus } from "../models/agent-model";
+import { ConfigManager } from "./config-manager";
 
 // Define user input callback type
 type UserInputCallback = (message?: string, options?: string[]) => Promise<string>;
@@ -11,8 +12,10 @@ type UserInputCallback = (message?: string, options?: string[]) => Promise<strin
  */
 export class AgentService {
   private engines: Map<string, AgentEngine> = new Map();
+  private configManager: ConfigManager;
 
   constructor() {
+    this.configManager = ConfigManager.getInstance();
     // Initialize storage on construction
     this.initialize();
   }
@@ -34,16 +37,6 @@ export class AgentService {
    */
   async startGeneration(
     initialUserRequest: string,
-    llmConfig: {
-      model_name: string;
-      api_key: string;
-      base_url?: string;
-      llm_type: "openai" | "ollama";
-      temperature?: number;
-      max_tokens?: number;
-      tavily_api_key?: string;
-      jina_api_key?: string;
-    },
     userInputCallback?: UserInputCallback,
   ): Promise<{
     conversationId: string;
@@ -52,19 +45,23 @@ export class AgentService {
     error?: string;
   }> {
     try {
+      // Ensure ConfigManager is initialized
+      if (!this.configManager.isConfigured()) {
+        await this.configManager.initialize();
+      }
+
+      // Check if LLM configuration is available
+      if (!this.configManager.isConfigured()) {
+        return {
+          conversationId: "",
+          success: false,
+          error: "LLM configuration not found. Please run configuration setup first.",
+        };
+      }
+
       // Create new conversation with fixed title and story as user request
       const session = await ResearchSessionOperations.createSession(
         "Character & Worldbook Generation", // Fixed title
-        {
-          model_name: llmConfig.model_name,
-          api_key: llmConfig.api_key,
-          base_url: llmConfig.base_url,
-          llm_type: llmConfig.llm_type,
-          temperature: llmConfig.temperature || 0.7,
-          max_tokens: llmConfig.max_tokens,
-          tavily_api_key: llmConfig.tavily_api_key,
-          jina_api_key: llmConfig.jina_api_key,
-        },
         initialUserRequest // Story description as user request
       );
       
@@ -484,6 +481,19 @@ export class AgentService {
     error?: string;
   }> {
     try {
+      // Ensure ConfigManager is initialized
+      if (!this.configManager.isConfigured()) {
+        await this.configManager.initialize();
+      }
+
+      // Check if LLM configuration is available
+      if (!this.configManager.isConfigured()) {
+        return {
+          success: false,
+          error: "LLM configuration not found. Please run configuration setup first.",
+        };
+      }
+
       // Get the session data
       const session = await ResearchSessionOperations.getSessionById(conversationId);
       if (!session) {
@@ -507,15 +517,16 @@ export class AgentService {
         selectedImageUrl = characterData.avatar;
         imageDescription = 'Using existing avatar URL from character data';
       } else {
-        // Step 1: Generate image description
-        imageDescription = await this.generateImageDescription(mainObjective, characterData, session.llm_config);
+        const llmConfig = this.configManager.getLLMConfig();
         
-        // Step 2: Ask user to choose between search and generation
+        // Step 1: Ask user to choose between search and generation
         const choice = await this.askUserForImageChoice(userInputCallback);
         
         if (choice === 'generate') {
+          // Generate detailed prompt for AI image generation
+          imageDescription = await this.generateAIImagePrompt(mainObjective, characterData, llmConfig);
           // Generate image using AI
-          const generationResult = await this.generateImageWithAI(imageDescription, session.llm_config);
+          const generationResult = await this.generateImageWithAI(imageDescription, llmConfig);
           
           if (!generationResult.success || !generationResult.imageUrl) {
             return {
@@ -528,32 +539,34 @@ export class AgentService {
           selectedImageUrl = generationResult.imageUrl;
           generatedImage = true;
         } else {
+          // Generate search-optimized description for image search
+          imageDescription = await this.generateImageDescription(mainObjective, characterData, llmConfig);
           // Search for images (original behavior)
-          const imageResults = await this.searchImages(imageDescription, session.llm_config.tavily_api_key || '');
-          
-          if (!imageResults.success || !imageResults.images || imageResults.images.length === 0) {
-            return { 
-              success: false, 
-              error: imageResults.error || 'No images found',
-              imageDescription 
-            };
-          }
+        const imageResults = await this.searchImages(imageDescription, llmConfig.tavily_api_key || '');
+        
+        if (!imageResults.success || !imageResults.images || imageResults.images.length === 0) {
+          return { 
+            success: false, 
+            error: imageResults.error || 'No images found',
+            imageDescription 
+          };
+        }
 
-          candidateImages = imageResults.images;
+        candidateImages = imageResults.images;
 
           // Step 3: Select best image using Jina AI
-          const selectedUrl = await this.selectBestImage(imageResults.images, imageDescription, session.llm_config, characterData);
-          
-          if (!selectedUrl) {
-            return { 
-              success: false, 
-              error: 'No suitable image could be selected',
-              imageDescription,
-              candidateImages: candidateImages
-            };
-          }
-          
-          selectedImageUrl = selectedUrl;
+        const selectedUrl = await this.selectBestImage(imageResults.images, imageDescription, llmConfig, characterData);
+        
+        if (!selectedUrl) {
+          return { 
+            success: false, 
+            error: 'No suitable image could be selected',
+            imageDescription,
+            candidateImages: candidateImages
+          };
+        }
+        
+        selectedImageUrl = selectedUrl;
         }
       }
 
@@ -878,6 +891,213 @@ export class AgentService {
   }
 
   /**
+   * Generate detailed AI image generation prompt optimized for Stable Diffusion
+   */
+  private async generateAIImagePrompt(mainObjective: string, characterData: any, llmConfig: any): Promise<string> {
+    const { ChatOpenAI } = await import("@langchain/openai");
+    const { ChatOllama } = await import("@langchain/ollama");
+    const { ChatPromptTemplate } = await import("@langchain/core/prompts");
+
+    // Create LLM instance
+    let model: any;
+    if (llmConfig.llm_type === "openai") {
+      model = new ChatOpenAI({
+        apiKey: llmConfig.api_key,
+        modelName: llmConfig.model_name,
+        temperature: 0.8, // Slightly higher for more creative prompts
+        maxTokens: 800,
+        ...(llmConfig.base_url && { configuration: { baseURL: llmConfig.base_url } })
+      });
+    } else {
+      model = new ChatOllama({
+        baseUrl: llmConfig.base_url || "http://localhost:11434",
+        model: llmConfig.model_name,
+        temperature: 0.8,
+      });
+    }
+
+    const prompt = ChatPromptTemplate.fromTemplate(`
+You are a MASTER PROMPT ENGINEER for Stable Diffusion XL and advanced AI image models. Your goal is to create EXTREMELY DETAILED, PROFESSIONAL-GRADE prompts that rival the best AI art communities.
+
+==============================
+📥 INPUT DATA:
+- MAIN OBJECTIVE: {mainObjective}
+- CHARACTER DATA: {characterData}
+
+==============================
+🎯 ADVANCED PROMPT ENGINEERING RULES:
+
+**STEP 1: CONTENT TYPE ANALYSIS (CRITICAL)**
+Analyze the character/story data to determine the PRIMARY CONTENT TYPE:
+
+**A. HUMAN/HUMANOID CHARACTER** (人像类)
+- Indicators: human, elf, dwarf, android, humanoid robot, etc.
+- Tags: "1girl", "1boy", "solo", DETAILED FACE & EYES, ULTRA DETAILED EYES
+- Focus: facial features, expressions, human anatomy
+
+**B. NON-HUMAN CHARACTER** (非人类角色)
+- Indicators: animal, furry, anthropomorphic, creature, monster, dragon, etc.
+- Tags: "1other", "furry", "anthro", or specific creature type
+- Focus: species characteristics, fur/scales/feathers, creature anatomy
+
+**C. MECHANICAL/ARTIFICIAL** (机械类)
+- Indicators: robot, mecha, vehicle, spaceship, weapon, magical item, etc.
+- Tags: "mecha", "robot", "no humans", "mechanical"
+- Focus: technical details, materials, mechanical parts
+
+**D. LANDSCAPE/SCENE** (场景类)
+- Indicators: location, building, environment, abstract concept, scenery
+- Tags: "scenery", "landscape", "no humans", "architecture"
+- Focus: atmospheric mood, architectural details, natural elements
+
+**E. ABSTRACT/CONCEPTUAL** (抽象概念)
+- Indicators: emotions, concepts, symbols, magical effects, energy
+- Tags: "abstract", "conceptual art", "surreal"
+- Focus: symbolic representation, color mood, artistic interpretation
+
+**STEP 2: STRUCTURE ORDER (ADAPT BASED ON CONTENT TYPE)**
+
+**FOR HUMAN/HUMANOID:**
+1. QUALITY TAGS: NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES
+2. FACE/EYE FOCUS: DETAILED FACE & EYES, ULTRA DETAILED EYES, EYE HIGHLIGHTS
+3. COUNT/TYPE: 1girl/1boy, solo
+4. CHARACTER DETAILS: appearance, features
+5. POSE/EXPRESSION: CONTRAPPOSTO, expressions
+6. CLOTHING: detailed descriptions
+7. ENVIRONMENT: background setting
+8. CAMERA/LIGHTING: angles, lighting
+
+**FOR NON-HUMAN CHARACTER:**
+1. QUALITY TAGS: NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES
+2. CREATURE FOCUS: ultra detailed, detailed fur/scales/feathers
+3. COUNT/TYPE: 1other, furry/anthro/dragon, solo
+4. SPECIES DETAILS: animal characteristics, body type
+5. POSE/ACTION: creature-appropriate poses
+6. ENVIRONMENT: natural habitat or relevant setting
+7. CAMERA/LIGHTING: angles suitable for creature
+
+**FOR MECHANICAL/ARTIFICIAL:**
+1. QUALITY TAGS: NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES
+2. TECH FOCUS: ultra detailed, mechanical details, metallic textures
+3. TYPE: mecha, robot, no humans
+4. TECHNICAL SPECS: materials, design, functionality
+5. ENVIRONMENT: tech setting, workshop, battlefield
+6. LIGHTING: dramatic, technical lighting
+
+**FOR LANDSCAPE/SCENE:**
+1. QUALITY TAGS: NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES
+2. SCENE FOCUS: ultra detailed, atmospheric, detailed background
+3. TYPE: scenery, landscape, no humans
+4. LOCATION DETAILS: specific environmental features
+5. MOOD/ATMOSPHERE: lighting, weather, time of day
+6. CAMERA: wide shot, establishing shot, cinematic
+
+**FOR ABSTRACT/CONCEPTUAL:**
+1. QUALITY TAGS: NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES
+2. ART FOCUS: abstract, conceptual art, artistic interpretation
+3. SYMBOLIC ELEMENTS: colors, shapes, metaphorical representations
+4. MOOD/EMOTION: atmospheric, surreal, dreamlike
+5. ARTISTIC STYLE: surrealism, abstract expressionism, etc.
+
+**QUALITY TAGS TO ALWAYS INCLUDE:**
+- Start with: "NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES"
+- Add: "ultra detailed, DETAILED FACE & EYES, ULTRA DETAILED EYES, EYE HIGHLIGHTS"
+- Technical: "2.5D REALISTIC, PERSPECTIVE, SOLO FOCUS"
+
+**CHARACTER DESCRIPTION TECHNIQUES:**
+- Use specific counts: "1girl", "solo" 
+- Hair: color, length, style (e.g., "dyed blonde hair long hair", "very short hair, curly bangs")
+- Eyes: color and emphasis (e.g., "green eyes", "purple eyes")
+- Expression: specific emotions (e.g., "embarrassed look", "smug", "half closed eyes")
+- Age indicators: "young", specific build
+
+**POSE & COMPOSITION:**
+- Classical poses: "CONTRAPPOSTO"
+- Specific positioning: "Y-pose arms", "arms up higher", "twisting upper body"
+- Face angles: "asymmetrical face profile", "tilt head"
+- Camera: "from above", "wide angle", "bust up shot", "from diagonally side"
+
+**CLOTHING DETAILS:**
+- Be EXTREMELY specific: "tight clothing, yellow clothing, breasts under clothes, slim sleeves, long sleeves"
+- Colors and patterns: "yellow and black stripe costume", "black and yellow zebra design arm sleeve"
+- Fit and style: descriptive details about how clothes look
+
+**WEIGHT CONTROL USAGE:**
+- Emphasize important elements: "(pink lipstick:0.6)", "(correct sign:1.4)"
+- Use for precise control of features
+
+**ENVIRONMENT RICHNESS:**
+- Specific locations: "American football stadium", "grass"
+- Atmospheric details: lighting, mood, surroundings
+- Additional characters: "team of cheerleaders", "detailed 1 fairies"
+
+==============================
+🚀 REFERENCE EXAMPLES BY CONTENT TYPE:
+
+**HUMAN/HUMANOID EXAMPLE:**
+"NEWEST, CONTRAPPOSTO, 2.5D REALISTIC, DETAILED FACE & EYES, PERSPECTIVE, SOLO FOCUS, ULTRA DETAILED EYES, EYE HIGHLIGHTS, masterpiece, BEST QUALITY, 1girl, solo, silver hair, emerald eyes, elegant pose, ornate royal dress, castle background, dramatic lighting, BREAK, fantasy art"
+
+**NON-HUMAN CHARACTER EXAMPLE:**
+"NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES, ultra detailed, detailed fur, 1other, anthro, solo, majestic white wolf, (blue glowing eyes:1.2), standing pose, thick winter fur, snowy mountain landscape, moonlight, from low angle, BREAK, fantasy creature art"
+
+**MECHANICAL/ARTIFICIAL EXAMPLE:**
+"NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES, ultra detailed, mechanical details, metallic textures, mecha, robot, no humans, (giant robot:1.3), sleek design, glowing blue energy, urban battlefield, dramatic lighting, cinematic angle, BREAK, sci-fi art"
+
+**LANDSCAPE/SCENE EXAMPLE:**
+"NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES, ultra detailed, atmospheric, detailed background, scenery, landscape, no humans, (ancient temple:1.2), overgrown with vines, mysterious fog, golden hour lighting, wide establishing shot, BREAK, fantasy landscape"
+
+**ABSTRACT/CONCEPTUAL EXAMPLE:**
+"NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES, abstract, conceptual art, artistic interpretation, (swirling energy:1.3), purple and gold colors, ethereal atmosphere, surreal composition, dreamlike quality, BREAK, abstract expressionism"
+
+==============================
+📋 GENERATION REQUIREMENTS:
+
+1. **START with technical quality tags** (NEWEST, masterpiece, etc.)
+2. **Include character count** (1girl, 1boy, solo)
+3. **Be EXTREMELY specific** about every visual element
+4. **Use weight parentheses** for important features: (feature:1.2)
+5. **Add BREAK** for style separation if prompt gets long
+6. **End with additional aesthetic tags** if space permits
+7. **NO length limits** - make it as detailed as the reference example
+8. **Use UPPERCASE** for important technical terms
+
+==============================
+✍️ GENERATE ADVANCED PROMPT:
+
+**ANALYSIS & GENERATION PROCESS:**
+1. **FIRST**: Analyze the character/story data to determine PRIMARY CONTENT TYPE (Human/Non-human/Mechanical/Landscape/Abstract)
+2. **SECOND**: Choose the appropriate structure and tags based on content type
+3. **THIRD**: Generate EXTREMELY DETAILED prompt following the selected structure
+
+**CRITICAL REMINDERS:**
+- Use content-appropriate count tags (1girl/1boy vs 1other vs no humans)
+- Include type-specific detail focuses (face/eyes vs fur/scales vs mechanical details)
+- Adapt camera angles and poses to suit the content type
+- Use weight parentheses (feature:1.2) for emphasis
+
+Create one EXTREMELY DETAILED, professional-grade AI image generation prompt:
+    `);
+
+    const response = await model.invoke([
+      await prompt.format({
+        mainObjective: mainObjective,
+        characterData: JSON.stringify(characterData, null, 2),
+      }),
+    ]);
+
+    // Clean and optimize the response for advanced AI generation
+    let aiPrompt = response.content as string;
+    
+    // Remove quotes and clean formatting while preserving structure
+    aiPrompt = aiPrompt.replace(/^["']|["']$/g, '');
+    aiPrompt = aiPrompt.replace(/\n+/g, ' ');
+    aiPrompt = aiPrompt.replace(/\s+/g, ' ').trim();
+    
+    console.log(`📏 Prompt length: ${aiPrompt.length} characters`);
+    return aiPrompt;
+  }
+
+  /**
    * Generate precise image description based on character and worldbook data
    */
   private async generateImageDescription(mainObjective: string, characterData: any, llmConfig: any): Promise<string> {
@@ -1000,7 +1220,7 @@ export class AgentService {
       const words = cleanDescription.split(' ');
       cleanDescription = words.slice(0, 30).join(' ');
     }
-    
+    console.log(`🔍 Generated image description: "${cleanDescription}"`);
     return cleanDescription;
   }
 

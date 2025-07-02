@@ -97,12 +97,8 @@ export class CharacterGeneratorCLI {
     
     const story = storyAnswer.story;
 
-    // Use saved configuration
-    const llmConfig = await this.getLLMConfigFromSaved(options);
-
     await this.startGeneration({
       story,
-      llmConfig,
       outputDir: options.output || './output',
     });
   }
@@ -112,13 +108,11 @@ export class CharacterGeneratorCLI {
    */
   private async startGeneration(params: {
     story: string;
-    llmConfig: any;
     outputDir: string;
   }): Promise<void> {
     console.log(chalk.bold.blue('\nGENERATION CONFIGURATION'));
     console.log(chalk.gray('─'.repeat(50)));
     console.log(chalk.white(`Story: ${params.story}`));
-    console.log(chalk.white(`AI Model: ${params.llmConfig.llm_type} - ${params.llmConfig.model_name}`));
     console.log(chalk.white(`Output: ${params.outputDir}`));
     console.log(chalk.gray('─'.repeat(50)));
     console.log('');
@@ -187,7 +181,6 @@ export class CharacterGeneratorCLI {
       // Start the generation with user input callback
       const result = await this.agentService.startGeneration(
         params.story,
-        params.llmConfig,
         userInputCallback // Pass the callback
       );
 
