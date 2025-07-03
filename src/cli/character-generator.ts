@@ -335,7 +335,6 @@ export class CharacterGeneratorCLI {
         console.log(chalk.bold.blue('\nGENERATION STATISTICS'));
         console.log(chalk.gray('─'.repeat(30)));
         console.log(chalk.white(`Messages: ${summary.messageCount}`));
-        console.log(chalk.white(`Completion: ${progress.completionPercentage}%`));
       }
     } catch (error) {
       console.log(chalk.red(`Failed to show stats: ${error}`));
@@ -356,17 +355,61 @@ export class CharacterGeneratorCLI {
       const characterName = result.character_data.name || 'character';
       const safeFileName = characterName.replace(/[^a-zA-Z0-9\-_]/g, '_').toLowerCase();
       
-      // Build character book entries from worldbook data
-      const characterBookEntries = (result.worldbook_data || []).map((entry: any, index: number) => ({
-        comment: entry.comment,
-        content: entry.content,
-        disable: entry.disable,
-        position: entry.position,
-        constant: entry.constant,
-        key: entry.key,
-        insert_order: entry.insert_order || index + 1,
-        depth: 4 // Default depth
-      }));
+      // Build character book entries from separated worldbook data
+      const characterBookEntries: any[] = [];
+
+      if (result.status_data && result.status_data.content && result.status_data.content.trim() !== '') {
+        characterBookEntries.push({
+          comment: "STATUS",
+          content: result.status_data.content,
+          key: result.status_data.key || ["status"],
+          insert_order: result.status_data.insert_order || 1,
+          position: result.status_data.position || 0,
+          constant: result.status_data.constant || true,
+          disable: result.status_data.disable || false,
+          depth: 4
+        });
+      }
+      if (result.user_setting_data && result.user_setting_data.content && result.user_setting_data.content.trim() !== '') {
+        characterBookEntries.push({
+          comment: "USER_SETTING",
+          content: result.user_setting_data.content,
+          key: result.user_setting_data.key || ["user", "player", "character"],
+          insert_order: result.user_setting_data.insert_order || 2,
+          position: result.user_setting_data.position || 0,
+          constant: result.user_setting_data.constant || true,
+          disable: result.user_setting_data.disable || false,
+          depth: 4
+        });
+      }
+      if (result.world_view_data && result.world_view_data.content && result.world_view_data.content.trim() !== '') {
+        characterBookEntries.push({
+          comment: "WORLD_VIEW",
+          content: result.world_view_data.content,
+          key: result.world_view_data.key || ["world", "universe"],
+          insert_order: result.world_view_data.insert_order || 3,
+          position: result.world_view_data.position || 0,
+          constant: result.world_view_data.constant || true,
+          disable: result.world_view_data.disable || false,
+          depth: 4
+        });
+      }
+      if (result.supplement_data && Array.isArray(result.supplement_data)) {
+        result.supplement_data.forEach((entry: any) => {
+          if (entry.content && entry.content.trim() !== '') {
+            characterBookEntries.push({
+              comment: entry.comment || 'SUPPLEMENTARY',
+              content: entry.content,
+              disable: entry.disable || false,
+              position: entry.position || 2,
+              constant: entry.constant || false,
+              key: entry.key || [],
+              insert_order: entry.insert_order || 10,
+              depth: entry.depth || 4
+            });
+          }
+        });
+      }
 
       // Create standard format
       const standardFormat = {
@@ -414,11 +457,12 @@ export class CharacterGeneratorCLI {
     }
     
     // Save worldbook
-    if (result.worldbook_data) {
-      const worldbookFile = path.join(outputDir, 'worldbook.json');
-      await fs.writeJson(worldbookFile, result.worldbook_data, { spaces: 2 });
-      console.log(chalk.white(`Worldbook: ${worldbookFile}`));
-    }
+    // The worldbook data is now merged during export if format is 'worldbook'
+    // if (result.worldbook_data) {
+    //   const worldbookFile = path.join(outputDir, 'worldbook.json');
+    //   await fs.writeJson(worldbookFile, result.worldbook_data, { spaces: 2 });
+    //   console.log(chalk.white(`Worldbook: ${worldbookFile}`));
+    // }
     
     // Save knowledge base (new feature)
     if (result.knowledge_base && result.knowledge_base.length > 0) {
@@ -692,8 +736,8 @@ export class CharacterGeneratorCLI {
       ID: conv.id.slice(0, 8),
       Title: conv.title,
       Status: conv.status,
-              'Has Character': conv.generation_output.character_data ? 'Yes' : 'No',
-        'Has Worldbook': (conv.generation_output.worldbook_data && conv.generation_output.worldbook_data.length > 0) ? 'Yes' : 'No',
+      'Has Character': conv.generation_output.character_data ? 'Yes' : 'No',
+      'Has Worldbook': (conv.generation_output.status_data || conv.generation_output.user_setting_data || conv.generation_output.world_view_data || (conv.generation_output.supplement_data && conv.generation_output.supplement_data.length > 0)) ? 'Yes' : 'No',
       'Knowledge': conv.research_state.knowledge_base.length,
     })));
 
@@ -737,8 +781,14 @@ export class CharacterGeneratorCLI {
       // Updated to use new data structure
       if (options.format === 'card' && conversation.generation_output.character_data) {
         await fs.writeJson(outputFile, conversation.generation_output.character_data, { spaces: 2 });
-      } else if (options.format === 'worldbook' && conversation.generation_output.worldbook_data) {
-        await fs.writeJson(outputFile, conversation.generation_output.worldbook_data, { spaces: 2 });
+      } else if (options.format === 'worldbook' && conversation.generation_output) {
+        const combinedWorldbook = {
+          status_data: conversation.generation_output.status_data || null,
+          user_setting_data: conversation.generation_output.user_setting_data || null,
+          world_view_data: conversation.generation_output.world_view_data || null,
+          supplement_data: conversation.generation_output.supplement_data || [],
+        };
+        await fs.writeJson(outputFile, combinedWorldbook, { spaces: 2 });
       } else {
         // Export both character progress and task state
         const exportData = {
@@ -1117,6 +1167,8 @@ export class CharacterGeneratorCLI {
     for (const conv of conversations) {
       const isStatusComplete = conv.status === 'completed';
       const isCharacterComplete = this.isCharacterComplete(conv.generation_output.character_data);
+      // Check if any of the new worldbook components exist and have content
+      const hasAnyWorldbookData = !!conv.generation_output.status_data || !!conv.generation_output.user_setting_data || !!conv.generation_output.world_view_data || (!!conv.generation_output.supplement_data && conv.generation_output.supplement_data.length > 0);
       const hasAvatarUrl = !!conv.generation_output.character_data?.avatar;
       
       if (!isStatusComplete || !isCharacterComplete) {
@@ -1124,6 +1176,14 @@ export class CharacterGeneratorCLI {
         continue;
       }
 
+      // If generation is complete and character is complete, but no worldbook data, it needs worldbook creation
+      // Or if worldbook data exists but is not fully complete, it also needs attention
+      if (isCharacterComplete && !hasAnyWorldbookData) {
+        incomplete.push(conv); // Treat as incomplete if character is done but worldbook hasn't started
+        continue;
+      }
+
+      // If character and worldbook are started, check for avatar presence for categorization
       if (!hasAvatarUrl) {
         needsAvatar.push(conv);
         continue;
@@ -1168,7 +1228,7 @@ export class CharacterGeneratorCLI {
    */
   private getCompletionInfo(conversation: any): string {
     const hasCharacter = !!conversation.generation_output.character_data;
-    const hasWorldbook = !!(conversation.generation_output.worldbook_data && conversation.generation_output.worldbook_data.length > 0);
+    const hasWorldbook = !!conversation.generation_output.status_data && !!conversation.generation_output.user_setting_data && !!conversation.generation_output.world_view_data && (conversation.generation_output.supplement_data && conversation.generation_output.supplement_data.length > 0);
     const avatar = conversation.generation_output.character_data?.avatar;
     
     const indicators = [];
@@ -1192,8 +1252,19 @@ export class CharacterGeneratorCLI {
       }
     }
     
-    if (result.worldbook_data) {
-      console.log(chalk.white(`Worldbook: ${result.worldbook_data.length} entries`));
+    // Display Worldbook data summaries
+    const worldbookComponents: string[] = [];
+    if (result.status_data) worldbookComponents.push('STATUS');
+    if (result.user_setting_data) worldbookComponents.push('USER_SETTING');
+    if (result.world_view_data) worldbookComponents.push('WORLD_VIEW');
+    if (result.supplement_data && Array.isArray(result.supplement_data) && result.supplement_data.length > 0) {
+      worldbookComponents.push(`SUPPLEMENT (${result.supplement_data.length} entries)`);
+    }
+
+    if (worldbookComponents.length > 0) {
+      console.log(chalk.white(`Worldbook: ${worldbookComponents.join(', ')}`));
+    } else {
+      console.log(chalk.white(`Worldbook: Not started`));
     }
     
     if (result.knowledge_base) {

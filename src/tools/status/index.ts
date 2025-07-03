@@ -1,24 +1,25 @@
 import { 
   ToolType, 
   ExecutionContext, 
-  ExecutionResult 
+  ExecutionResult,
+  StatusEntry
 } from "../../models/agent-model";
 import { BaseSimpleTool, ToolParameter } from "../base-tool";
 
 /**
  * Status Tool - Creates the mandatory STATUS worldbook entry
- * STATUS entry provides comprehensive real-time information about the current world state
+ * STATUS entry provides comprehensive real-time game interface with professional formatting and visual organization
  */
 export class StatusTool extends BaseSimpleTool {
   readonly toolType = ToolType.STATUS;
   readonly name = "STATUS";
-  readonly description = "Create the mandatory STATUS worldbook entry that provides comprehensive real-time information including temporal context, spatial context, environmental data, character statistics, physical information, interactive elements, visual structure with symbols and organized data presentation, and dynamic elements that change based on story progression. This is one of the 3 required essential entries.";
+  readonly description = "Create the mandatory STATUS worldbook entry that provides comprehensive real-time game interface with professional visual formatting. Must include structured sections with decorative headers, temporal context (current time/date/location), environmental data (indoor/outdoor temperature, weather), character interaction panels (basic info, physical data, special attributes), dynamic statistics (numerical values with progress bars), and interactive elements (available actions, special events). Use professional formatting with symbols, dividers, organized data presentation, and visual structure that creates an immersive game-like interface. This is one of the 3 required essential entries.";
   
   readonly parameters: ToolParameter[] = [
     {
       name: "content",
       type: "string",
-      description: "Comprehensive STATUS entry content (500-1500 words) wrapped in <status></status> XML tags with Markdown formatting inside. Must include: temporal context, spatial context, environmental data, character statistics, physical information, interactive elements, visual structure with symbols, and dynamic elements. Use detailed descriptions with specific examples and organized data presentation.",
+      description: "Comprehensive STATUS entry content (500-1500 words) wrapped in <status></status> XML tags with professional visual formatting inside. Must include: decorative title headers with symbols/dividers, temporal context (current time/date/day/location), environmental data (temperatures, conditions), character interaction panels with structured data (basic info: name/age/affiliation/occupation/level/status effects, physical data: height/weight/measurements/experience, special attributes: traits/personality/preferences), dynamic statistics with numerical values and progress indicators, interactive elements (available actions list, special events/triggers), and professional visual organization using symbols, formatting, and clear data presentation that creates an immersive real-time game interface.",
       required: true
     },
     {
@@ -46,8 +47,14 @@ export class StatusTool extends BaseSimpleTool {
       return this.createFailureResult("STATUS entry content must be wrapped in <status></status> XML tags.");
     }
 
+    // Validate content length for quality requirements
+    const contentLength = content.length;
+    if (contentLength < 300) {
+      return this.createFailureResult("STATUS entry content too short. Minimum 500 words required for comprehensive real-time interface.");
+    }
+
     // Build the STATUS worldbook entry with fixed configuration
-    const entry = {
+    const statusEntry: StatusEntry = {
       id: `wb_status_${Date.now()}`,
       uid: (1000 + Math.floor(Math.random() * 1000)).toString(),
       key: ["status", "current", "state", "condition", "situation"], // Fixed keywords for STATUS
@@ -63,10 +70,10 @@ export class StatusTool extends BaseSimpleTool {
       useProbability: true
     };
 
-    console.log(`✅ Created STATUS entry with ${content.length} characters`);
+    console.log(`✅ Created STATUS entry with ${content.length} characters, featuring professional game interface formatting`);
 
     return this.createSuccessResult({
-      worldbook_data: [entry],
+      status_data: statusEntry,
     });
   }
 } 

@@ -293,7 +293,10 @@ export class ResearchSessionOperations {
       status: session.status,
       messageCount: session.messages.length,
       hasCharacter: !!session.generation_output.character_data,
-      hasWorldbook: !!session.generation_output.worldbook_data && session.generation_output.worldbook_data.length > 0,
+      hasWorldbook: !!(session.generation_output.status_data || 
+                       session.generation_output.user_setting_data || 
+                       session.generation_output.world_view_data || 
+                       (session.generation_output.supplement_data && session.generation_output.supplement_data.length > 0)),
       completionPercentage: Math.round(averageCompletion),
       knowledgeBaseSize: session.research_state.knowledge_base.length,
     };
@@ -349,21 +352,40 @@ export class ResearchSessionOperations {
   }
 
   /**
-   * Append new worldbook entries to existing worldbook data efficiently
+   * Append new worldbook entries to existing specialized worldbook data efficiently
    */
   static async appendWorldbookData(
     sessionId: string,
-    newEntries: any[]
+    worldbookData: {
+      status_data?: any;
+      user_setting_data?: any;
+      world_view_data?: any;
+      supplement_data?: any[];
+    }
   ): Promise<void> {
     const session = await this.getSessionById(sessionId);
     if (!session) {
       throw new Error(`Session not found: ${sessionId}`);
     }
 
-    const currentWorldbookData = session.generation_output.worldbook_data || [];
-    const updatedWorldbookData = [...currentWorldbookData, ...newEntries];
+    // Update specialized worldbook data fields
+    if (worldbookData.status_data) {
+      session.generation_output.status_data = worldbookData.status_data;
+    }
     
-    session.generation_output.worldbook_data = updatedWorldbookData;
+    if (worldbookData.user_setting_data) {
+      session.generation_output.user_setting_data = worldbookData.user_setting_data;
+    }
+    
+    if (worldbookData.world_view_data) {
+      session.generation_output.world_view_data = worldbookData.world_view_data;
+    }
+    
+    if (worldbookData.supplement_data && worldbookData.supplement_data.length > 0) {
+      const currentSupplements = session.generation_output.supplement_data || [];
+      session.generation_output.supplement_data = [...currentSupplements, ...worldbookData.supplement_data];
+    }
+    
     await this.saveSession(session);
   }
 

@@ -120,8 +120,13 @@ export class AgentService {
       
       // Check completion using new character_progress structure
       const hasCharacterData = !!session.generation_output.character_data;
-      const hasWorldbookData = !!session.generation_output.worldbook_data && session.generation_output.worldbook_data.length > 0;
-      const hasResult = hasCharacterData && hasWorldbookData;
+      // Check if all mandatory worldbook components exist and supplement_data has content (at least 5 valid entries)
+      const hasAllWorldbookComponents = !!session.generation_output.status_data && 
+                                      !!session.generation_output.user_setting_data && 
+                                      !!session.generation_output.world_view_data && 
+                                      (session.generation_output.supplement_data && session.generation_output.supplement_data.filter(e => e.content && e.content.trim() !== '').length >= 5);
+      
+      const hasResult = hasCharacterData && hasAllWorldbookComponents;
       
       return {
         session: session,
@@ -131,10 +136,13 @@ export class AgentService {
           totalIterations: session.execution_info.current_iteration,
           knowledgeBaseSize: session.research_state.knowledge_base.length,
         },
-        hasResult,
+        hasResult: hasResult || false,
         result: hasResult ? {
           character_data: session.generation_output.character_data,
-          worldbook_data: session.generation_output.worldbook_data,
+          status_data: session.generation_output.status_data,
+          user_setting_data: session.generation_output.user_setting_data,
+          world_view_data: session.generation_output.world_view_data,
+          supplement_data: session.generation_output.supplement_data,
           knowledge_base: session.research_state.knowledge_base,
           completion_status: session
         } : undefined,
@@ -270,41 +278,55 @@ export class AgentService {
    */
   async getGenerationOutput(sessionId: string): Promise<{
     hasCharacter: boolean;
-    hasWorldbook: boolean;
-    completionPercentage: number;
     characterData?: any;
-    worldbookData?: any[];
+    hasStatusData: boolean;
+    hasUserSettingData: boolean;
+    hasWorldViewData: boolean;
+    supplementDataCount: number;
+    statusData?: any;
+    userSettingData?: any;
+    worldViewData?: any;
+    supplementData?: any[];
   }> {
     try {
       const session = await ResearchSessionOperations.getSessionById(sessionId);
       if (!session) {
         return {
           hasCharacter: false,
-          hasWorldbook: false,
-          completionPercentage: 0,
+          hasStatusData: false,
+          hasUserSettingData: false,
+          hasWorldViewData: false,
+          supplementDataCount: 0,
         };
       }
       
       const hasCharacter = !!session.generation_output.character_data;
-      const hasWorldbook = !!session.generation_output.worldbook_data && session.generation_output.worldbook_data.length > 0;
-      
-      // Calculate completion percentage from completion status
-      const completionPercentage = 0;
-      
+      const hasStatus = !!session.generation_output.status_data;
+      const hasUserSetting = !!session.generation_output.user_setting_data;
+      const hasWorldView = !!session.generation_output.world_view_data;
+      const validSupplementCount = session.generation_output.supplement_data?.filter(e => e.content && e.content.trim() !== '').length || 0;
+
       return {
         hasCharacter,
-        hasWorldbook,
-        completionPercentage: Math.round(completionPercentage),
         characterData: session.generation_output.character_data,
-        worldbookData: session.generation_output.worldbook_data,
+        hasStatusData: hasStatus,
+        hasUserSettingData: hasUserSetting,
+        hasWorldViewData: hasWorldView,
+        supplementDataCount: validSupplementCount,
+        statusData: session.generation_output.status_data,
+        userSettingData: session.generation_output.user_setting_data,
+        worldViewData: session.generation_output.world_view_data,
+        supplementData: session.generation_output.supplement_data,
       };
       
     } catch (error) {
       console.error("Failed to get character progress:", error);
       return {
         hasCharacter: false,
-        hasWorldbook: false,
-        completionPercentage: 0,
+        hasStatusData: false,
+        hasUserSettingData: false,
+        hasWorldViewData: false,
+        supplementDataCount: 0,
       };
     }
   }
@@ -384,8 +406,10 @@ export class AgentService {
         // Count completed generations
         if (session.status === SessionStatus.COMPLETED && 
             session.generation_output.character_data && 
-            session.generation_output.worldbook_data && 
-            session.generation_output.worldbook_data.length > 0) {
+            session.generation_output.status_data &&
+            session.generation_output.user_setting_data &&
+            session.generation_output.world_view_data &&
+            (session.generation_output.supplement_data && session.generation_output.supplement_data.length >= 5)) {
           completedGenerations++;
         }
         
@@ -821,23 +845,65 @@ export class AgentService {
       }
 
       const characterData = session.generation_output.character_data;
-      const worldbookData = session.generation_output.worldbook_data || [];
+      // Build character book entries from separated worldbook data
+      const characterBookEntries: any[] = [];
+
+      if (session.generation_output.status_data && session.generation_output.status_data.content && session.generation_output.status_data.content.trim() !== '') {
+        characterBookEntries.push({
+          comment: "STATUS",
+          content: session.generation_output.status_data.content,
+          key: session.generation_output.status_data.key || ["status"],
+          insert_order: session.generation_output.status_data.insert_order || 1,
+          position: session.generation_output.status_data.position || 0,
+          constant: session.generation_output.status_data.constant || true,
+          disable: session.generation_output.status_data.disable || false,
+          depth: 4
+        });
+      }
+      if (session.generation_output.user_setting_data && session.generation_output.user_setting_data.content && session.generation_output.user_setting_data.content.trim() !== '') {
+        characterBookEntries.push({
+          comment: "USER_SETTING",
+          content: session.generation_output.user_setting_data.content,
+          key: session.generation_output.user_setting_data.key || ["user", "player", "character"],
+          insert_order: session.generation_output.user_setting_data.insert_order || 2,
+          position: session.generation_output.user_setting_data.position || 0,
+          constant: session.generation_output.user_setting_data.constant || true,
+          disable: session.generation_output.user_setting_data.disable || false,
+          depth: 4
+        });
+      }
+      if (session.generation_output.world_view_data && session.generation_output.world_view_data.content && session.generation_output.world_view_data.content.trim() !== '') {
+        characterBookEntries.push({
+          comment: "WORLD_VIEW",
+          content: session.generation_output.world_view_data.content,
+          key: session.generation_output.world_view_data.key || ["world", "universe"],
+          insert_order: session.generation_output.world_view_data.insert_order || 3,
+          position: session.generation_output.world_view_data.position || 0,
+          constant: session.generation_output.world_view_data.constant || true,
+          disable: session.generation_output.world_view_data.disable || false,
+          depth: 4
+        });
+      }
+      if (session.generation_output.supplement_data && Array.isArray(session.generation_output.supplement_data)) {
+        session.generation_output.supplement_data.forEach((entry: any) => {
+          if (entry.content && entry.content.trim() !== '') {
+            characterBookEntries.push({
+              comment: entry.comment || 'SUPPLEMENTARY',
+              content: entry.content,
+              disable: entry.disable || false,
+              position: entry.position || 2,
+              constant: entry.constant || false,
+              key: entry.key || [],
+              insert_order: entry.insert_order || 10,
+              depth: entry.depth || 4
+            });
+          }
+        });
+      }
 
       if (!characterData) {
         throw new Error('No character data found');
       }
-
-      // Build character book entries from worldbook data
-      const characterBookEntries = worldbookData.map((entry, index) => ({
-        comment: entry.comment,
-        content: entry.content,
-        disable: entry.disable,
-        position: entry.position,
-        constant: entry.constant,
-        key: entry.key,
-        insert_order: entry.insert_order || index + 1,
-        depth: 4 // Default depth
-      }));
 
       // Create standard format
       const standardFormat = {
@@ -1546,7 +1612,10 @@ Prioritize official content (posters, covers) and quality domains. Respond with 
             action: 'already_complete',
             result: {
               character_data: session.generation_output.character_data,
-              worldbook_data: session.generation_output.worldbook_data,
+              status_data: session.generation_output.status_data,
+              user_setting_data: session.generation_output.user_setting_data,
+              world_view_data: session.generation_output.world_view_data,
+              supplement_data: session.generation_output.supplement_data,
               hasAvatar: !!session.generation_output.character_data?.avatar
             }
           };

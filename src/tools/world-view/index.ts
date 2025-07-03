@@ -1,24 +1,25 @@
 import { 
   ToolType, 
   ExecutionContext, 
-  ExecutionResult 
+  ExecutionResult,
+  WorldViewEntry
 } from "../../models/agent-model";
 import { BaseSimpleTool, ToolParameter } from "../base-tool";
 
 /**
  * World View Tool - Creates the mandatory WORLD_VIEW worldbook entry
- * WORLD_VIEW entry provides comprehensive world structure with hierarchical framework for all supplementary entries
+ * WORLD_VIEW entry provides comprehensive foundational world structure with deep hierarchical organization
  */
 export class WorldViewTool extends BaseSimpleTool {
   readonly toolType = ToolType.WORLD_VIEW;
   readonly name = "WORLD_VIEW";
-  readonly description = "Create the mandatory WORLD_VIEW worldbook entry that provides comprehensive world structure with hierarchical framework. This serves as the foundation for all supplementary entries and must include: world overview, major systems, geographical structure, power/magic systems, societal structure, technological level, cultural aspects, historical context, and hierarchical organization that guides what supplementary entries to create. This is one of the 3 required essential entries.";
+  readonly description = "Create the mandatory WORLD_VIEW worldbook entry that provides comprehensive foundational world structure with deep hierarchical organization. Must include systematic world-building covering: world origins/history with detailed timelines, core systems (technology/magic/power) with specific mechanisms, geographical structure with environmental details, societal frameworks with power dynamics, cultural aspects with behavioral patterns, faction systems with relationships and conflicts, resource distribution with scarcity factors, communication networks, survival challenges, and clear expansion opportunities that can be developed into supplementary entries. Use deep hierarchical Markdown structure (## → ### → #### → -) with 800-2000 words total. This is one of the 3 required essential entries.";
   
   readonly parameters: ToolParameter[] = [
     {
       name: "content",
       type: "string",
-      description: "Comprehensive WORLD_VIEW entry content (500-1500 words) wrapped in <world_view></world_view> XML tags with Markdown formatting inside. Must include: world overview, major systems (magic/tech/power), geographical structure, societal framework, cultural aspects, historical context, and most importantly - hierarchical organization that clearly defines what types of supplementary entries should be created (locations, characters, systems, factions, etc.). Use detailed descriptions with specific examples and clear categorization.",
+      description: "Comprehensive WORLD_VIEW entry content (800-2000 words) wrapped in <world_view></world_view> XML tags with deep hierarchical Markdown formatting inside. Must include systematic world structure using 4-level hierarchy (## → ### → #### → -) covering: world origins/history with detailed timelines, core systems (technology/magic/power) with specific mechanisms, geographical structure with environmental details, societal frameworks with power dynamics, cultural aspects with behavioral patterns, faction systems with relationships and conflicts, resource distribution with scarcity factors, communication networks, survival challenges. Focus on creating clear expansion opportunities that can be developed into supplementary entries. Include specific nouns, names, locations, organizations, technologies, and systems that can serve as keywords for supplementary worldbook entries.",
       required: true
     },
     {
@@ -47,26 +48,26 @@ export class WorldViewTool extends BaseSimpleTool {
     }
 
     // Build the WORLD_VIEW worldbook entry with fixed configuration
-    const entry = {
+    const worldViewEntry: WorldViewEntry = {
       id: `wb_world_view_${Date.now()}`,
       uid: (1200 + Math.floor(Math.random() * 1000)).toString(),
       key: ["world", "universe", "realm", "setting", "reality"], // Fixed keywords for WORLD_VIEW
-      keysecondary: ["lore", "background", "structure", "system"],
+      keysecondary: ["background", "lore", "foundation"],
       comment: "WORLD_VIEW",
       content: content,
       constant: true, // Always active
       selective: true,
-      insert_order: 3, // Third priority after STATUS and USER_SETTING
+      insert_order: 3, // Third priority
       position: 0, // At story beginning
       disable: false,
       probability: 100,
       useProbability: true
     };
 
-    console.log(`✅ Created WORLD_VIEW entry with ${content.length} characters`);
+    console.log(`✅ Created WORLD_VIEW entry with ${content.length} characters, providing comprehensive world foundation`);
 
     return this.createSuccessResult({
-      worldbook_data: [entry],
+      world_view_data: worldViewEntry,
     });
   }
 } 

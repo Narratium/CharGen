@@ -37,11 +37,11 @@ A character card is a structured data format that defines AI roleplay scenarios.
 - **personality**: For character cards: behavioral traits and psychological profile; For story cards: atmosphere, tone, and key NPC personalities [REQUIRED]
 - **scenario**: Context and circumstances - character's situation or world's current state/events [REQUIRED]
 - **first_mes**: Extensive, immersive opening sequence (typically 200-800 words) that establishes the entire narrative foundation including detailed scene setting, atmospheric description, character introduction with visual details, initial dialogue or internal monologue, environmental context, and emotional tone [REQUIRED]
-- **mes_example**: Comprehensive dialogue examples (typically 3-6 exchanges) demonstrating complex communication patterns, personality nuances, behavioral consistency, speech patterns, emotional range, decision-making style, and relationship dynamics across different conversation scenarios [REQUIRED]
+- **mes_example**: A comprehensive and immersive example of a message (mes) from the character. This should go beyond simple dialogue examples and act as a dynamic narrative segment, typically spanning multiple paragraphs (300-800 words). It MUST integrate:\n  1. Detailed scene introduction and atmospheric setting.\n  2. Deep internal monologue or character reflection, revealing thoughts, memories, and motivations.\n  3. Dynamic display of real-time game information or context, explicitly using the <status> XML tag to encapsulate structured data (e.g., character status, environmental stats, interactive options). This part should be clearly separated from the narrative text.\n  4. Engaging dialogue demonstrating character's communication style, emotional range, and interactions with other entities.\n  5. Character's actions, reactions, and decision-making processes within the scene.\n  This example serves as a living demonstration of the character's in-world behavior and the interactive elements of the scenario. [REQUIRED]
 - **creator_notes**: Usage guidelines, compatibility information, and creator insights [REQUIRED]
 - **tags**: Categorization tags including card type (character-card/story-card), genre, and descriptors [REQUIRED]
 - **avatar**: Visual representation - character portrait or scenario artwork [OPTIONAL]
-- **alternate_greetings**: Array of comprehensive alternative opening scenarios (typically 3-5 entries, each 150-600 words) providing entirely different narrative starting points, worldlines, or timeline variations with unique atmospheric settings, character contexts, and story hooks for meaningful player choice [REQUIRED]
+- **alternate_greetings**: Array of comprehensive alternative opening scenarios (typically 3-5 entries, each 150-600 words) providing entirely different narrative starting points, worldlines, or timeline variations with unique atmospheric settings, character contexts, and story hooks for meaningful player choice [OPTIONAL]
 
 **CRITICAL**: All eight core fields (name through tags) must be completed in the specified insert_order for a professional-quality character card. The CHARACTER tool should be used systematically to build these fields incrementally across multiple tool calls until all required fields are present.
 
@@ -78,45 +78,58 @@ Worldbooks are dynamic knowledge systems that provide contextual information to 
 - **constant**: Controls whether entry remains permanently active regardless of keywords
 - **selective**: Enables advanced keyword logic with AND/OR/NOT operations for precise activation
 
-#### Essential Entry Excellence Standards:
+#### Four-Category Worldbook System:
+The worldbook system uses four specialized tools to create comprehensive, organized content:
 
-**STATUS Entry Standard:**
-Comprehensive real-time information including temporal context, spatial context, environmental data, character statistics, physical information, interactive elements, visual structure with symbols and organized data presentation, and dynamic elements that change based on story progression.
+**1. STATUS Tool - Real-time Game Interface:**
+- **Purpose**: Creates the mandatory STATUS entry providing comprehensive real-time game interface with professional visual formatting
+- **Fixed Keywords**: ["status", "current", "state", "condition", "situation"]
+- **XML Wrapper**: <status></status>
+- **Content Requirements**: Professional game interface formatting with decorative title headers using symbols/dividers, temporal context (current time/date/day/location), environmental data (indoor/outdoor temperatures, weather conditions), character interaction panels with structured data (basic info: name/age/affiliation/occupation/level/status effects, physical data: height/weight/measurements/experience, special attributes: traits/personality/preferences), dynamic statistics with numerical values and progress indicators, interactive elements (available actions list, special events/triggers), and immersive visual organization that creates a real-time game interface experience
+- **Configuration**: constant=true, insert_order=1, position=0 (highest priority, always active)
 
-**WORLD_VIEW Entry Standard:**
-A high-quality WORLD_VIEW entry should provide systematic world-building with:
-- **Version Control**: Clear versioning for world consistency (e.g., "version: 3.0")
-- **Historical Timeline**: Detailed chronological development with specific dates, times, phases
-- **System Categories**: Comprehensive coverage of technology, politics, economics, society, environment
-- **Hierarchical Structure**: Main categories → subcategories → specific items → detailed descriptions
-- **Interconnected Elements**: All systems relate to and support each other logically
-- **Expansion Interfaces**: Clear connection points where supplementary entries can add specific details
-- **Causal Relationships**: Events, systems, and factions have logical cause-and-effect connections
-- **Living World Design**: Dynamic elements that can evolve and change over time
+**2. USER_SETTING Tool - Player Character Profile:**
+- **Purpose**: Creates the mandatory USER_SETTING entry for comprehensive player character profiling with detailed hierarchical structure
+- **Fixed Keywords**: ["user", "player", "character", "protagonist", "you"]
+- **XML Wrapper**: <user_setting></user_setting>
+- **Content Requirements**: Comprehensive character profiling (800-1500 words) with deep hierarchical organization using 4-level Markdown structure (## → ### → #### → -). Must include: ## 基础信息 (personal overview including name/age/gender/physical stats/occupation, appearance features covering facial/body/clothing), ## 性格特征 (surface personality, inner personality, psychological states with contrasts), ## 生活状态 (living environment details, social relationships dynamics), ## 重生经历/特殊经历 (past experiences, timeline events, known/unknown information patterns), ## 特殊能力 (systems/powers with detailed limitations and usage methods), ## 当前状态 (controlled resources, psychological dynamics, action tendencies). Focus on character depth, contradictions, growth arcs, systematic ability descriptions, and world integration with specific examples and detailed descriptions
+- **Configuration**: constant=true, insert_order=2, position=0 (second priority, always active)
 
-**USER_SETTING Entry Standard:**
-A high-quality USER_SETTING entry should provide comprehensive player character profiling with:
-- **Multi-dimensional Information**: Basic info, appearance, personality layers (surface vs inner), life circumstances, special experiences, abilities, current state
-- **Hierarchical Organization**: Main categories → subcategories → specific items → detailed descriptions
-- **Timeline Integration**: Character development across different time periods, before/after major events, transformation arcs
-- **Psychological Depth**: Surface personality vs inner nature, mental state evolution, motivations, desires, plans
-- **Systematic Ability Description**: Detailed mechanisms, usage methods, limitations, and conditions for special powers or skills
-- **Dynamic Character Arc**: Past circumstances → current situation → future intentions, showing character growth and change
-- **World Integration**: How the character fits into and interacts with the established world systems and events
-- **Behavioral Framework**: Action tendencies, decision-making patterns, relationship dynamics, strategic approaches
+**3. WORLD_VIEW Tool - Foundation Framework:**
+- **Purpose**: Creates the mandatory WORLD_VIEW entry as the structural foundation for all supplementary content
+- **Fixed Keywords**: ["world", "universe", "realm", "setting", "reality"]
+- **XML Wrapper**: <world_view></world_view>
+- **Content Requirements**: Comprehensive world structure with deep hierarchical organization using multi-level categorization (## Major Systems → ### Subsystems → #### Specific Elements → - Detailed Points). Must include: world origins/history with detailed timelines, core systems (technology/magic/power) with specific mechanisms, geographical structure with environmental details, societal frameworks with power dynamics, cultural aspects with behavioral patterns, faction systems with relationships and conflicts, resource distribution with scarcity factors, communication networks, survival challenges, and hierarchical organization that clearly defines expansion opportunities for supplementary entries
+- **Configuration**: constant=true, insert_order=3, position=0 (third priority, always active)
 
-These create immersive, comprehensive world foundations that provide rich context for AI responses and clear expansion opportunities for supplementary worldbook entries.
+**4. SUPPLEMENT Tool - Contextual Expansions:**
+- **Purpose**: Creates supplementary entries that provide detailed descriptions of specific nouns/entities mentioned in the WORLD_VIEW entry
+- **Custom Keywords**: Extract specific nouns from WORLD_VIEW content as trigger keywords (e.g., faction names like "血十字帮", locations like "美好公寓", systems like "雪上列车", technologies like "冰雪分子能量转化技术")
+- **Content Format**: Detailed Markdown formatting (no XML wrapper for supplementary entries)
+- **Content Requirements**: 500-1000 words of comprehensive detail expanding specific WORLD_VIEW nouns. Each entry focuses on one particular entity mentioned in WORLD_VIEW, providing deep background, operational details, relationships, and context that wasn't fully covered in the foundational entry. Minimum 5 entries required covering diverse WORLD_VIEW elements.
+- **Configuration**: constant=false, insert_order=10+, position=2 (contextual activation)
 
-#### Worldbook Best Practices:
-1. **Dual Classification System**: Create two types of entries - (1) Essential fixed entries with specific comment values "STATUS" (comprehensive real-time interface), "USER_SETTING" (multi-dimensional player character profiling with hierarchical organization, timeline integration, psychological depth, systematic ability descriptions, dynamic character arc, and behavioral framework), "WORLD_VIEW" (systematic world-building with version control, historical timeline, hierarchical system categories, interconnected elements, and expansion interfaces for supplementary entries) all wrapped in proper XML tags containing 500-1500 words each of substantial, detailed content, and (2) Supplementary keyword-triggered entries that expand specific world elements (NPCs, locations, items, factions, technologies, events) referenced in the WORLD_VIEW foundation, each containing 500-1000 words of comprehensive detail
-2. **Strict Creation insert_order**: Follow this exact sequence - FIRST: STATUS entry (current game state), SECOND: USER_SETTING entry (player character info), THIRD: WORLD_VIEW entry (world background), ONLY THEN: supplementary keyword entries. Each essential entry must be completed with proper XML wrapping before proceeding to the next type
-3. **Quality over Quantity**: Focus on creating meaningful, well-crafted entries rather than numerous shallow ones
-4. **Systematic Expansion**: Supplementary entries must include at least 5 diverse, detailed entries that expand WORLD_VIEW elements without repetition. Required types: Tools/Weapons (magical items, legendary equipment), Characters/NPCs (important figures, faction leaders), Buildings/Architecture (significant structures, magical buildings), Geography/Locations (specific places, dangerous areas), Astronomy/Celestial (moons, stars, prophecies), War History/Events (past conflicts, major battles), Organizations/Factions (detailed group profiles), Magic/Technology Systems (specific mechanisms, abilities), Cultural Elements (traditions, customs), Historical Figures (past heroes, legends)
-5. **Strategic Keywords**: Use discoverable, relevant keywords that naturally appear in conversations for supplementary entries
-6. **Content Depth**: Provide extensive, detailed information (500-1500 words per entry) that genuinely enhances storytelling and immersion. Each entry should be comprehensive and rich in detail, NOT brief summaries. Include multiple paragraphs with specific examples, extensive descriptions, and immersive world-building content
-7. **Strategic Positioning**: Use position 0-1 for foundational world info, position 2 for supplemental context, position 3-4 for immediate response relevance
-8. **Scenario Integration**: Ensure entries complement and enhance the character card's scenario and tone
-9. **Token Management**: Balance information richness with efficient token usage for optimal performance
+#### Worldbook Creation Workflow:
+1. **Mandatory Sequence**: Always create in this exact order:
+   - FIRST: STATUS entry (current game state interface)
+   - SECOND: USER_SETTING entry (player character profile)
+   - THIRD: WORLD_VIEW entry (foundational world structure)
+   - FOURTH: SUPPLEMENT entries (minimum 5 expansions)
+
+2. **Quality Standards**: 
+   - **STATUS**: 500-1500 words with professional game interface formatting including decorative headers, visual symbols, structured data panels, numerical statistics, progress indicators, and immersive real-time display elements
+   - **USER_SETTING**: 800-1500 words with deep hierarchical structure (## → ### → #### → -) covering comprehensive character profiling including 基础信息, 性格特征, 生活状态, 重生经历/特殊经历, 特殊能力, 当前状态 with character depth, contradictions, and systematic descriptions
+   - **WORLD_VIEW**: 800-2000 words with deep hierarchical structure using multi-level Markdown formatting (## → ### → #### → -) covering comprehensive world systems, detailed timelines, specific mechanisms, power dynamics, and clear expansion frameworks
+   - **SUPPLEMENT**: 500-1000 words each focusing on specific nouns/entities mentioned in WORLD_VIEW, using those nouns as keywords and providing detailed background not covered in the foundational entry
+
+3. **Content Excellence**: 
+   - **Hierarchical Organization**: Use consistent multi-level structure with clear categorization
+   - **Temporal Detail**: Include specific dates, phases, timelines, and chronological development
+   - **System Depth**: Provide detailed mechanisms, processes, and operational frameworks
+   - **Relational Complexity**: Show interconnections, power dynamics, conflicts, and dependencies
+   - **Environmental Immersion**: Rich atmospheric details, survival challenges, and contextual elements
+
+4. **Strategic Integration**: Ensure all entries complement and enhance the character card's scenario and tone while maintaining internal consistency across the worldbook system
 
 ### INTEGRATION PRINCIPLES
 Character cards and worldbooks work together to create rich, immersive roleplay experiences across different scenario types:
@@ -227,36 +240,43 @@ Analyze the user's objective and create a smart, targeted task queue with sub-pr
 USER OBJECTIVE: {main_objective}
 
 ANALYSIS GUIDELINES:
-1. FIRST, determine if the story relates to existing real-world content (anime, novels, games, movies, etc.)
-   - Look for specific mentions of existing works, characters, or franchises
-   - Check if user wants something "based on" or "inspired by" existing content
-   - If YES: Include research tasks to gather accurate information
+1. **INITIAL CLARITY ASSESSMENT:**
+   - Determine if the story relates to existing real-world content (anime, novels, games, movies, etc.). If YES, plan research.
+   - Assess if the story direction is clear enough (genre, style, focus). If NO, plan user clarification.
+   - **MANDATORY**: At least one task or sub-problem must involve user clarification (using the ASK_USER tool).
+   - **MANDATORY**: At least one task or sub-problem must involve external research/search (using the SEARCH tool).
 
-2. SECOND, assess if the story direction is clear enough
-   - Is the genre/style clear? (romance, adventure, fantasy, sci-fi, horror, campus life, etc.)
-   - Is the story type clear? (single character focus vs world/scenario focus)
-   - Is the setting/theme sufficiently defined?
-   - If NO: Include user clarification tasks
+2. **TASK DECOMPOSITION - CRITICAL REQUIREMENTS:**
+   - You MUST create between 5 and 8 high-level tasks. Prefer 6-7 tasks for comprehensive coverage.
+   - These tasks must logically progress towards the main objective (character card and worldbook generation).
+   - Each task should be broken down into 2-5 specific, action-oriented sub-problems that are tool-agnostic.
 
-3. THIRD, create 3-5 specific tasks with actionable sub-problems:
-   - Research tasks (if needed for existing content)
-   - User clarification tasks (if story is too vague)
-   - Character card generation task (REQUIRED)
-   - Worldbook generation task (REQUIRED, after character)
-   - Quality review task (REQUIRED)
+3. **CONTENT COVERAGE - MULTI-ANGLE ANALYSIS:**
+   - **Character Analysis**: Ensure tasks cover multiple aspects of character creation, such as personality depth, background story development, dialogue examples, and unique abilities.
+   - **Worldbook Analysis**: Ensure tasks cover multiple aspects of worldbook creation, such as foundational world structure (STATUS, USER_SETTING, WORLD_VIEW), detailed lore (SUPPLEMENT), and interconnected systems.
 
 TASK CREATION RULES:
-- Character card generation MUST come before worldbook generation
-- Each task should be broken down into 2-5 specific sub-problems
-- Sub-problems should be tool-agnostic and action-oriented
-- Tasks should build upon each other logically
-- Sub-problems are completed sequentially within each task
+- Character card generation MUST be a primary focus and come before comprehensive worldbook generation.
+- Tasks should build upon each other logically.
+- Sub-problems are completed sequentially within each task.
+- Ensure a mix of clarification, research, character-building, and world-building sub-problems across the tasks.
 
 EXAMPLE DECISION LOGIC:
-- Story mentions "Harry Potter": ADD research task with sub-problems for different aspects
-- Story says "anime girl": ADD clarification task with specific questions  
-- Story is vague "fantasy adventure": ADD clarification task for genre/setting details
-- Story is clear "cyberpunk detective in Neo-Tokyo": PROCEED with character creation
+- User wants "fantasy adventure based on Lord of the Rings":
+  - Task 1: Research Lord of the Rings lore and main characters (sub: search for details, clarify specific focus).
+  - Task 2: Develop main character (sub: define personality, create first_mes, mes_example).
+  - Task 3: Establish core worldbook elements (sub: create WORLD_VIEW, generate initial SUPPLEMENT entries).
+  - Task 4: Explore specific world regions (sub: search for regional info, add SUPPLEMENT entries).
+  - Task 5: Define key magical systems (sub: ask_user for magic details, add SUPPLEMENT entries).
+  - Task 6: Develop secondary characters (sub: define allies, define antagonists).
+
+- User wants "a unique sci-fi detective story":
+  - Task 1: Clarify specific sci-fi sub-genre and protagonist's core motivation (sub: ask_user for sub-genre, ask_user for motivation).
+  - Task 2: Design the protagonist character (sub: develop character background, create scenario, define special abilities).
+  - Task 3: Build the futuristic city and its key organizations (sub: create WORLD_VIEW, generate SUPPLEMENT entries for city districts and factions).
+  - Task 4: Detail the crime and investigation mechanics (sub: ask_user about crime types, add SUPPLEMENT entries on forensics).
+  - Task 5: Introduce key NPCs and their roles (sub: define allies, define suspects).
+  - Task 6: Establish the socio-political landscape (sub: search for dystopian elements, add SUPPLEMENT entries on government and corporations).
 
 Respond using the following XML format:
 <task_decomposition>
@@ -278,7 +298,7 @@ Respond using the following XML format:
         // 2-5 sub-problems per task
       </sub_problems>
     </task>
-    // 3-5 tasks total
+    // BETWEEN 5 AND 8 tasks total
   </initial_tasks>
   <task_strategy>explanation of the overall approach</task_strategy>
 </task_decomposition>`);
@@ -582,12 +602,6 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
     {knowledge_base}
   </existing_knowledge>
 
-  <full_conversation_history>
-    // Complete conversation history excluding the recent 5 turns
-    // This provides comprehensive context for understanding the entire generation process
-    {full_conversation}
-  </full_conversation_history>
-
   <recent_conversation>
     // The most recent 5 conversation turns with emphasis on quality_evaluation and tool_failure messages
     // This provides immediate feedback and execution context for decision making
@@ -625,27 +639,29 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       - If character is < 50% complete: Focus on CHARACTER tool to build core fields
       - If character is 50-80% complete: Use CHARACTER tool to fill remaining required fields
       - If character is > 80% complete: Continue with CHARACTER tool until 100% complete
-      - If character is 100% complete: Only then consider WORLDBOOK tool
+      - If character is 100% complete: Only then consider worldbook tools (STATUS, USER_SETTING, WORLD_VIEW, SUPPLEMENT)
       
       🚫 CRITICAL CONSTRAINT: Worldbook creation is BLOCKED until ALL character fields are complete
       - Required character fields: name, description, personality, scenario, first_mes, mes_example, alternate_greetings, creator_notes, tags
-      - Do NOT use WORLDBOOK tool if any character field is missing
+        - Do NOT use any worldbook tools if any character field is missing
       - Character completion is mandatory before worldbook creation
       
       WORLDBOOK PROGRESS ANALYSIS (only if character is 100% complete):
-      - If worldbook has 0 entries: Start with STATUS entry creation
-      - If worldbook has 1-2 entries: Continue with missing essential entries (STATUS → USER_SETTING → WORLD_VIEW)
-      - If worldbook has 3 entries: Check if all essentials exist, then IMMEDIATELY start supplementary entries
-      - If worldbook has 4-7 entries: PRIORITY - Continue adding supplementary entries (need minimum 5 supplementary)
-      - If worldbook has exactly 8 entries: VERIFY completion - ensure 3 essential + 5 supplementary with proper content
-      - If worldbook has 8+ entries: Focus on quality refinement and completion
-      - MANDATORY MINIMUM: 8 total entries (3 essential + 5 supplementary) - DO NOT mark complete with fewer
-      - Supplementary entries must be: Tools/Weapons, Characters/NPCs, Buildings, Geography, Astronomy, War History, Organizations, Systems, Culture, Historical Figures
+      - Check STATUS, USER_SETTING, WORLD_VIEW completion in order:
+        - If STATUS entry is missing or empty: Use STATUS tool to create the initial STATUS entry.
+        - If STATUS entry is complete but USER_SETTING entry is missing or empty: Use USER_SETTING tool to create the player character profile.
+        - If STATUS and USER_SETTING entries are complete but WORLD_VIEW entry is missing or empty: Use WORLD_VIEW tool to create the foundational world structure.
+      - If STATUS, USER_SETTING, and WORLD_VIEW entries are all complete and have content:
+        - Check SUPPLEMENT entries:
+          - If less than 5 supplementary entries exist or any existing supplementary entry is empty: Use SUPPLEMENT tool to add more entries or fill content until at least 5 non-empty entries are present.
+          - If 5 or more non-empty supplementary entries exist: Worldbook is structurally complete.
+      - MANDATORY MINIMUM: All 3 mandatory entries (STATUS, USER_SETTING, WORLD_VIEW) must be present AND have content. At least 5 SUPPLEMENT entries must be present AND have content.
+      - Focus on quality refinement and completion if all structural requirements are met.
       
       COMPLETION STATUS ANALYSIS:
       - If "Generation not started": Start with CHARACTER tool
       - If "Character incomplete": Use CHARACTER tool to complete missing fields
-      - If "Character complete - Ready for worldbook": Use WORLDBOOK tool
+              - If "Character complete - Ready for worldbook": Use worldbook tools (STATUS → USER_SETTING → WORLD_VIEW → SUPPLEMENT)
       - If "Ready for final evaluation": Use COMPLETE tool to finish session
       - If "Task queue empty but output incomplete": Use REFLECT tool to create new tasks
     </generation_based_tool_selection>
@@ -655,7 +671,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       1. ASK_USER: Use for fundamental uncertainties about story direction, genre, tone, or core creative decisions - prioritize early in generation
       2. SEARCH: Use when referencing existing anime/novels/games or needing factual information
       3. CHARACTER: Primary tool - complete character development BEFORE worldbook
-      4. WORLDBOOK: Secondary tool - use ONLY AFTER character is 100% complete
+      4. STATUS/USER_SETTING/WORLD_VIEW/SUPPLEMENT: Worldbook tools - use ONLY AFTER character is 100% complete
       5. REFLECT: Use ONLY when task queue is empty but generation output is incomplete
       6. COMPLETE: Use when generation is finished and session should end
 
@@ -694,47 +710,34 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - Character completion is verified by presence of all eight required fields
       </character_when>
 
-      <worldbook_when>
+      <status_when>
         - Use ONLY AFTER character creation is 100% complete
-        - ALL character fields must be present: name, description, personality, scenario, first_mes, mes_example, alternate_greetings, creator_notes, tags
-        - Do NOT use if any character field is missing or empty
-        
-        WORLDBOOK STRUCTURE REQUIREMENTS:
-        - ESSENTIAL ENTRIES (exactly 1 each): STATUS, USER_SETTING, WORLD_VIEW
-        - SUPPLEMENTARY ENTRIES (minimum 5): Based on WORLD_VIEW hierarchical structure elements
-        - Total minimum: 8 worldbook entries (3 essential + 5+ supplementary)
-        
-        CREATION insert_order:
-        1. FIRST: STATUS entry (1 required) - comprehensive real-time game state interface
-        2. SECOND: USER_SETTING entry (1 required) - detailed player character profiling  
-        3. THIRD: WORLD_VIEW entry (1 required) - systematic world-building foundation
-        4. THEN: Supplementary entries (5+ required) - expand specific WORLD_VIEW elements
-        
-        CONTENT FORMAT REQUIREMENTS:
-        - Each entry: 500-1500 words of substantial, detailed content (NOT brief summaries)
-        - ESSENTIAL entries: XML wrapper with Markdown inside (e.g., <status>## Current Status\n\n**Location:** Academy\n\n...</status>)
-        - SUPPLEMENTARY entries: Rich Markdown formatting with headers, lists, comprehensive descriptions
-        - Content must be comprehensive world-building material with extensive detail and depth
-        - Include multiple paragraphs, specific examples, and rich contextual information
-        - Avoid short, superficial descriptions - prioritize thorough, immersive content
-        
-        SUPPLEMENTARY ENTRY GUIDELINES:
-        - MANDATORY: At least 5 supplementary entries after the 3 essential ones
-        - Create specific, detailed entries that expand WORLD_VIEW elements WITHOUT repeating WORLD_VIEW content
-        - Entry types should include: Tools/Weapons, Characters/NPCs, Buildings/Architecture, Geography/Locations, Astronomy/Celestial, War History/Events, Organizations/Factions, Magic/Technology Systems, Cultural Elements, Historical Figures
-        - Each entry must have specific keywords in 'key' field and comprehensive detailed descriptions in 'content'
-        - Examples:
-          * Tool: key=["crimson blade", "legendary sword"], content=detailed weapon description, backstory, powers
-          * Character: key=["elder mage", "academy principal"], content=personality, appearance, background, abilities
-          * Building: key=["crystal tower", "academy spire"], content=architecture, history, magical properties
-          * Geography: key=["shadow valley", "forbidden forest"], content=terrain, dangers, resources, legends
-          * Astronomy: key=["twin moons", "eclipse prophecy"], content=celestial mechanics, cultural significance
-          * War History: key=["dragon war", "ancient conflict"], content=causes, battles, consequences, heroes
-        - Use descriptive comment types: "Weapon: Crimson Blade", "Character: Elder Mage", "Location: Crystal Tower", etc.
-        - CRITICAL: Do NOT duplicate or repeat content already covered in WORLD_VIEW - create NEW specific details
-        
-        PRIORITY: Essential entries first, then supplementary entries based on WORLD_VIEW structure
-      </worldbook_when>
+        - Creates mandatory STATUS entry (real-time game interface)
+        - Professional formatting with decorative headers, time/location/temperature, character interaction panels
+        - First worldbook tool to use (highest priority)
+      </status_when>
+
+      <user_setting_when>
+        - Use ONLY AFTER character creation is 100% complete  
+        - Creates mandatory USER_SETTING entry (player character profiling)
+        - Hierarchical structure: 基础信息, 性格特征, 生活状态, 重生经历/特殊经历, 特殊能力, 当前状态
+        - Second worldbook tool to use (after STATUS)
+      </user_setting_when>
+
+      <world_view_when>
+        - Use ONLY AFTER character creation is 100% complete
+        - Creates mandatory WORLD_VIEW entry (foundational world structure) 
+        - Deep hierarchical organization with expansion opportunities for supplementary entries
+        - Third worldbook tool to use (after STATUS and USER_SETTING)
+      </world_view_when>
+
+      <supplement_when>
+        - Use ONLY AFTER character creation is 100% complete AND WORLD_VIEW entry exists
+        - Creates supplementary entries expanding specific WORLD_VIEW nouns/entities
+        - Minimum 5 supplementary entries required for complete worldbook
+        - Extract keywords from WORLD_VIEW content (faction names, locations, systems, etc.)
+        - Each entry: 500-1000 words of detailed background not covered in WORLD_VIEW
+      </supplement_when>
 
       <reflect_when>
         - Task queue is empty but main objective is not yet complete
@@ -755,45 +758,36 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
   </tool_usage_guidelines>
 
   <instructions>
-    CRITICAL DECISION PROCESS - Follow this insert_order of importance:
-    
-    1. MAIN OBJECTIVE (Highest Priority): Analyze <main_objective> to understand the user's core request and desired outcome
-       - If genre/tone unclear from user description, consider ASK_USER tool first
-    
-    2. RECENT CONVERSATION (Critical Priority): Examine <recent_conversation> for immediate feedback and status
-       - Pay SPECIAL ATTENTION to recent messages with type "quality_evaluation" or "tool_failure"
-       - quality_evaluation messages indicate generation quality issues that need addressing
-       - tool_failure messages indicate previous tool execution problems that must be resolved
-       - Recent conversation shows the last 5 conversation turns for immediate context
-       - Adjust strategy based on recent feedback and execution results
-    
-    3. GENERATION OUTPUT (Critical Priority): Examine <current_generation_output> to assess current character and worldbook progress
-       - Check character completion status and identify missing fields
-       - Check worldbook progress ONLY if character is 100% complete
-       - 🚫 CRITICAL: Character must be fully complete before any worldbook creation
-    
-    4. CURRENT TASK: Review <current_task_queue> to understand what specific work is planned
-    
-    5. CURRENT SUB-PROBLEM: Examine <current_sub_problem> to identify the immediate next step
-    
-    6. TOOL GUIDELINES: Apply the tool selection guidelines based on generation output analysis
-       - Use CHARACTER tool until all 8 required fields are complete
-       - Only use WORLDBOOK tool after character is 100% complete
-       - Use REFLECT ONLY when task queue is empty but generation output is incomplete
-       - Follow the priority insert_order and selection criteria
-    
-    7. KNOWLEDGE & CONTEXT: Review <existing_knowledge> for background information and research results
-    
-    8. FULL CONVERSATION HISTORY: Review <full_conversation_history> for comprehensive understanding
-       - Provides complete context of the entire generation process (excluding recent 5 turns)
-       - Helps understand user preferences, previous decisions, and evolution of requirements
-       - Use for understanding long-term patterns and maintaining consistency
-    
-    9. TASK OPTIMIZATION: Evaluate if current task needs adjustment based on recent progress and feedback
-    
-    10. DECISION: Select the single most critical tool action to complete the current sub-problem
-    
-    🚫 MANDATORY CONSTRAINT: Character completion (all 8 fields) is REQUIRED before worldbook creation can begin.
+    You need to think step-by-step through the decision-making process using a structured chain of thought. Follow this thinking framework:
+
+    STEP 1: SITUATION ANALYSIS
+    - What is the user's main objective and current progress?
+    - What happened in the **most recent** conversation? Any failures or quality issues to address? (Prioritize recent messages)
+    - What is my current task and sub-problem focus? (Refer to the *latest* task queue status and current sub-problem)
+
+    STEP 2: PROGRESS EVALUATION  
+    - Character creation status: Which of the 8 required fields (name, description, personality, scenario, first_mes, mes_example, alternate_greetings, creator_notes, tags) are complete/missing? (Based on *current* generation output)
+    - Worldbook status: How many entries exist and what type? (Can only work on worldbook AFTER character is 100% complete, based on *current* generation output)
+    - Overall completion level: Where am I in the generation process? (Based on *current* generation output)
+
+    STEP 3: PROBLEM IDENTIFICATION
+    - What is the most critical gap or issue that needs immediate attention?
+    - Are there any quality problems or execution failures I need to resolve?
+    - What is blocking progress toward the main objective?
+
+    STEP 4: SOLUTION REASONING
+    - Which tool would best address the identified problem?
+    - Why is this tool the most appropriate choice right now?
+    - How will this action move me closer to the main objective?
+
+    STEP 5: ACTION PLANNING
+    - What specific parameters do I need to provide for the chosen tool?
+    - How should I optimize the current task based on recent progress?
+    - What sub-problems should I focus on next?
+
+    Remember: The tool selection emerges naturally from your analysis - you're not choosing a tool, you're solving the most critical problem using the most appropriate method available.
+
+    🚫 CRITICAL CONSTRAINT: Character must have ALL 8 required fields complete before any worldbook creation can begin.
   </instructions>
 
   <output_specification>
@@ -801,9 +795,22 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
 
     <response>
       <think>
-        Provide detailed reasoning in TWO parts:
-        1. TASK ADJUSTMENT ANALYSIS: Analyze current task and sub-problems based on recent tool results and progress.
-        2. TOOL SELECTION: Explain your choice of the next tool action and how it helps achieve the main objective.
+        Follow the 5-step thinking framework systematically:
+        
+        STEP 1 - SITUATION ANALYSIS:
+        [Analyze user's main objective, recent conversation context, and current task focus]
+        
+        STEP 2 - PROGRESS EVALUATION:
+        [Evaluate character creation status (8 fields) and worldbook status, assess overall completion]
+        
+        STEP 3 - PROBLEM IDENTIFICATION:
+        [Identify the most critical gap, quality issues, or blocking factors]
+        
+        STEP 4 - SOLUTION REASONING:
+        [Determine which tool best addresses the identified problem and why]
+        
+        STEP 5 - ACTION PLANNING:
+        [Plan specific parameters and task optimization strategy]
       </think>
       <task_adjustment>
         MANDATORY: Always analyze and optimize current task based on recent tool execution results:
@@ -827,7 +834,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         <task_description>Create character based on researched background</task_description>
         <new_subproblems>Design character appearance and personality</new_subproblems>
       </task_adjustment>
-      <action>The name of the ONE tool you are choosing to use (e.g., SEARCH, CHARACTER, WORLDBOOK).</action>
+      <action>The name of the ONE tool you are choosing to use (e.g., SEARCH, CHARACTER, STATUS, USER_SETTING, WORLD_VIEW, SUPPLEMENT).</action>
       <parameters>
         <!--
         - Provide all parameters for the chosen action inside this block.
@@ -837,7 +844,8 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - Example for SEARCH: <query><![CDATA["dragon mythology", "magic system"]]]></query>
         - Example for ASK_USER: <question>What genre style do you prefer?</question><options><![CDATA[["Fantasy adventure", "Modern romance", "Sci-fi thriller"]]]></options>
         - Example for CHARACTER: <name>Elara</name><description>A cunning sorceress...</description><alternate_greetings><![CDATA[["Summer festival version", "Library encounter", "Rainy day meeting", "Battle aftermath scenario"]]]></alternate_greetings><tags><![CDATA[["fantasy", "sorceress"]]]></tags>
-        - Example for WORLDBOOK: <key><![CDATA[["magic", "spell"]]]></key><content>Details...</content><comment>Magic system</comment><constant>false</constant><position>0</position><insert_order>100</insert_order>
+        - Example for STATUS: <content><![CDATA[<status>## Current Status\n\n**Location:** Academy</status>]]></content><comment>STATUS</comment>
+        - Example for SUPPLEMENT: <key><![CDATA[["magic", "spell"]]]></key><content>Details...</content><comment>Magic system</comment><constant>false</constant><position>0</position><insert_order>100</insert_order>
         - Example for REFLECT: <new_tasks>
             <task>
               <description>Research character background</description>
@@ -861,7 +869,6 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
           completed_tasks: this.buildCompletedTasksSummary(context),
           knowledge_base: this.buildKnowledgeBaseSummary(context.research_state.knowledge_base),
           recent_conversation: this.buildRecentConversationSummary(context.message_history),
-          full_conversation: this.buildFullConversationSummary(context.message_history),
           task_queue_status: this.buildTaskQueueSummary(context),
           current_sub_problem: context.research_state.task_queue?.[0]?.sub_problems?.[0]?.description || "No current sub-problem",
           character_progress: this.buildCharacterProgressSummary(context.generation_output),
@@ -1489,20 +1496,43 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
       }
     }
 
-    // Check if worldbook_data exists and has at least 5 entries
-    if (!generationOutput.worldbook_data || !Array.isArray(generationOutput.worldbook_data)) {
+    // Validate individual worldbook components
+    if (!generationOutput.status_data) {
       return { 
         isValid: false, 
-        reason: `worldbook_data is missing or not an array. Next step: Call REFLECT tool to analyze and create new tasks to start worldbook creation (character is complete, ready for worldbook)` 
+        reason: `status_data is missing. Next step: Call REFLECT tool to analyze and create new tasks to generate status data.` 
       };
     }
 
-    if (generationOutput.worldbook_data.length < 8) {
+    if (!generationOutput.user_setting_data) {
       return { 
         isValid: false, 
-        reason: `worldbook_data has only ${generationOutput.worldbook_data.length} entries, minimum 8 required (3 essential + 5 supplementary). Next step: Call REFLECT tool to analyze and create new tasks to complete worldbook creation (need ${8 - generationOutput.worldbook_data.length} more entries)` 
+        reason: `user_setting_data is missing. Next step: Call REFLECT tool to analyze and create new tasks to generate user setting data.` 
       };
     }
+
+    if (!generationOutput.world_view_data) {
+      return { 
+        isValid: false, 
+        reason: `world_view_data is missing. Next step: Call REFLECT tool to analyze and create new tasks to generate world view data.` 
+      };
+    }
+
+    if (!generationOutput.supplement_data || !Array.isArray(generationOutput.supplement_data)) {
+      return { 
+        isValid: false, 
+        reason: `supplement_data is missing or not an array. Next step: Call REFLECT tool to analyze and create new tasks to generate supplementary data.` 
+      };
+    }
+
+    const validSupplementEntries = generationOutput.supplement_data.filter(e => e.content && e.content.trim() !== '');
+    if (validSupplementEntries.length < 5) {
+      return { 
+        isValid: false, 
+        reason: `supplement_data has only ${validSupplementEntries.length} valid entries, minimum 5 required. Next step: Call REFLECT tool to analyze and create new tasks to generate more supplementary entries (need ${5 - validSupplementEntries.length} more valid entries).` 
+      };
+    }
+
     return { isValid: true };
   }
 
@@ -1630,7 +1660,10 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
 
     return {
       character_data: session.generation_output.character_data,
-      worldbook_data: session.generation_output.worldbook_data,
+      status_data: session.generation_output.status_data,
+      user_setting_data: session.generation_output.user_setting_data,
+      world_view_data: session.generation_output.world_view_data,
+      supplement_data: session.generation_output.supplement_data,
       knowledge_base: session.research_state.knowledge_base,
     };
   }
@@ -1661,34 +1694,50 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
   }
 
   private buildWorldbookProgressSummary(generationOutput: GenerationOutput): string {
-    if (!generationOutput?.worldbook_data || generationOutput.worldbook_data.length === 0) {
-      return "WORLDBOOK STATUS: Not started - No worldbook entries available";
+    if (!generationOutput) {
+      return "WORLDBOOK STATUS: No generation output available";
     }
 
-    const entries = generationOutput.worldbook_data;
-    
-    // Check for essential fixed entries
-    const hasStatus = entries.some(entry => entry.comment === "STATUS");
-    const hasUserSetting = entries.some(entry => entry.comment === "USER_SETTING");
-    const hasWorldView = entries.some(entry => entry.comment === "WORLD_VIEW");
-    
-    const completedEntries = entries.filter(entry => entry.content && entry.content.trim() !== '').length;
-    const totalEntries = entries.length;
-    const progressPercentage = Math.round((completedEntries / totalEntries) * 100);
-    
-    let summary = `WORLDBOOK STATUS: ${progressPercentage}% Complete (${completedEntries}/${totalEntries} entries)`;
-    
-    // Essential entries check
-    const essentialStatus = `STATUS:${hasStatus ? "✅" : "❌"} USER_SETTING:${hasUserSetting ? "✅" : "❌"} WORLD_VIEW:${hasWorldView ? "✅" : "❌"}`;
-    summary += `\n🔥 Essential: ${essentialStatus}`;
-    
-    // Show some example entry types
-    const entryTypes = entries.slice(0, 3).map(entry => entry.comment || 'Unnamed entry').join(', ');
-    if (entryTypes) {
-      summary += `\n📚 Sample entries: ${entryTypes}`;
+    // STATUS
+    let statusSummary = "";
+    if (generationOutput.status_data && generationOutput.status_data.content && generationOutput.status_data.content.trim() !== "") {
+      const wordCount = generationOutput.status_data.content.trim().split(/\s+/).length;
+      statusSummary = `STATUS: ✅ Present (${wordCount} words)`;
+    } else {
+      statusSummary = "STATUS: ❌ Missing";
     }
-    
-    return summary;
+
+    // USER_SETTING
+    let userSettingSummary = "";
+    if (generationOutput.user_setting_data && generationOutput.user_setting_data.content && generationOutput.user_setting_data.content.trim() !== "") {
+      const wordCount = generationOutput.user_setting_data.content.trim().split(/\s+/).length;
+      userSettingSummary = `USER_SETTING: ✅ Present (${wordCount} words)`;
+    } else {
+      userSettingSummary = "USER_SETTING: ❌ Missing";
+    }
+
+    // WORLD_VIEW
+    let worldViewSummary = "";
+    if (generationOutput.world_view_data && generationOutput.world_view_data.content && generationOutput.world_view_data.content.trim() !== "") {
+      const wordCount = generationOutput.world_view_data.content.trim().split(/\s+/).length;
+      worldViewSummary = `WORLD_VIEW: ✅ Present (${wordCount} words)`;
+    } else {
+      worldViewSummary = "WORLD_VIEW: ❌ Missing";
+    }
+
+    // SUPPLEMENT
+    let supplementSummary = "";
+    if (generationOutput.supplement_data && Array.isArray(generationOutput.supplement_data) && generationOutput.supplement_data.length > 0) {
+      const validSupplements = generationOutput.supplement_data.filter(entry => entry.content && entry.content.trim() !== "");
+      const count = validSupplements.length;
+      const avgWordCount = count > 0 ? Math.round(validSupplements.map(e => e.content.trim().split(/\s+/).length).reduce((a, b) => a + b, 0) / count) : 0;
+      supplementSummary = `SUPPLEMENT: ${count} entries (avg ${avgWordCount} words)`;
+    } else {
+      supplementSummary = "SUPPLEMENT: ❌ None";
+    }
+
+    // 合并描述
+    return [statusSummary, userSettingSummary, worldViewSummary, supplementSummary].join("\n");
   }
 
   private buildCompletionStatusSummary(generationOutput: GenerationOutput): string {
@@ -1697,13 +1746,22 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
     }
 
     const hasCharacterData = !!generationOutput.character_data;
-    const hasWorldbookData = !!generationOutput.worldbook_data && generationOutput.worldbook_data.length > 0;
     
-    if (!hasCharacterData && !hasWorldbookData) {
+    // Check individual worldbook components
+    const hasStatusData = !!generationOutput.status_data;
+    const hasUserSettingData = !!generationOutput.user_setting_data;
+    const hasWorldViewData = !!generationOutput.world_view_data;
+    const supplementEntries = generationOutput.supplement_data || [];
+    const hasSupplementData = Array.isArray(supplementEntries) && supplementEntries.length > 0;
+    
+    const hasAnyWorldbookData = hasStatusData || hasUserSettingData || hasWorldViewData || hasSupplementData;
+    const hasAllMandatoryWorldbookData = hasStatusData && hasUserSettingData && hasWorldViewData;
+    
+    if (!hasCharacterData && !hasAnyWorldbookData) {
       return "OVERALL STATUS: Generation not started - Start with CHARACTER tool";
     }
     
-    if (!hasCharacterData && hasWorldbookData) {
+    if (!hasCharacterData && hasAnyWorldbookData) {
       return "OVERALL STATUS: ⚠️ INVALID STATE - Worldbook exists but no character data. Character must be completed first before worldbook creation.";
     }
     
@@ -1722,22 +1780,29 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
       return status;
     }
     
-    // Character is complete, check worldbook
-    if (hasCharacterData && !hasWorldbookData) {
-      return "OVERALL STATUS: ✅ Character complete - Ready for worldbook creation. Use WORLDBOOK tool to start world-building.";
+    // Character is complete, check worldbook status
+    if (hasCharacterData && !hasAnyWorldbookData) {
+      return "OVERALL STATUS: ✅ Character complete - Ready for worldbook creation. Start with STATUS tool.";
     }
     
-    // Both exist, check worldbook completion
-    const worldbookEntries = generationOutput.worldbook_data;
-    const worldbookComplete = worldbookEntries && worldbookEntries.length >= 8 && worldbookEntries.every(entry => entry.content && entry.content.trim() !== '');
+    // 并列检测所有 worldbook 组件
+    const missingWorldbookComponents: string[] = [];
+    if (!hasStatusData) missingWorldbookComponents.push('STATUS');
+    if (!hasUserSettingData) missingWorldbookComponents.push('USER_SETTING');
+    if (!hasWorldViewData) missingWorldbookComponents.push('WORLD_VIEW');
+    // SUPPLEMENT 至少需要 5 条且内容非空
+    const supplementComplete = supplementEntries.length >= 5 && supplementEntries.every(entry => entry.content && entry.content.trim() !== '');
+    if (!supplementComplete) missingWorldbookComponents.push('SUPPLEMENT (need 5+)');
+
+    if (missingWorldbookComponents.length > 0) {
+      let status = `OVERALL STATUS: Character complete - Worldbook in progress`;
+      status += `\n❌ MISSING WORLDBOOK COMPONENTS: ${missingWorldbookComponents.join(', ')}`;
+      status += `\n📋 NEXT ACTION: Use tool(s): ${missingWorldbookComponents.join(', ')}`;
+      return status;
+    }
     
-    if (charComplete && worldbookComplete) {
+    // All worldbook components complete
       return "OVERALL STATUS: ✅ Generation complete - Ready for final evaluation";
-    } else if (charComplete && !worldbookComplete) {
-      return "OVERALL STATUS: Character complete - Worldbook needs completion. Continue with WORLDBOOK tool.";
-    } else {
-      return "OVERALL STATUS: Both character and worldbook in progress - Focus on character completion first.";
-    }
   }
 } 
  
