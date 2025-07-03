@@ -704,16 +704,19 @@ export class AgentService {
       'Retro/Vintage Style - analog film photo, faded film, desaturated, grainy, vignette, vintage, Kodachrome'
     ];
 
+    // Create display options (only the part before the dash) for user selection
+    const displayOptions = styleOptions.map(option => option.split(' - ')[0]);
+
     // If we have a user input callback, use it for interaction
     if (userInputCallback) {
       const choice = await userInputCallback(
         'Choose the style for your AI-generated image:',
-        styleOptions
+        displayOptions
       );
       
-      // Extract the keywords from the selected option (after the dash)
-      const selectedKeywords = choice.split(' - ')[1] || choice;
-      return selectedKeywords;
+      // Find the full option that matches the selected display name
+      const selectedFullOption = styleOptions.find(option => option.startsWith(choice));
+      return selectedFullOption || choice;
     }
     
     // Fallback to inquirer if no callback
@@ -722,12 +725,12 @@ export class AgentService {
       type: 'list',
       name: 'style',
       message: 'Choose the style for your AI-generated image:',
-      choices: styleOptions
+      choices: displayOptions
     }]);
     
-    // Extract the keywords from the selected option (after the dash)
-    const selectedKeywords = style.split(' - ')[1] || style;
-    return selectedKeywords;
+    // Find the full option that matches the selected display name
+    const selectedFullOption = styleOptions.find(option => option.startsWith(style));
+    return selectedFullOption || style;
   }
 
   /**
