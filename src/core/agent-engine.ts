@@ -269,7 +269,7 @@ EXAMPLE DECISION LOGIC (Ideal Workflow):
   - Task 4: Create STATUS entry (sub: design real-time game interface, define status panels and stats)
   - Task 5: Create USER_SETTING entry (sub: build player character profile, organize hierarchical structure)
   - Task 6: Create WORLD_VIEW entry (sub: develop foundational world structure, define major systems and history)
-  - Task 7: Create at least 8 SUPPLEMENT entries (sub: extract key terms from WORLD_VIEW/STATUS/USER_SETTING, expand each with detailed lore, ensure diversity of topics)
+  - Task 7: Create at least 5 SUPPLEMENT entries (sub: extract key terms from WORLD_VIEW/STATUS/USER_SETTING, expand each with detailed lore, ensure diversity of topics)
 
 - User wants "a unique sci-fi detective story":
   - Task 1: Clarify specific sci-fi sub-genre and protagonist's core motivation (sub: ask_user for sub-genre, ask_user for motivation)
@@ -278,7 +278,7 @@ EXAMPLE DECISION LOGIC (Ideal Workflow):
   - Task 4: Create STATUS entry (sub: design interface, define stats and panels)
   - Task 5: Create USER_SETTING entry (sub: build protagonist profile, organize sections)
   - Task 6: Create WORLD_VIEW entry (sub: develop world structure, define systems and factions)
-  - Task 7: Create at least 8 SUPPLEMENT entries (sub: extract key terms from WORLD_VIEW/STATUS/USER_SETTING, expand each with detailed lore, ensure diversity)
+  - Task 7: Create at least 5 SUPPLEMENT entries (sub: extract key terms from WORLD_VIEW/STATUS/USER_SETTING, expand each with detailed lore, ensure diversity)
 
 Respond using the following XML format:
 <task_decomposition>
@@ -1254,7 +1254,7 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
     const prompt = createStandardPromptTemplate(`
 <prompt>
   <system_role>
-    You are an expert quality assurance specialist for professional character AI content generation. Your role is to conduct rigorous, detailed quality assessment of worldbook entries and character data to ensure they meet industry excellence standards. You must be extremely thorough and demanding in your evaluation.
+    You are an expert quality assurance specialist for professional character AI content generation. Your role is to conduct rigorous, detailed quality assessment of character data and worldbook components to ensure they meet industry excellence standards. You must be extremely thorough and demanding in your evaluation.
   </system_role>
 
   <evaluation_context>
@@ -1264,24 +1264,22 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
   </evaluation_context>
 
   <strict_evaluation_criteria>
-    <worldbook_structure_analysis>
+    <essential_entry_analysis>
       MANDATORY STRUCTURAL REQUIREMENTS:
       1. Essential Entry Validation:
-         - STATUS entry: Must have comment="STATUS" with XML wrapper <status>content</status>
-         - USER_SETTING entry: Must have comment="USER_SETTING" with XML wrapper <user_setting>content</user_setting>  
-         - WORLD_VIEW entry: Must have comment="WORLD_VIEW" with XML wrapper <world_view>content</world_view>
-      
+         - STATUS entry: Must exist (only one), comment="STATUS", XML wrapper <status>content</status>
+         - USER_SETTING entry: Must exist (only one), comment="USER_SETTING", XML wrapper <user_setting>content</user_setting>
+         - WORLD_VIEW entry: Must exist (only one), comment="WORLD_VIEW", XML wrapper <world_view>content</world_view>
+         - SUPPLEMENT entries: Must be an array with at least 5 entries, each with non-empty content, each expanding a specific noun/entity from WORLD_VIEW
       2. Content Length Assessment:
-         - Each essential entry: Minimum 500 words, optimal 800-1500 words
-         - Supplementary entries: Minimum 300 words, optimal 500-1000 words
-         - Calculate actual word count for each entry and compare to requirements
-      
+         - STATUS, USER_SETTING, WORLD_VIEW: Each must be at least 500 words, optimal 800-1500 words
+         - SUPPLEMENT: Each entry must be at least 300 words, optimal 500-1000 words; report count and average word count
       3. Content Quality Standards:
-         - STATUS: Must be comprehensive real-time interface with organized sections, dynamic values, clear formatting with symbols, temporal/spatial context, character statistics, interactive elements
+         - STATUS: Must be a comprehensive real-time interface with organized sections, dynamic values, clear formatting with symbols, temporal/spatial context, character statistics, interactive elements
          - USER_SETTING: Must include multi-dimensional profiling (basic info, appearance, personality layers, life circumstances, abilities with mechanisms, timeline integration, psychological depth, behavioral framework)
          - WORLD_VIEW: Must contain systematic world-building (version control, historical timeline, system categories, hierarchical structure, interconnected elements, expansion interfaces)
-         - Supplementary: Must expand specific WORLD_VIEW elements with rich detail
-    </worldbook_structure_analysis>
+         - SUPPLEMENT: Each entry must expand a specific WORLD_VIEW element with rich detail, no duplication, and high diversity
+    </essential_entry_analysis>
 
     <content_depth_analysis>
       CONTENT QUALITY METRICS:
@@ -1290,7 +1288,7 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
       3. Narrative Utility: Does each entry provide actionable information for storytelling?
       4. Professional Standards: Does content meet commercial-grade character AI expectations?
       5. XML Format Compliance: Are essential entries properly wrapped in their specific XML tags?
-      6. Keyword Strategy: Do supplementary entries have discoverable, relevant keywords?
+      6. Supplement Diversity: Are supplement entries based on different key terms/entities, and do they avoid duplication?
     </content_depth_analysis>
 
     <character_data_analysis>
@@ -1306,10 +1304,13 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
 
   <critical_assessment_process>
     STEP 1: Essential Entry Audit
-    - Verify presence of all 3 essential entries with exact comment names
+    - Verify presence of STATUS, USER_SETTING, WORLD_VIEW (each must exist, only one of each)
     - Check XML wrapper format compliance for each essential entry
     - Measure word count in each essential entry's content
-    - Assess content quality against excellence standards
+    - Assess content quality against excellence standards for each entry
+    - For SUPPLEMENT: count entries, check each for non-empty content, diversity, and connection to WORLD_VIEW nouns/entities
+    - Calculate average word count for supplement entries
+    - Assess overall supplement quality and diversity
 
     STEP 2: Content Depth Evaluation
     - Analyze detail density and comprehensiveness of each entry
@@ -1318,10 +1319,10 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
     - Assess professional quality standards
 
     STEP 3: Supplementary Entry Assessment
-    - Verify minimum quantity requirements (at least 5 supplementary entries for total of 8+ entries)
-    - Check entry diversity: Tools/Weapons, Characters/NPCs, Buildings, Geography, Astronomy, War History, Organizations, Systems, Culture, Historical Figures
+    - Verify minimum quantity requirements (at least 5 supplement entries)
+    - Check entry diversity: Tools/Weapons, Characters/NPCs, Buildings, Geography, Astronomy, War History, Organizations, Systems, Culture, Historical Figures, etc.
     - Evaluate keyword strategies and discoverability in 'key' field
-    - Check content depth and narrative value (500-1000 words per entry)
+    - Check content depth and narrative value (500-1000 words per entry preferred)
     - Assess integration with WORLD_VIEW foundation WITHOUT content duplication
     - Verify each entry provides NEW specific details not covered in WORLD_VIEW
 
@@ -1333,14 +1334,13 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
 
   <instructions>
     Conduct a RIGOROUS and DEMANDING evaluation. You must:
-    1. Actually count words in each entry content section
+    1. Actually count words in each essential entry (status, user_setting, world_view) and in each supplement entry
     2. Specifically identify any missing essential entries or XML format issues
     3. Evaluate content depth - reject superficial or brief content
     4. Assess professional quality standards strictly
     5. Provide specific, actionable improvement suggestions for REFLECT tool usage
-    
-    FAIL any worldbook that lacks comprehensive, detailed content or proper structure.
-    PASS only content that meets professional industry standards for character AI applications.
+    6. FAIL any worldbook that lacks comprehensive, detailed content or proper structure
+    7. PASS only content that meets professional industry standards for character AI applications
   </instructions>
 
   <output_specification>
@@ -1369,16 +1369,16 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
           </world_view_entry>
         </essential_entries_status>
         <supplementary_entries_assessment>
-          <count>actual number of supplementary entries</count>
-          <average_word_count>average words per supplementary entry</average_word_count>
-          <quality_summary>overall quality assessment of supplementary content</quality_summary>
+          <count>actual number of supplement entries</count>
+          <average_word_count>average words per supplement entry</average_word_count>
+          <quality_summary>overall quality assessment of supplement content</quality_summary>
         </supplementary_entries_assessment>
         <content_depth_evaluation>Comprehensive analysis of content depth, detail density, and professional quality</content_depth_evaluation>
       </detailed_analysis>
       <character_quality_score>Character data quality score from 0 to 100</character_quality_score>
       <worldbook_quality_score>Worldbook data quality score from 0 to 100</worldbook_quality_score>
       <overall_quality_score>Overall quality score from 0 to 100</overall_quality_score>
-      <meets_professional_standards>true or false - only true if content meets commercial-grade standards (overall >= 90, worldbook >= 85, all essential entries present with proper XML and 500+ words, minimum 8 total entries with 5+ diverse supplementary entries)</meets_professional_standards>
+      <meets_professional_standards>true or false - only true if content meets commercial-grade standards (overall >= 90, worldbook >= 85, all essential entries present with proper XML and 500+ words, minimum 5 supplement entries)</meets_professional_standards>
       <critical_issues>
         <issue>Specific critical issue that must be addressed</issue>
         <issue>Another critical issue requiring immediate attention</issue>
@@ -1761,11 +1761,11 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
   }
 
   private buildCompletionStatusSummary(generationOutput: GenerationOutput, message_history: Message[]): string {
-    // Check the latest message for quality_evaluation or tool_failure
+    // Atomic feedback: If the latest message is a quality_evaluation or tool_failure, return its content immediately
     if (Array.isArray(message_history) && message_history.length > 0) {
       const lastMsg = message_history[message_history.length - 1];
       if (lastMsg.type === "quality_evaluation" || lastMsg.type === "tool_failure") {
-        // If the latest message is a quality evaluation or tool failure, return its content directly
+        // Return only this feedback, do not append or combine with other status
         return lastMsg.content;
       }
     }
@@ -1812,25 +1812,28 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
     if (hasCharacterData && !hasAnyWorldbookData) {
       return "OVERALL STATUS: ✅ Character complete - Ready for worldbook creation. Start with STATUS tool.";
     }
-    
-    // 并列检测所有 worldbook 组件
-    const missingWorldbookComponents: string[] = [];
-    if (!hasStatusData) missingWorldbookComponents.push('STATUS');
-    if (!hasUserSettingData) missingWorldbookComponents.push('USER_SETTING');
-    if (!hasWorldViewData) missingWorldbookComponents.push('WORLD_VIEW');
-    // SUPPLEMENT 至少需要 5 条且内容非空
-    const supplementComplete = supplementEntries.length >= 5 && supplementEntries.every(entry => entry.content && entry.content.trim() !== '');
-    if (!supplementComplete) missingWorldbookComponents.push('SUPPLEMENT (need 5+)');
 
-    if (missingWorldbookComponents.length > 0) {
-      let status = `OVERALL STATUS: Character complete - Worldbook in progress`;
-      status += `\n❌ MISSING WORLDBOOK COMPONENTS: ${missingWorldbookComponents.join(', ')}`;
-      status += `\n📋 NEXT ACTION: Use tool(s): ${missingWorldbookComponents.join(', ')}`;
-      return status;
+    // Sequentially check each worldbook component and return immediately if missing
+    // 1. STATUS
+    if (!hasStatusData) {
+      return `OVERALL STATUS: Character complete - Worldbook in progress\n❌ MISSING WORLDBOOK COMPONENT: STATUS\n📋 NEXT ACTION: Use tool: STATUS`;
+    }
+    // 2. USER_SETTING
+    if (!hasUserSettingData) {
+      return `OVERALL STATUS: Character complete - Worldbook in progress\n❌ MISSING WORLDBOOK COMPONENT: USER_SETTING\n📋 NEXT ACTION: Use tool: USER_SETTING`;
+    }
+    // 3. WORLD_VIEW
+    if (!hasWorldViewData) {
+      return `OVERALL STATUS: Character complete - Worldbook in progress\n❌ MISSING WORLDBOOK COMPONENT: WORLD_VIEW\n📋 NEXT ACTION: Use tool: WORLD_VIEW`;
+    }
+    // 4. SUPPLEMENT (must have at least 5 entries and all non-empty)
+    const supplementComplete = supplementEntries.length >= 5 && supplementEntries.every(entry => entry.content && entry.content.trim() !== '');
+    if (!supplementComplete) {
+      return `OVERALL STATUS: Character complete - Worldbook in progress\n❌ MISSING WORLDBOOK COMPONENT: SUPPLEMENT (need 5+)\n📋 NEXT ACTION: Use tool: SUPPLEMENT`;
     }
     
     // All worldbook components complete
-      return "OVERALL STATUS: ✅ Generation complete - Ready for final evaluation";
+    return "OVERALL STATUS: ✅ Generation complete - Ready for final evaluation";
   }
 } 
  
