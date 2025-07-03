@@ -56,7 +56,7 @@ export class StatusTool extends BaseSimpleTool {
 
     // Build the STATUS worldbook entry with fixed configuration
     const statusEntry: StatusEntry = {
-      id: `wb_status_${Date.now()}`,
+      id: `status_${Date.now()}`,
       uid: uuidv4(),
       key: ["status", "current", "state", "condition", "situation"], // Fixed keywords for STATUS
       keysecondary: ["info", "update", "check"],

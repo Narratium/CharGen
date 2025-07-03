@@ -24,12 +24,6 @@ export class SupplementTool extends BaseSimpleTool {
       required: true
     },
     {
-      name: "keysecondary",
-      type: "array", 
-      description: "Optional secondary keywords for more specific or related triggers",
-      required: false
-    },
-    {
       name: "content",
       type: "string",
       description: "Detailed supplementary content (500-1000 words) using rich Markdown formatting. Focus on one specific WORLD_VIEW element and provide comprehensive background, operational details, relationships, and context not covered in the foundational WORLD_VIEW entry. Use headers, lists, and detailed descriptions to create immersive content.",
@@ -51,7 +45,6 @@ export class SupplementTool extends BaseSimpleTool {
 
   protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<ExecutionResult> {
     const key = parameters.key;
-    const keysecondary = parameters.keysecondary || [];
     const content = parameters.content;
     const comment = parameters.comment;
     const insertOrder = parameters.insert_order || 10;
@@ -73,7 +66,7 @@ export class SupplementTool extends BaseSimpleTool {
       id: `supplement_${Date.now()}`,
       uid: uuidv4(),
       key: key,
-      keysecondary: keysecondary,
+      keysecondary: [],
       comment: comment,
       content: content,
       constant: false, // Context-activated

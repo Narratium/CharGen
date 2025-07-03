@@ -50,7 +50,7 @@ export class WorldViewTool extends BaseSimpleTool {
 
     // Build the WORLD_VIEW worldbook entry with fixed configuration
     const worldViewEntry: WorldViewEntry = {
-      id: `wb_world_view_${Date.now()}`,
+      id: `world_view_${Date.now()}`,
       uid: uuidv4(),
       key: ["world", "universe", "realm", "setting", "reality"], // Fixed keywords for WORLD_VIEW
       keysecondary: ["background", "lore", "foundation"],

@@ -752,11 +752,16 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       </world_view_when>
 
       <supplement_when>
-        - Use ONLY AFTER character creation is 100% complete AND WORLD_VIEW entry exists
-        - Creates supplementary entries expanding specific WORLD_VIEW nouns/entities
-        - Minimum 5 supplementary entries required for complete worldbook
-        - Extract keywords from WORLD_VIEW content (faction names, locations, systems, etc.)
-        - Each entry: 500-1000 words of detailed background not covered in WORLD_VIEW
+        - Use ONLY AFTER character creation is 100% complete AND WORLD_VIEW entry exists.
+        - This tool generates **a single batch** of supplementary entries to enrich the WORLD_VIEW section.
+        - It is NOT a multi-category filler — it extracts **a coherent set of related entities** from the WORLD_VIEW (e.g., faction names, locations, systems, ideologies, etc.) and creates corresponding entries in one call.
+        - Each generated supplementary entry must include:
+          - key: the unique identifier or title of the entity.
+          - content: a detailed explanation (500–1000 words) expanding the background and unseen depth of the entity beyond WORLD_VIEW.
+          - comment: a brief annotation or purpose of this entry in narrative/world context.
+          - insert_order: a suggested relative insertion index (for chronological or logical placement).
+        - Minimum of 5 entries should be generated per call for worldbook completeness.
+        - Supplementary entries should **not repeat** content already described in WORLD_VIEW, but rather **expand, explain, or contextualize** mentioned terms.
       </supplement_when>
 
       <reflect_when>
@@ -924,6 +929,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
     const parameters: Record<string, any> = {};
 
     if (paramsMatch && paramsMatch[1]) {
+        console.log("🔄 paramsMatch", paramsMatch[1]);
         const paramsString = paramsMatch[1].trim();
         const paramRegex = /<(\w+)>([\s\S]*?)<\/(\1)>/g;
         let match;
@@ -934,10 +940,56 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
 
             const cdataMatch = value.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
             if (cdataMatch) {
+                let cdata = cdataMatch[1];
+                let parsed = undefined;
+                let fixed = false;
+                // Try to parse as JSON, if fail, try to auto-fix common issues
                 try {
-                    parameters[key] = JSON.parse(cdataMatch[1]);
+                    parameters[key] = JSON.parse(cdata);
                 } catch (e) {
-                    parameters[key] = cdataMatch[1];
+                    // Auto-fix: If starts with [ or { but missing closing ] or }
+                    let fixedCdata = cdata;
+                    // Fix missing closing bracket for array
+                    if (/^\s*\[/.test(fixedCdata) && !/\]\s*$/.test(fixedCdata)) {
+                        fixedCdata = fixedCdata + "]";
+                        fixed = true;
+                    }
+                    // Fix missing closing bracket for object
+                    if (/^\s*\{/.test(fixedCdata) && !/\}\s*$/.test(fixedCdata)) {
+                        fixedCdata = fixedCdata + "}";
+                        fixed = true;
+                    }
+                    // Fix unbalanced double quotes
+                    const quoteCount = (fixedCdata.match(/\"/g) || []).length;
+                    if (quoteCount % 2 !== 0) {
+                        fixedCdata = fixedCdata + '"';
+                        fixed = true;
+                    }
+                    // Try parsing again if fixed
+                    if (fixed) {
+                        try {
+                            parsed = JSON.parse(fixedCdata);
+                        } catch (e2) {
+                            // fallback below
+                        }
+                    }
+                    // If still not parsed, try to close both array and object
+                    if (parsed === undefined) {
+                        let tryCdata = cdata;
+                        if (/^\s*\[/.test(tryCdata) && !/\]\s*$/.test(tryCdata)) {
+                            tryCdata = tryCdata + "]";
+                        }
+                        if (/^\s*\{/.test(tryCdata) && !/\}\s*$/.test(tryCdata)) {
+                            tryCdata = tryCdata + "}";
+                        }
+                        try {
+                            parsed = JSON.parse(tryCdata);
+                        } catch (e3) {
+                            // fallback below
+                        }
+                    }
+                    // If still not parsed, fallback to raw string
+                    parameters[key] = parsed !== undefined ? parsed : cdata;
                 }
             } else {
                 // Simple parameter parsing - handle basic types
@@ -1829,7 +1881,26 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
     // 4. SUPPLEMENT (must have at least 5 entries and all non-empty)
     const supplementComplete = supplementEntries.length >= 5 && supplementEntries.every(entry => entry.content && entry.content.trim() !== '');
     if (!supplementComplete) {
-      return `OVERALL STATUS: Character complete - Worldbook in progress\n❌ MISSING WORLDBOOK COMPONENT: SUPPLEMENT (need 5+)\n📋 NEXT ACTION: Use tool: SUPPLEMENT`;
+      // Collect all existing supplement keys (support string and string[])
+      const existingKeys: string[] = [];
+      for (const entry of supplementEntries) {
+        const key = entry.key;
+        if (typeof key === 'string') {
+          existingKeys.push(`"${key}"`);
+        } else if (Array.isArray(key)) {
+          // If key is an array, add all non-empty strings
+          key.forEach(k => {
+            if (typeof k === 'string' && k.trim() !== '') {
+              existingKeys.push(`"${k}"`);
+            }
+          });
+        }
+      }
+      let keyInfo = '';
+      if (existingKeys.length > 0) {
+        keyInfo = `\n⚠️ Existing SUPPLEMENT keys: ${existingKeys.join(', ')}\n🚫 Do NOT use new or similar keys. Please avoid duplication or similar expressions.`;
+      }
+      return `OVERALL STATUS: Character complete - Worldbook in progress\n❌ MISSING WORLDBOOK COMPONENT: SUPPLEMENT (need 5+)\n📋 NEXT ACTION: Use tool: SUPPLEMENT${keyInfo}`;
     }
     
     // All worldbook components complete

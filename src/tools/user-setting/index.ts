@@ -50,7 +50,7 @@ export class UserSettingTool extends BaseSimpleTool {
 
     // Build the USER_SETTING worldbook entry with fixed configuration
     const userSettingEntry: UserSettingEntry = {
-      id: `wb_user_setting_${Date.now()}`,
+      id: `user_setting_${Date.now()}`,
       uid: uuidv4(),
       key: ["user", "player", "character", "protagonist", "you"], // Fixed keywords for USER_SETTING
       keysecondary: ["yourself", "personal", "background"],
