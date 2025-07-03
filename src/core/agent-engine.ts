@@ -38,10 +38,10 @@ A character card is a structured data format that defines AI roleplay scenarios.
 - **scenario**: Context and circumstances - character's situation or world's current state/events [REQUIRED]
 - **first_mes**: Extensive, immersive opening sequence (typically 200-800 words) that establishes the entire narrative foundation including detailed scene setting, atmospheric description, character introduction with visual details, initial dialogue or internal monologue, environmental context, and emotional tone [REQUIRED]
 - **mes_example**: A comprehensive and immersive example of a message (mes) from the character. This should go beyond simple dialogue examples and act as a dynamic narrative segment, typically spanning multiple paragraphs (300-800 words). It MUST integrate:\n  1. Detailed scene introduction and atmospheric setting.\n  2. Deep internal monologue or character reflection, revealing thoughts, memories, and motivations.\n  3. Dynamic display of real-time game information or context, explicitly using the <status> XML tag to encapsulate structured data (e.g., character status, environmental stats, interactive options). This part should be clearly separated from the narrative text.\n  4. Engaging dialogue demonstrating character's communication style, emotional range, and interactions with other entities.\n  5. Character's actions, reactions, and decision-making processes within the scene.\n  This example serves as a living demonstration of the character's in-world behavior and the interactive elements of the scenario. [REQUIRED]
+- **alternate_greetings**: Array of comprehensive alternative opening scenarios (typically 3-5 entries, each 150-600 words) providing entirely different narrative starting points, worldlines, or timeline variations with unique atmospheric settings, character contexts, and story hooks for meaningful player choice [REQUIRED]
 - **creator_notes**: Usage guidelines, compatibility information, and creator insights [REQUIRED]
 - **tags**: Categorization tags including card type (character-card/story-card), genre, and descriptors [REQUIRED]
 - **avatar**: Visual representation - character portrait or scenario artwork [OPTIONAL]
-- **alternate_greetings**: Array of comprehensive alternative opening scenarios (typically 3-5 entries, each 150-600 words) providing entirely different narrative starting points, worldlines, or timeline variations with unique atmospheric settings, character contexts, and story hooks for meaningful player choice [OPTIONAL]
 
 **CRITICAL**: All eight core fields (name through tags) must be completed in the specified insert_order for a professional-quality character card. The CHARACTER tool should be used systematically to build these fields incrementally across multiple tool calls until all required fields are present.
 
@@ -490,7 +490,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         decision.tool === ToolType.SUPPLEMENT
       ) {
         console.log(`✅ ${decision.tool} execution completed with generated content`);
-
+        
         if (decision.tool === ToolType.CHARACTER && result.result?.character_data) {
           console.log("🔄 Updating generation output with character data");
           await ResearchSessionOperations.updateGenerationOutput(this.conversationId, {
@@ -668,7 +668,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - If STATUS and USER_SETTING entries are complete but WORLD_VIEW entry is missing or empty: Use WORLD_VIEW tool to create the foundational world structure.
       - If STATUS, USER_SETTING, and WORLD_VIEW entries are all complete and have content:
         - Check SUPPLEMENT entries:
-          - If less than 5 supplementary entries exist or any existing supplementary entry is empty: Use SUPPLEMENT tool to add more entries or fill content until at least 5 non-empty entries are present.
+          - If less than 5 supplementary entries exist or any existing supplementary entry is empty: Use SUPPLEMENT tool to add more entries or fill content until at least 5 non-empty entries are present. Remember, SUPPLEMENT entries are *expansions* of WORLD_VIEW, not a replacement. If WORLD_VIEW is already present, focus ONLY on generating more SUPPLEMENT entries. Only expand WORLD_VIEW if its current content is explicitly insufficient to support the creation of the required number of quality SUPPLEMENT entries.
           - If 5 or more non-empty supplementary entries exist: Worldbook is structurally complete.
       - MANDATORY MINIMUM: All 3 mandatory entries (STATUS, USER_SETTING, WORLD_VIEW) must be present AND have content. At least 5 SUPPLEMENT entries must be present AND have content.
       - Focus on quality refinement and completion if all structural requirements are met.
@@ -718,7 +718,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
 
       <character_when>
         - Most frequently used tool
-        - Build incrementally in REQUIRED insert_order: name → description → personality → scenario → first_mes → alternate_greetings → mes_example → creator_notes → tags
+        - Build incrementally in REQUIRED insert_order: name → description → personality → scenario → first_mes → mes_example → alternate_greetings → creator_notes → tags
         - ALL EIGHT FIELDS ARE MANDATORY for complete character card
         - Use multiple tool calls to build systematically, adding one or more fields each time
         - Must have ALL required fields complete BEFORE starting worldbook
@@ -888,7 +888,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
           current_sub_problem: context.research_state.task_queue?.[0]?.sub_problems?.[0]?.description || "No current sub-problem",
           character_progress: this.buildCharacterProgressSummary(context.generation_output),
           worldbook_progress: this.buildWorldbookProgressSummary(context.generation_output),
-          completion_status: this.buildCompletionStatusSummary(context.generation_output)
+          completion_status: this.buildCompletionStatusSummary(context.generation_output, context.message_history)
         }),
       ]);
 
@@ -1689,7 +1689,7 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
     }
 
     const charData = generationOutput.character_data;
-    const requiredCharFields = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'creator_notes', 'tags'];
+    const requiredCharFields = ['name', 'description', 'personality', 'scenario', 'first_mes', 'mes_example', 'alternate_greetings', 'creator_notes', 'tags'];
     const completedFields = charData ? requiredCharFields.filter(field => charData[field] && charData[field].toString().trim() !== '') : [];
     const missingFields = charData ? requiredCharFields.filter(field => !charData[field] || charData[field].toString().trim() === '') : requiredCharFields;
     
@@ -1755,7 +1755,15 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
     return [statusSummary, userSettingSummary, worldViewSummary, supplementSummary].join("\n");
   }
 
-  private buildCompletionStatusSummary(generationOutput: GenerationOutput): string {
+  private buildCompletionStatusSummary(generationOutput: GenerationOutput, message_history: Message[]): string {
+    // Check the latest message for quality_evaluation or tool_failure
+    if (Array.isArray(message_history) && message_history.length > 0) {
+      const lastMsg = message_history[message_history.length - 1];
+      if (lastMsg.type === "quality_evaluation" || lastMsg.type === "tool_failure") {
+        // If the latest message is a quality evaluation or tool failure, return its content directly
+        return lastMsg.content;
+      }
+    }
     if (!generationOutput) {
       return "OVERALL STATUS: No generation output available";
     }

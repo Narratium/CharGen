@@ -196,9 +196,6 @@ export interface SupplementEntry extends BaseWorldbookEntry {
   position: 2; // Story end position for contextual activation
 }
 
-// Legacy WorldbookEntry for backward compatibility
-export interface WorldbookEntry extends BaseWorldbookEntry {}
-
 // ============================================================================
 // COMMUNICATION STRUCTURES
 // ============================================================================
