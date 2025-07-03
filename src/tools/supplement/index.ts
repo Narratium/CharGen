@@ -4,14 +4,14 @@ import {
   ExecutionResult,
   SupplementEntry
 } from "../../models/agent-model";
-import { BaseSimpleTool, ToolParameter } from "../base-tool";
+import { BaseTool, ToolParameter } from "../base-tool";
 import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Supplement Tool - Creates supplementary worldbook entries
  * SUPPLEMENT entries provide detailed expansions of specific WORLD_VIEW elements
  */
-export class SupplementTool extends BaseSimpleTool {
+export class SupplementTool extends BaseTool {
   readonly toolType = ToolType.SUPPLEMENT;
   readonly name = "SUPPLEMENT";
   readonly description = "Create supplementary worldbook entries that provide detailed expansions of specific nouns/entities mentioned in the WORLD_VIEW entry. Each supplement focuses on one particular element (faction, location, technology, character, system, etc.) and provides comprehensive background details not covered in the foundational WORLD_VIEW. Extract keywords from WORLD_VIEW content and create detailed 500-1000 word entries using rich Markdown formatting. Minimum 5 supplementary entries required for complete worldbook.";

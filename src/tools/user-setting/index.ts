@@ -4,14 +4,14 @@ import {
   ExecutionResult,
   UserSettingEntry
 } from "../../models/agent-model";
-import { BaseSimpleTool, ToolParameter } from "../base-tool";
+import { BaseTool, ToolParameter } from "../base-tool";
 import { v4 as uuidv4 } from 'uuid';
 
 /**
  * User Setting Tool - Creates the mandatory USER_SETTING worldbook entry
  * USER_SETTING entry provides comprehensive player character profiling with multi-dimensional hierarchical information
  */
-export class UserSettingTool extends BaseSimpleTool {
+export class UserSettingTool extends BaseTool {
   readonly toolType = ToolType.USER_SETTING;
   readonly name = "USER_SETTING";
   readonly description = "Create the mandatory USER_SETTING worldbook entry that provides comprehensive player character profiling with detailed hierarchical organization. Must include structured sections: Basic Information (name, age, gender, physical stats, occupation), Appearance Features (facial features, body type, clothing style), Personality Traits (surface personality, inner personality, psychological state), Life Status (living environment, social relationships), Special Experiences (past experiences, rebirths, timeline events), Special Abilities (systems, powers, limitations), Current State (resources, psychological dynamics, action tendencies). Use deep hierarchical Markdown structure (## → ### → #### → -) with 800-1500 words total. This is one of the 3 required essential entries.";

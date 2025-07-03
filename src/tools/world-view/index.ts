@@ -4,14 +4,14 @@ import {
   ExecutionResult,
   WorldViewEntry
 } from "../../models/agent-model";
-import { BaseSimpleTool, ToolParameter } from "../base-tool";
+import { BaseTool, ToolParameter } from "../base-tool";
 import { v4 as uuidv4 } from 'uuid';
 
 /**
  * World View Tool - Creates the mandatory WORLD_VIEW worldbook entry
  * WORLD_VIEW entry provides comprehensive foundational world structure with deep hierarchical organization
  */
-export class WorldViewTool extends BaseSimpleTool {
+export class WorldViewTool extends BaseTool {
   readonly toolType = ToolType.WORLD_VIEW;
   readonly name = "WORLD_VIEW";
   readonly description = "Create the mandatory WORLD_VIEW worldbook entry that provides comprehensive foundational world structure with deep hierarchical organization. Must include systematic world-building covering: world origins/history with detailed timelines, core systems (technology/magic/power) with specific mechanisms, geographical structure with environmental details, societal frameworks with power dynamics, cultural aspects with behavioral patterns, faction systems with relationships and conflicts, resource distribution with scarcity factors, communication networks, survival challenges, and clear expansion opportunities that can be developed into supplementary entries. Use deep hierarchical Markdown structure (## → ### → #### → -) with 800-2000 words total. This is one of the 3 required essential entries.";

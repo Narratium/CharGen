@@ -4,14 +4,14 @@ import {
   ExecutionResult,
   StatusEntry
 } from "../../models/agent-model";
-import { BaseSimpleTool, ToolParameter } from "../base-tool";
+import { BaseTool, ToolParameter } from "../base-tool";
 import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Status Tool - Creates the mandatory STATUS worldbook entry
  * STATUS entry provides comprehensive real-time game interface with professional formatting and visual organization
  */
-export class StatusTool extends BaseSimpleTool {
+export class StatusTool extends BaseTool {
   readonly toolType = ToolType.STATUS;
   readonly name = "STATUS";
   readonly description = "Create the mandatory STATUS worldbook entry that provides comprehensive real-time game interface with professional visual formatting. Must include structured sections with decorative headers, temporal context (current time/date/location), environmental data (indoor/outdoor temperature, weather), character interaction panels (basic info, physical data, special attributes), dynamic statistics (numerical values with progress bars), and interactive elements (available actions, special events). Use professional formatting with symbols, dividers, organized data presentation, and visual structure that creates an immersive game-like interface. This is one of the 3 required essential entries.";

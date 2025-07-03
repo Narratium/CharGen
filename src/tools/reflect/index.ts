@@ -4,13 +4,13 @@ import {
   ExecutionResult,
   TaskEntry
 } from "../../models/agent-model";
-import { BaseSimpleTool, ToolParameter, DetailedToolInfo } from "../base-tool";
+import { BaseTool, ToolParameter, DetailedToolInfo } from "../base-tool";
 
 /**
  * Reflect Tool - Pure Execution Unit
  * Adds new tasks with sub-problems to the task queue based on provided parameters from planner
  */
-export class ReflectTool extends BaseSimpleTool {
+export class ReflectTool extends BaseTool {
   
   readonly toolType = ToolType.REFLECT;
   readonly name = "REFLECT";

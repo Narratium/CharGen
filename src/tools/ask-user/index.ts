@@ -3,14 +3,14 @@ import {
   ExecutionContext, 
   ExecutionResult,
 } from "../../models/agent-model";
-import { BaseSimpleTool, ToolParameter, DetailedToolInfo } from "../base-tool";
+import { BaseTool, ToolParameter, DetailedToolInfo } from "../base-tool";
 
 /**
  * Ask User Tool - Pure Execution Unit
  * Formats a question provided by the planner to be presented to the user.
  * Can optionally provide predefined choice options for the user to select from.
  */
-export class AskUserTool extends BaseSimpleTool {
+export class AskUserTool extends BaseTool {
   readonly toolType = ToolType.ASK_USER;
   readonly name = "ASK_USER";
   readonly description = "Ask the user for clarification on core story elements and broad directional questions. USE ONLY when you cannot determine fundamental aspects like: story genre/style (e.g., Cthulhu horror, sweet romance, campus life), character type (single character vs world scenario), or other major creative directions that significantly impact the entire generation. Do NOT use for specific details that can be inferred or creatively determined - only use when uncertain about foundational story elements that require user preference. Can provide optional choice options for easier user selection.";

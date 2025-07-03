@@ -3,17 +3,17 @@ import {
   ExecutionContext, 
   ExecutionResult 
 } from "../../models/agent-model";
-import { BaseSimpleTool, ToolParameter } from "../base-tool";
+import { BaseTool, ToolParameter } from "../base-tool";
 
 /**
  * Character Tool - Pure Execution Unit
  * Updates or adds one or more character fields to the character card data
  * Can be used incrementally to build up the character over multiple tool calls
  */
-export class CharacterTool extends BaseSimpleTool {
+export class CharacterTool extends BaseTool {
   readonly toolType = ToolType.CHARACTER;
   readonly name = "CHARACTER";
-  readonly description = "Generate or update character card data - one of the most frequently used tools. Build character incrementally by adding fields in REQUIRED logical insert_order: name → description → personality → scenario → first_mes → mes_example → creator_notes → tags. ALL EIGHT CORE FIELDS ARE REQUIRED for a complete character card. Optional fields like alternate_greetings can be added to enhance player choice. Use multiple tool calls to build systematically, with each call adding one or more fields. CHARACTER generation with all required fields must be completed BEFORE starting worldbook creation, as worldbook entries should complement and enhance the established character.";
+  readonly description = "Generate or update character card data - one of the most frequently used tools. Build character incrementally by adding fields in REQUIRED logical insert_order: name → description → personality → scenario → first_mes → mes_example → creator_notes → tags. ALL EIGHT CORE FIELDS ARE REQUIRED for a complete character card. Optional fields like alternate_greetings can be added to enhance player choice. IMPORTANT: Generally generate ONE attribute at a time and make the content as rich and detailed as possible. Use multiple tool calls to build systematically, focusing on creating comprehensive, immersive content for each field. CHARACTER generation with all required fields must be completed BEFORE starting worldbook creation, as worldbook entries should complement and enhance the established character.";
   
   readonly parameters: ToolParameter[] = [
     {

@@ -3,7 +3,7 @@ import {
   ExecutionContext, 
   ExecutionResult 
 } from "../../models/agent-model";
-import { BaseSimpleTool, ToolParameter } from "../base-tool";
+import { BaseTool, ToolParameter } from "../base-tool";
 import { TavilySearch } from "@langchain/tavily";
 import { ConfigManager } from "../../core/config-manager";
 
@@ -11,7 +11,7 @@ import { ConfigManager } from "../../core/config-manager";
  * Enhanced Search Tool - Tavily API implementation
  * Uses Tavily's professional search API for reliable and high-quality search results
  */
-export class SearchTool extends BaseSimpleTool {
+export class SearchTool extends BaseTool {
   readonly toolType = ToolType.SEARCH;
   readonly name = "SEARCH";
   readonly description = "Search for information using Tavily API. USE PRIMARILY when the story relates to existing real-world content like anime, novels, games, movies, or specific cultural references that require accurate information. Also use when you need specific factual details, historical context, or cultural elements that cannot be creatively invented. Do NOT use for generic creative content that can be imagined - only use when accuracy about existing works or real-world elements is essential for the story.";

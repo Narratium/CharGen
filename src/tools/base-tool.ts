@@ -47,7 +47,7 @@ export interface SimpleTool {
  * Base Tool - Pure Execution Unit (Following DeepResearch Philosophy)
  * No LLM calls, no parameter generation, just direct execution
  */
-export abstract class BaseSimpleTool implements SimpleTool {
+export abstract class BaseTool implements SimpleTool {
   abstract readonly toolType: ToolType;
   abstract readonly name: string;
   abstract readonly description: string;
