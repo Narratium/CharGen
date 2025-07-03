@@ -261,22 +261,24 @@ TASK CREATION RULES:
 - Sub-problems are completed sequentially within each task.
 - Ensure a mix of clarification, research, character-building, and world-building sub-problems across the tasks.
 
-EXAMPLE DECISION LOGIC:
+EXAMPLE DECISION LOGIC (Ideal Workflow):
 - User wants "fantasy adventure based on Lord of the Rings":
-  - Task 1: Research Lord of the Rings lore and main characters (sub: search for details, clarify specific focus).
-  - Task 2: Develop main character (sub: define personality, create first_mes, mes_example).
-  - Task 3: Establish core worldbook elements (sub: create WORLD_VIEW, generate initial SUPPLEMENT entries).
-  - Task 4: Explore specific world regions (sub: search for regional info, add SUPPLEMENT entries).
-  - Task 5: Define key magical systems (sub: ask_user for magic details, add SUPPLEMENT entries).
-  - Task 6: Develop secondary characters (sub: define allies, define antagonists).
+  - Task 1: Clarify user preferences and scenario focus (sub: ask_user for genre/style, ask_user for main character or world focus)
+  - Task 2: Research real-world references if needed (sub: search for Lord of the Rings lore, search for main characters, search for world details)
+  - Task 3: Complete all character card fields step by step (sub: define name, description, personality, scenario, first_mes, mes_example, alternate_greetings, creator_notes, tags)
+  - Task 4: Create STATUS entry (sub: design real-time game interface, define status panels and stats)
+  - Task 5: Create USER_SETTING entry (sub: build player character profile, organize hierarchical structure)
+  - Task 6: Create WORLD_VIEW entry (sub: develop foundational world structure, define major systems and history)
+  - Task 7: Create at least 8 SUPPLEMENT entries (sub: extract key terms from WORLD_VIEW/STATUS/USER_SETTING, expand each with detailed lore, ensure diversity of topics)
 
 - User wants "a unique sci-fi detective story":
-  - Task 1: Clarify specific sci-fi sub-genre and protagonist's core motivation (sub: ask_user for sub-genre, ask_user for motivation).
-  - Task 2: Design the protagonist character (sub: develop character background, create scenario, define special abilities).
-  - Task 3: Build the futuristic city and its key organizations (sub: create WORLD_VIEW, generate SUPPLEMENT entries for city districts and factions).
-  - Task 4: Detail the crime and investigation mechanics (sub: ask_user about crime types, add SUPPLEMENT entries on forensics).
-  - Task 5: Introduce key NPCs and their roles (sub: define allies, define suspects).
-  - Task 6: Establish the socio-political landscape (sub: search for dystopian elements, add SUPPLEMENT entries on government and corporations).
+  - Task 1: Clarify specific sci-fi sub-genre and protagonist's core motivation (sub: ask_user for sub-genre, ask_user for motivation)
+  - Task 2: Research relevant references if needed (sub: search for sci-fi detective tropes, search for futuristic city inspirations)
+  - Task 3: Complete all character card fields step by step (sub: develop character background, define personality, create scenario, write first_mes, provide mes_example, add alternate_greetings, creator_notes, tags)
+  - Task 4: Create STATUS entry (sub: design interface, define stats and panels)
+  - Task 5: Create USER_SETTING entry (sub: build protagonist profile, organize sections)
+  - Task 6: Create WORLD_VIEW entry (sub: develop world structure, define systems and factions)
+  - Task 7: Create at least 8 SUPPLEMENT entries (sub: extract key terms from WORLD_VIEW/STATUS/USER_SETTING, expand each with detailed lore, ensure diversity)
 
 Respond using the following XML format:
 <task_decomposition>
@@ -686,9 +688,12 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       1. ASK_USER: Use for fundamental uncertainties about story direction, genre, tone, or core creative decisions - prioritize early in generation
       2. SEARCH: Use when referencing existing anime/novels/games or needing factual information
       3. CHARACTER: Primary tool - complete character development BEFORE worldbook
-      4. STATUS/USER_SETTING/WORLD_VIEW/SUPPLEMENT: Worldbook tools - use ONLY AFTER character is 100% complete
-      5. REFLECT: Use ONLY when task queue is empty but generation output is incomplete
-      6. COMPLETE: Use when generation is finished and session should end
+      4. STATUS: Use ONLY AFTER character creation is 100% complete. STATUS is the first worldbook tool to use (highest priority among worldbook tools).
+      5. USER_SETTING: Use ONLY AFTER character creation is 100% complete AND STATUS entry is present. USER_SETTING is the second worldbook tool to use.
+      6. WORLD_VIEW: Use ONLY AFTER character creation is 100% complete AND STATUS and USER_SETTING entries are present. WORLD_VIEW is the third worldbook tool to use.
+      7. SUPPLEMENT: Use ONLY AFTER character creation is 100% complete AND WORLD_VIEW entry is present. The key parameter is MANDATORY and must be a non-empty array of proper nouns or key terms, typically extracted from WORLD_VIEW, STATUS, or USER_SETTING content (such as locations, factions, systems, or other important entities). If no valid key can be provided, do NOT use the SUPPLEMENT tool. SUPPLEMENT is used to create supplementary entries based on these extracted terms.
+      8. REFLECT: Use ONLY when task queue is empty but generation output is incomplete
+      9. COMPLETE: Use when generation is finished and session should end
 
       TOOL SELECTION CRITERIA:
       <ask_user_when>
