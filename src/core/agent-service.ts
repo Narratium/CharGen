@@ -547,8 +547,10 @@ export class AgentService {
         const choice = await this.askUserForImageChoice(userInputCallback);
         
         if (choice === 'generate') {
-          // Generate detailed prompt for AI image generation
-          imageDescription = await this.generateAIImagePrompt(mainObjective, characterData, llmConfig);
+          // Step 2: Ask user to choose image style for AI generation
+          const selectedStyle = await this.askUserForImageStyle(userInputCallback);
+          // Generate detailed prompt for AI image generation with selected style
+          imageDescription = await this.generateAIImagePrompt(mainObjective, characterData, llmConfig, selectedStyle);
           // Generate image using AI
           const generationResult = await this.generateImageWithAI(imageDescription, llmConfig);
           
@@ -685,6 +687,47 @@ export class AgentService {
     ]);
     
     return answer.choice;
+  }
+
+  /**
+   * Ask user to choose image style for AI generation
+   */
+  private async askUserForImageStyle(userInputCallback?: UserInputCallback): Promise<string> {
+    const styleOptions = [
+      'Cute/Kawaii Style - kawaii, adorable, soft lighting, pastel colors, innocent expression',
+      'Japanese Anime Style - anime artwork, anime style, key visual, vibrant, studio anime, highly detailed', 
+      'Sci-fi/Tech Style - neonpunk style, cyberpunk, vaporwave, neon, vibes, vibrant, ultramodern, high contrast, cinematic',
+      'Realistic/Photographic Style - cinematic photo, 35mm photograph, film, bokeh, professional, 4k, highly detailed',
+      'Fantasy Style - ethereal fantasy concept art, magnificent, celestial, ethereal, painterly, epic, majestic, magical',
+      'Dark/Gothic Style - dark atmosphere, gothic, dramatic lighting, moody, shadows, mysterious',
+      'Minimalist Style - clean, simple, minimalist, modern, elegant, white background',
+      'Retro/Vintage Style - analog film photo, faded film, desaturated, grainy, vignette, vintage, Kodachrome'
+    ];
+
+    // If we have a user input callback, use it for interaction
+    if (userInputCallback) {
+      const choice = await userInputCallback(
+        'Choose the style for your AI-generated image:',
+        styleOptions
+      );
+      
+      // Extract the keywords from the selected option (after the dash)
+      const selectedKeywords = choice.split(' - ')[1] || choice;
+      return selectedKeywords;
+    }
+    
+    // Fallback to inquirer if no callback
+    const inquirer = require('inquirer');
+    const { style } = await inquirer.prompt([{
+      type: 'list',
+      name: 'style',
+      message: 'Choose the style for your AI-generated image:',
+      choices: styleOptions
+    }]);
+    
+    // Extract the keywords from the selected option (after the dash)
+    const selectedKeywords = style.split(' - ')[1] || style;
+    return selectedKeywords;
   }
 
   /**
@@ -852,7 +895,7 @@ export class AgentService {
         characterBookEntries.push({
           comment: "STATUS",
           content: session.generation_output.status_data.content,
-          key: session.generation_output.status_data.key || ["status"],
+          keys: session.generation_output.status_data.keys || ["status"],
           insert_order: session.generation_output.status_data.insert_order || 1,
           position: session.generation_output.status_data.position || 0,
           constant: session.generation_output.status_data.constant || true,
@@ -864,7 +907,7 @@ export class AgentService {
         characterBookEntries.push({
           comment: "USER_SETTING",
           content: session.generation_output.user_setting_data.content,
-          key: session.generation_output.user_setting_data.key || ["user", "player", "character"],
+          keys: session.generation_output.user_setting_data.keys || ["user", "player", "character"],
           insert_order: session.generation_output.user_setting_data.insert_order || 2,
           position: session.generation_output.user_setting_data.position || 0,
           constant: session.generation_output.user_setting_data.constant || true,
@@ -876,7 +919,7 @@ export class AgentService {
         characterBookEntries.push({
           comment: "WORLD_VIEW",
           content: session.generation_output.world_view_data.content,
-          key: session.generation_output.world_view_data.key || ["world", "universe"],
+          keys: session.generation_output.world_view_data.keys || ["world", "universe"],
           insert_order: session.generation_output.world_view_data.insert_order || 3,
           position: session.generation_output.world_view_data.position || 0,
           constant: session.generation_output.world_view_data.constant || true,
@@ -893,7 +936,7 @@ export class AgentService {
               disable: entry.disable || false,
               position: entry.position || 2,
               constant: entry.constant || false,
-              key: entry.key || [],
+              keys: entry.keys || [],
               insert_order: entry.insert_order || 10,
               depth: entry.depth || 4
             });
@@ -959,7 +1002,7 @@ export class AgentService {
   /**
    * Generate detailed AI image generation prompt optimized for Stable Diffusion
    */
-  private async generateAIImagePrompt(mainObjective: string, characterData: any, llmConfig: any): Promise<string> {
+  private async generateAIImagePrompt(mainObjective: string, characterData: any, llmConfig: any, style: string): Promise<string> {
     const { ChatOpenAI } = await import("@langchain/openai");
     const { ChatOllama } = await import("@langchain/ollama");
     const { ChatPromptTemplate } = await import("@langchain/core/prompts");
@@ -983,171 +1026,51 @@ export class AgentService {
     }
 
     const prompt = ChatPromptTemplate.fromTemplate(`
-You are a MASTER PROMPT ENGINEER for Stable Diffusion XL and advanced AI image models. Your goal is to create EXTREMELY DETAILED, PROFESSIONAL-GRADE prompts that rival the best AI art communities.
+You are an expert AI image prompt engineer. Generate a concise, high-quality Stable Diffusion prompt.
 
 ==============================
 📥 INPUT DATA:
-- MAIN OBJECTIVE: {mainObjective}
 - CHARACTER DATA: {characterData}
+- STYLE: {style}
 
 ==============================
-🎯 ADVANCED PROMPT ENGINEERING RULES:
+🎯 PROMPT STRUCTURE:
 
-**STEP 1: CONTENT TYPE ANALYSIS (CRITICAL)**
-Analyze the character/story data to determine the PRIMARY CONTENT TYPE:
+**FORMAT**: Generate exactly 100-200 characters of comma-separated keywords
+**NO explanations, NO quotation marks, NO extra text**
 
-**A. HUMAN/HUMANOID CHARACTER** (人像类)
-- Indicators: human, elf, dwarf, android, humanoid robot, etc.
-- Tags: "1girl", "1boy", "solo", DETAILED FACE & EYES, ULTRA DETAILED EYES
-- Focus: facial features, expressions, human anatomy
+**REQUIRED ELEMENTS (in order):**
+1. **Quality tags**: Masterpiece, Top Quality, Best Quality
+2. **Character type**: 1girl/1boy/1other/no humans, solo
+3. **Main subject**: Brief character description (hair, eyes, expression)
+4. **Key features**: 3-5 distinctive visual elements
+5. **Environment**: Background/setting (if relevant)
+6. **Artistic style**: Art medium, technique
+7. **Technical**: High detail, resolution
 
-**B. NON-HUMAN CHARACTER** (非人类角色)
-- Indicators: animal, furry, anthropomorphic, creature, monster, dragon, etc.
-- Tags: "1other", "furry", "anthro", or specific creature type
-- Focus: species characteristics, fur/scales/feathers, creature anatomy
-
-**C. MECHANICAL/ARTIFICIAL** (机械类)
-- Indicators: robot, mecha, vehicle, spaceship, weapon, magical item, etc.
-- Tags: "mecha", "robot", "no humans", "mechanical"
-- Focus: technical details, materials, mechanical parts
-
-**D. LANDSCAPE/SCENE** (场景类)
-- Indicators: location, building, environment, abstract concept, scenery
-- Tags: "scenery", "landscape", "no humans", "architecture"
-- Focus: atmospheric mood, architectural details, natural elements
-
-**E. ABSTRACT/CONCEPTUAL** (抽象概念)
-- Indicators: emotions, concepts, symbols, magical effects, energy
-- Tags: "abstract", "conceptual art", "surreal"
-- Focus: symbolic representation, color mood, artistic interpretation
-
-**STEP 2: STRUCTURE ORDER (ADAPT BASED ON CONTENT TYPE)**
-
-**FOR HUMAN/HUMANOID:**
-1. QUALITY TAGS: NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES
-2. FACE/EYE FOCUS: DETAILED FACE & EYES, ULTRA DETAILED EYES, EYE HIGHLIGHTS
-3. COUNT/TYPE: 1girl/1boy, solo
-4. CHARACTER DETAILS: appearance, features
-5. POSE/EXPRESSION: CONTRAPPOSTO, expressions
-6. CLOTHING: detailed descriptions
-7. ENVIRONMENT: background setting
-8. CAMERA/LIGHTING: angles, lighting
-
-**FOR NON-HUMAN CHARACTER:**
-1. QUALITY TAGS: NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES
-2. CREATURE FOCUS: ultra detailed, detailed fur/scales/feathers
-3. COUNT/TYPE: 1other, furry/anthro/dragon, solo
-4. SPECIES DETAILS: animal characteristics, body type
-5. POSE/ACTION: creature-appropriate poses
-6. ENVIRONMENT: natural habitat or relevant setting
-7. CAMERA/LIGHTING: angles suitable for creature
-
-**FOR MECHANICAL/ARTIFICIAL:**
-1. QUALITY TAGS: NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES
-2. TECH FOCUS: ultra detailed, mechanical details, metallic textures
-3. TYPE: mecha, robot, no humans
-4. TECHNICAL SPECS: materials, design, functionality
-5. ENVIRONMENT: tech setting, workshop, battlefield
-6. LIGHTING: dramatic, technical lighting
-
-**FOR LANDSCAPE/SCENE:**
-1. QUALITY TAGS: NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES
-2. SCENE FOCUS: ultra detailed, atmospheric, detailed background
-3. TYPE: scenery, landscape, no humans
-4. LOCATION DETAILS: specific environmental features
-5. MOOD/ATMOSPHERE: lighting, weather, time of day
-6. CAMERA: wide shot, establishing shot, cinematic
-
-**FOR ABSTRACT/CONCEPTUAL:**
-1. QUALITY TAGS: NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES
-2. ART FOCUS: abstract, conceptual art, artistic interpretation
-3. SYMBOLIC ELEMENTS: colors, shapes, metaphorical representations
-4. MOOD/EMOTION: atmospheric, surreal, dreamlike
-5. ARTISTIC STYLE: surrealism, abstract expressionism, etc.
-
-**QUALITY TAGS TO ALWAYS INCLUDE:**
-- Start with: "NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES"
-- Add: "ultra detailed, DETAILED FACE & EYES, ULTRA DETAILED EYES, EYE HIGHLIGHTS"
-- Technical: "2.5D REALISTIC, PERSPECTIVE, SOLO FOCUS"
-
-**CHARACTER DESCRIPTION TECHNIQUES:**
-- Use specific counts: "1girl", "solo" 
-- Hair: color, length, style (e.g., "dyed blonde hair long hair", "very short hair, curly bangs")
-- Eyes: color and emphasis (e.g., "green eyes", "purple eyes")
-- Expression: specific emotions (e.g., "embarrassed look", "smug", "half closed eyes")
-- Age indicators: "young", specific build
-
-**POSE & COMPOSITION:**
-- Classical poses: "CONTRAPPOSTO"
-- Specific positioning: "Y-pose arms", "arms up higher", "twisting upper body"
-- Face angles: "asymmetrical face profile", "tilt head"
-- Camera: "from above", "wide angle", "bust up shot", "from diagonally side"
-
-**CLOTHING DETAILS:**
-- Be EXTREMELY specific: "tight clothing, yellow clothing, breasts under clothes, slim sleeves, long sleeves"
-- Colors and patterns: "yellow and black stripe costume", "black and yellow zebra design arm sleeve"
-- Fit and style: descriptive details about how clothes look
-
-**WEIGHT CONTROL USAGE:**
-- Emphasize important elements: "(pink lipstick:0.6)", "(correct sign:1.4)"
-- Use for precise control of features
-
-**ENVIRONMENT RICHNESS:**
-- Specific locations: "American football stadium", "grass"
-- Atmospheric details: lighting, mood, surroundings
-- Additional characters: "team of cheerleaders", "detailed 1 fairies"
+**EXAMPLE OUTPUT:**
+"Masterpiece, Top Quality, 1girl, silver hair, emerald eyes, ornate dress, castle background, fantasy portrait, digital art, high detail"
 
 ==============================
-🚀 REFERENCE EXAMPLES BY CONTENT TYPE:
+📋 RULES:
 
-**HUMAN/HUMANOID EXAMPLE:**
-"NEWEST, CONTRAPPOSTO, 2.5D REALISTIC, DETAILED FACE & EYES, PERSPECTIVE, SOLO FOCUS, ULTRA DETAILED EYES, EYE HIGHLIGHTS, masterpiece, BEST QUALITY, 1girl, solo, silver hair, emerald eyes, elegant pose, ornate royal dress, castle background, dramatic lighting, BREAK, fantasy art"
-
-**NON-HUMAN CHARACTER EXAMPLE:**
-"NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES, ultra detailed, detailed fur, 1other, anthro, solo, majestic white wolf, (blue glowing eyes:1.2), standing pose, thick winter fur, snowy mountain landscape, moonlight, from low angle, BREAK, fantasy creature art"
-
-**MECHANICAL/ARTIFICIAL EXAMPLE:**
-"NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES, ultra detailed, mechanical details, metallic textures, mecha, robot, no humans, (giant robot:1.3), sleek design, glowing blue energy, urban battlefield, dramatic lighting, cinematic angle, BREAK, sci-fi art"
-
-**LANDSCAPE/SCENE EXAMPLE:**
-"NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES, ultra detailed, atmospheric, detailed background, scenery, landscape, no humans, (ancient temple:1.2), overgrown with vines, mysterious fog, golden hour lighting, wide establishing shot, BREAK, fantasy landscape"
-
-**ABSTRACT/CONCEPTUAL EXAMPLE:**
-"NEWEST, masterpiece, BEST QUALITY, AMAZING QUALITY, VERY AESTHETIC, ABSURDRES, abstract, conceptual art, artistic interpretation, (swirling energy:1.3), purple and gold colors, ethereal atmosphere, surreal composition, dreamlike quality, BREAK, abstract expressionism"
+- **LENGTH**: 100-200 characters total
+- **KEYWORDS ONLY**: No sentences, no explanations
+- **PRECISE WORDS**: Each word must add unique value
+- **NO REPETITION**: Avoid duplicate concepts
+- **COMMA SEPARATED**: Clean formatting
 
 ==============================
-📋 GENERATION REQUIREMENTS:
+✍️ GENERATE:
 
-1. **START with technical quality tags** (NEWEST, masterpiece, etc.)
-2. **Include character count** (1girl, 1boy, solo)
-3. **Be EXTREMELY specific** about every visual element
-4. **Use weight parentheses** for important features: (feature:1.2)
-5. **Add BREAK** for style separation if prompt gets long
-6. **End with additional aesthetic tags** if space permits
-7. **NO length limits** - make it as detailed as the reference example
-8. **Use UPPERCASE** for important technical terms
-
-==============================
-✍️ GENERATE ADVANCED PROMPT:
-
-**ANALYSIS & GENERATION PROCESS:**
-1. **FIRST**: Analyze the character/story data to determine PRIMARY CONTENT TYPE (Human/Non-human/Mechanical/Landscape/Abstract)
-2. **SECOND**: Choose the appropriate structure and tags based on content type
-3. **THIRD**: Generate EXTREMELY DETAILED prompt following the selected structure
-
-**CRITICAL REMINDERS:**
-- Use content-appropriate count tags (1girl/1boy vs 1other vs no humans)
-- Include type-specific detail focuses (face/eyes vs fur/scales vs mechanical details)
-- Adapt camera angles and poses to suit the content type
-- Use weight parentheses (feature:1.2) for emphasis
-
-Create one EXTREMELY DETAILED, professional-grade AI image generation prompt:
+Based on the character data, create a concise prompt following the format above:
     `);
 
     const response = await model.invoke([
       await prompt.format({
         mainObjective: mainObjective,
         characterData: JSON.stringify(characterData, null, 2),
+        style: style,
       }),
     ]);
 
@@ -1159,7 +1082,15 @@ Create one EXTREMELY DETAILED, professional-grade AI image generation prompt:
     aiPrompt = aiPrompt.replace(/\n+/g, ' ');
     aiPrompt = aiPrompt.replace(/\s+/g, ' ').trim();
     
-    console.log(`📏 Prompt length: ${aiPrompt.length} characters`);
+    // Inject style keywords directly into the prompt
+    if (style && style.trim()) {
+      // Insert style keywords after quality tags
+      const styleKeywords = style.trim();
+      aiPrompt = aiPrompt.replace(/ABSURDRES/i, `ABSURDRES, ${styleKeywords}`);
+    }
+    
+    console.log(`📏 Final prompt length: ${aiPrompt.length} characters`);
+    console.log(`🎨 Style keywords applied: ${style}`);
     return aiPrompt;
   }
 

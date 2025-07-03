@@ -58,7 +58,7 @@ export class StatusTool extends BaseSimpleTool {
     const statusEntry: StatusEntry = {
       id: `status_${Date.now()}`,
       uid: uuidv4(),
-      key: ["status", "current", "state", "condition", "situation"], // Fixed keywords for STATUS
+      keys: ["status", "current", "state", "condition", "situation"], // Fixed keywords for STATUS
       keysecondary: ["info", "update", "check"],
       comment: "STATUS",
       content: content,

@@ -34,7 +34,7 @@ A character card is a structured data format that defines AI roleplay scenarios.
 #### Character Card Core Fields (ALL REQUIRED):
 - **name**: Primary identifier - typically story title, scenario name, or thematic title rather than just character name [REQUIRED]
 - **description**: Physical/visual details for characters, or world setting description for scenarios [REQUIRED]
-- **personality**: For character cards: behavioral traits and psychological profile; For story cards: atmosphere, tone, and key NPC personalities [REQUIRED]
+- **personality**: For character cards: behavioral traits and psychological profile; For story cards: atmosphere, tone, and keys NPC personalities [REQUIRED]
 - **scenario**: Context and circumstances - character's situation or world's current state/events [REQUIRED]
 - **first_mes**: Extensive, immersive opening sequence (typically 200-800 words) that establishes the entire narrative foundation including detailed scene setting, atmospheric description, character introduction with visual details, initial dialogue or internal monologue, environmental context, and emotional tone [REQUIRED]
 - **mes_example**: A comprehensive and immersive example of a message (mes) from the character. This should go beyond simple dialogue examples and act as a dynamic narrative segment, typically spanning multiple paragraphs (300-800 words). It MUST integrate:\n  1. Detailed scene introduction and atmospheric setting.\n  2. Deep internal monologue or character reflection, revealing thoughts, memories, and motivations.\n  3. Dynamic display of real-time game information or context, explicitly using the <status> XML tag to encapsulate structured data (e.g., character status, environmental stats, interactive options). This part should be clearly separated from the narrative text.\n  4. Engaging dialogue demonstrating character's communication style, emotional range, and interactions with other entities.\n  5. Character's actions, reactions, and decision-making processes within the scene.\n  This example serves as a living demonstration of the character's in-world behavior and the interactive elements of the scenario. [REQUIRED]
@@ -69,7 +69,7 @@ Worldbooks are dynamic knowledge systems that provide contextual information to 
 - **Recursive Activation**: Entries can trigger other entries, creating complex information networks
 
 #### Worldbook Entry Structure:
-- **key**: Primary trigger keywords that activate the entry
+- **keys**: Primary trigger keywords that activate the entry
 - **keysecondary**: Secondary keywords for conditional or refined activation logic
 - **content**: The actual information inserted into the prompt when triggered
 - **comment**: Internal organizational notes for creators and maintainers
@@ -82,21 +82,21 @@ Worldbooks are dynamic knowledge systems that provide contextual information to 
 The worldbook system uses four specialized tools to create comprehensive, organized content:
 
 **1. STATUS Tool - Real-time Game Interface:**
-- **Purpose**: Creates the mandatory STATUS entry providing comprehensive real-time game interface with professional visual formatting. This tool generates a single, constant entry. It does NOT accept a 'key' parameter.
+- **Purpose**: Creates the mandatory STATUS entry providing comprehensive real-time game interface with professional visual formatting. This tool generates a single, constant entry. It does NOT accept a 'keys' parameter.
 - **Fixed Keywords**: ["status", "current", "state", "condition", "situation"]
 - **XML Wrapper**: <status></status>
 - **Content Requirements**: Professional game interface formatting with decorative title headers using symbols/dividers, temporal context (current time/date/day/location), environmental data (indoor/outdoor temperatures, weather conditions), character interaction panels with structured data (basic info: name/age/affiliation/occupation/level/status effects, physical data: height/weight/measurements/experience, special attributes: traits/personality/preferences), dynamic statistics with numerical values and progress indicators, interactive elements (available actions list, special events/triggers), and immersive visual organization that creates a real-time game interface experience
 - **Configuration**: constant=true, insert_order=1, position=0 (highest priority, always active)
 
 **2. USER_SETTING Tool - Player Character Profile:**
-- **Purpose**: Creates the mandatory USER_SETTING entry for comprehensive player character profiling with detailed hierarchical structure. This tool generates a single, constant entry. It does NOT accept a 'key' parameter.
+- **Purpose**: Creates the mandatory USER_SETTING entry for comprehensive player character profiling with detailed hierarchical structure. This tool generates a single, constant entry. It does NOT accept a 'keys' parameter.
 - **Fixed Keywords**: ["user", "player", "character", "protagonist", "you"]
 - **XML Wrapper**: <user_setting></user_setting>
 - **Content Requirements**: Comprehensive character profiling (800-1500 words) with deep hierarchical organization using 4-level Markdown structure (## → ### → #### → -). Must include: ## 基础信息 (personal overview including name/age/gender/physical stats/occupation, appearance features covering facial/body/clothing), ## 性格特征 (surface personality, inner personality, psychological states with contrasts), ## 生活状态 (living environment details, social relationships dynamics), ## 重生经历/特殊经历 (past experiences, timeline events, known/unknown information patterns), ## 特殊能力 (systems/powers with detailed limitations and usage methods), ## 当前状态 (controlled resources, psychological dynamics, action tendencies). Focus on character depth, contradictions, growth arcs, systematic ability descriptions, and world integration with specific examples and detailed descriptions
 - **Configuration**: constant=true, insert_order=2, position=0 (second priority, always active)
 
 **3. WORLD_VIEW Tool - Foundation Framework:**
-- **Purpose**: Creates the mandatory WORLD_VIEW entry as the structural foundation for all supplementary content. This tool generates a single, constant entry. It does NOT accept a 'key' parameter.
+- **Purpose**: Creates the mandatory WORLD_VIEW entry as the structural foundation for all supplementary content. This tool generates a single, constant entry. It does NOT accept a 'keys' parameter.
 - **Fixed Keywords**: ["world", "universe", "realm", "setting", "reality"]
 - **XML Wrapper**: <world_view></world_view>
 - **Content Requirements**: Comprehensive world structure with deep hierarchical organization using multi-level categorization (## Major Systems → ### Subsystems → #### Specific Elements → - Detailed Points). Must include: world origins/history with detailed timelines, core systems (technology/magic/power) with specific mechanisms, geographical structure with environmental details, societal frameworks with power dynamics, cultural aspects with behavioral patterns, faction systems with relationships and conflicts, resource distribution with scarcity factors, communication networks, survival challenges, and hierarchical organization that clearly defines expansion opportunities for supplementary entries
@@ -104,7 +104,7 @@ The worldbook system uses four specialized tools to create comprehensive, organi
 
 **4. SUPPLEMENT Tool - Contextual Expansions:**
 - **Purpose**: Creates supplementary entries that provide detailed descriptions of specific nouns/entities mentioned in the WORLD_VIEW entry.
-- **Custom Keywords**: This tool REQUIRES a 'key' parameter which MUST be a NON-EMPTY ARRAY of specific nouns extracted from WORLD_VIEW content as trigger keywords (e.g., ["血十字帮", "美好公寓", "雪上列车", "冰雪分子能量转化技术"]). If the 'key' array is empty or not provided, the tool will fail.
+- **Custom Keywords**: This tool REQUIRES a 'keys' parameter which MUST be a NON-EMPTY ARRAY of specific nouns extracted from WORLD_VIEW content as trigger keywords (e.g., ["血十字帮", "美好公寓", "雪上列车", "冰雪分子能量转化技术"]). If the 'keys' array is empty or not provided, the tool will fail.
 - **Content Format**: Detailed Markdown formatting (no XML wrapper for supplementary entries)
 - **Content Requirements**: 500-1000 words of comprehensive detail expanding specific WORLD_VIEW nouns. Each entry focuses on one particular entity mentioned in WORLD_VIEW, providing deep background, operational details, relationships, and context that wasn't fully covered in the foundational entry. Minimum 5 entries required covering diverse WORLD_VIEW elements.
 - **Configuration**: constant=false, insert_order=10+, position=2 (contextual activation)
@@ -269,7 +269,7 @@ EXAMPLE DECISION LOGIC (Ideal Workflow):
   - Task 4: Create STATUS entry (sub: design real-time game interface, define status panels and stats)
   - Task 5: Create USER_SETTING entry (sub: build player character profile, organize hierarchical structure)
   - Task 6: Create WORLD_VIEW entry (sub: develop foundational world structure, define major systems and history)
-  - Task 7: Create at least 5 SUPPLEMENT entries (sub: extract key terms from WORLD_VIEW/STATUS/USER_SETTING, expand each with detailed lore, ensure diversity of topics)
+  - Task 7: Create at least 5 SUPPLEMENT entries (sub: extract keys terms from WORLD_VIEW/STATUS/USER_SETTING, expand each with detailed lore, ensure diversity of topics)
 
 - User wants "a unique sci-fi detective story":
   - Task 1: Clarify specific sci-fi sub-genre and protagonist's core motivation (sub: ask_user for sub-genre, ask_user for motivation)
@@ -278,7 +278,7 @@ EXAMPLE DECISION LOGIC (Ideal Workflow):
   - Task 4: Create STATUS entry (sub: design interface, define stats and panels)
   - Task 5: Create USER_SETTING entry (sub: build protagonist profile, organize sections)
   - Task 6: Create WORLD_VIEW entry (sub: develop world structure, define systems and factions)
-  - Task 7: Create at least 5 SUPPLEMENT entries (sub: extract key terms from WORLD_VIEW/STATUS/USER_SETTING, expand each with detailed lore, ensure diversity)
+  - Task 7: Create at least 5 SUPPLEMENT entries (sub: extract keys terms from WORLD_VIEW/STATUS/USER_SETTING, expand each with detailed lore, ensure diversity)
 
 Respond using the following XML format:
 <task_decomposition>
@@ -691,7 +691,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
       4. STATUS: Use ONLY AFTER character creation is 100% complete. STATUS is the first worldbook tool to use (highest priority among worldbook tools).
       5. USER_SETTING: Use ONLY AFTER character creation is 100% complete AND STATUS entry is present. USER_SETTING is the second worldbook tool to use.
       6. WORLD_VIEW: Use ONLY AFTER character creation is 100% complete AND STATUS and USER_SETTING entries are present. WORLD_VIEW is the third worldbook tool to use.
-      7. SUPPLEMENT: Use ONLY AFTER character creation is 100% complete AND WORLD_VIEW entry is present. The key parameter is MANDATORY and must be a non-empty array of proper nouns or key terms, typically extracted from WORLD_VIEW, STATUS, or USER_SETTING content (such as locations, factions, systems, or other important entities). If no valid key can be provided, do NOT use the SUPPLEMENT tool. SUPPLEMENT is used to create supplementary entries based on these extracted terms.
+      7. SUPPLEMENT: Use ONLY AFTER character creation is 100% complete AND WORLD_VIEW entry is present. The keys parameter is MANDATORY and must be a non-empty array of proper nouns or keys terms, typically extracted from WORLD_VIEW, STATUS, or USER_SETTING content (such as locations, factions, systems, or other important entities). If no valid keys can be provided, do NOT use the SUPPLEMENT tool. SUPPLEMENT is used to create supplementary entries based on these extracted terms.
       8. REFLECT: Use ONLY when task queue is empty but generation output is incomplete
       9. COMPLETE: Use when generation is finished and session should end
 
@@ -710,7 +710,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - Provide 2-4 predefined choice options using the 'options' parameter
         - Include common genre categories: ["Xianxia Fantasy", "Modern Urban", "School Youth", "Isekai/Rebirth"]
         - Or story tones: ["Lighthearted & Humorous", "Sweet Romance", "Passionate Adventure", "Warm & Healing"]
-        - Options help users make quick decisions with arrow key navigation
+        - Options help users make quick decisions with arrow keys navigation
         - Users can still provide custom input if none of the options fit
       </ask_user_when>
 
@@ -756,7 +756,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - This tool generates **a single batch** of supplementary entries to enrich the WORLD_VIEW section.
         - It is NOT a multi-category filler — it extracts **a coherent set of related entities** from the WORLD_VIEW (e.g., faction names, locations, systems, ideologies, etc.) and creates corresponding entries in one call.
         - Each generated supplementary entry must include:
-          - key: the unique identifier or title of the entity.
+          - keys: the unique identifier or title of the entity.
           - content: a detailed explanation (500–1000 words) expanding the background and unseen depth of the entity beyond WORLD_VIEW.
           - comment: a brief annotation or purpose of this entry in narrative/world context.
           - insert_order: a suggested relative insertion index (for chronological or logical placement).
@@ -870,7 +870,7 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         - Example for ASK_USER: <question>What genre style do you prefer?</question><options><![CDATA[["Fantasy adventure", "Modern romance", "Sci-fi thriller"]]]></options>
         - Example for CHARACTER: <name>Elara</name><description>A cunning sorceress...</description><alternate_greetings><![CDATA[["Summer festival version", "Library encounter", "Rainy day meeting", "Battle aftermath scenario"]]]></alternate_greetings><tags><![CDATA[["fantasy", "sorceress"]]]></tags>
         - Example for STATUS: <content><![CDATA[<status>## Current Status\n\n**Location:** Academy</status>]]></content><comment>STATUS</comment>
-        - Example for SUPPLEMENT: <key><![CDATA[["magic", "spell"]]]></key><content>Details...</content><comment>Magic system</comment><constant>false</constant><position>0</position><insert_order>100</insert_order>
+        - Example for SUPPLEMENT: <keys><![CDATA[["magic", "spell"]]]></keys><content>Details...</content><comment>Magic system</comment><constant>false</constant><position>0</position><insert_order>100</insert_order>
         - Example for REFLECT: <new_tasks>
             <task>
               <description>Research character background</description>
@@ -1373,7 +1373,7 @@ Task Progress: ${currentTask.sub_problems.length - remainingSubProblems}/${curre
     STEP 3: Supplementary Entry Assessment
     - Verify minimum quantity requirements (at least 5 supplement entries)
     - Check entry diversity: Tools/Weapons, Characters/NPCs, Buildings, Geography, Astronomy, War History, Organizations, Systems, Culture, Historical Figures, etc.
-    - Evaluate keyword strategies and discoverability in 'key' field
+    - Evaluate keyword strategies and discoverability in 'keys' field
     - Check content depth and narrative value (500-1000 words per entry preferred)
     - Assess integration with WORLD_VIEW foundation WITHOUT content duplication
     - Verify each entry provides NEW specific details not covered in WORLD_VIEW
@@ -1884,12 +1884,12 @@ ${improvement_tasks.map(task => `• ${task}`).join('\n')}`;
       // Collect all existing supplement keys (support string and string[])
       const existingKeys: string[] = [];
       for (const entry of supplementEntries) {
-        const key = entry.key;
-        if (typeof key === 'string') {
-          existingKeys.push(`"${key}"`);
-        } else if (Array.isArray(key)) {
+        const keys = entry.keys;
+        if (typeof keys === 'string') {
+          existingKeys.push(`"${keys}"`);
+        } else if (Array.isArray(keys)) {
           // If key is an array, add all non-empty strings
-          key.forEach(k => {
+          keys  .forEach(k => {
             if (typeof k === 'string' && k.trim() !== '') {
               existingKeys.push(`"${k}"`);
             }

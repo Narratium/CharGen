@@ -18,7 +18,7 @@ export class SupplementTool extends BaseSimpleTool {
   
   readonly parameters: ToolParameter[] = [
     {
-      name: "key",
+      name: "keys",
       type: "array",
       description: "Array of trigger keywords extracted from WORLD_VIEW content. Should be specific nouns, names, or entities mentioned in WORLD_VIEW (e.g., faction names like '血十字帮', locations like '美好公寓', technologies like '雪上列车', systems like '冰雪分子能量转化技术'). These keywords will trigger this entry when mentioned in conversation.",
       required: true
@@ -44,13 +44,13 @@ export class SupplementTool extends BaseSimpleTool {
   ];
 
   protected async doWork(parameters: Record<string, any>, context: ExecutionContext): Promise<ExecutionResult> {
-    const key = parameters.key;
+    const keys = parameters.keys;
     const content = parameters.content;
     const comment = parameters.comment;
     const insertOrder = parameters.insert_order || 10;
     
-    if (!key || !Array.isArray(key) || key.length === 0) {
-      return this.createFailureResult("SUPPLEMENT tool requires 'key' parameter as a non-empty array of trigger keywords.");
+    if (!keys || !Array.isArray(keys) || keys.length === 0) {
+      return this.createFailureResult("SUPPLEMENT tool requires 'keys' parameter as a non-empty array of trigger keywords.");
     }
 
     if (!content || typeof content !== 'string') {
@@ -65,7 +65,7 @@ export class SupplementTool extends BaseSimpleTool {
     const supplementEntry: SupplementEntry = {
       id: `supplement_${Date.now()}`,
       uid: uuidv4(),
-      key: key,
+      keys: keys,
       keysecondary: [],
       comment: comment,
       content: content,

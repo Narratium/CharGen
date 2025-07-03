@@ -140,7 +140,7 @@ export interface ExecutionContext {
 export interface BaseWorldbookEntry {
   id: string;
   uid: string;
-  key: string[];
+  keys: string[];
   keysecondary: string[];
   comment: string;
   content: string;

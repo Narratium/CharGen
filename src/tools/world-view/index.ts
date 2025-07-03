@@ -52,7 +52,7 @@ export class WorldViewTool extends BaseSimpleTool {
     const worldViewEntry: WorldViewEntry = {
       id: `world_view_${Date.now()}`,
       uid: uuidv4(),
-      key: ["world", "universe", "realm", "setting", "reality"], // Fixed keywords for WORLD_VIEW
+      keys: ["world", "universe", "realm", "setting", "reality"], // Fixed keywords for WORLD_VIEW
       keysecondary: ["background", "lore", "foundation"],
       comment: "WORLD_VIEW",
       content: content,

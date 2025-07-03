@@ -52,7 +52,7 @@ export class UserSettingTool extends BaseSimpleTool {
     const userSettingEntry: UserSettingEntry = {
       id: `user_setting_${Date.now()}`,
       uid: uuidv4(),
-      key: ["user", "player", "character", "protagonist", "you"], // Fixed keywords for USER_SETTING
+      keys: ["user", "player", "character", "protagonist", "you"], // Fixed keywords for USER_SETTING
       keysecondary: ["yourself", "personal", "background"],
       comment: "USER_SETTING",
       content: content,
