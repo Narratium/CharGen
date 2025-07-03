@@ -5,6 +5,7 @@ import {
   UserSettingEntry
 } from "../../models/agent-model";
 import { BaseSimpleTool, ToolParameter } from "../base-tool";
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * User Setting Tool - Creates the mandatory USER_SETTING worldbook entry
@@ -50,7 +51,7 @@ export class UserSettingTool extends BaseSimpleTool {
     // Build the USER_SETTING worldbook entry with fixed configuration
     const userSettingEntry: UserSettingEntry = {
       id: `wb_user_setting_${Date.now()}`,
-      uid: (1100 + Math.floor(Math.random() * 1000)).toString(),
+      uid: uuidv4(),
       key: ["user", "player", "character", "protagonist", "you"], // Fixed keywords for USER_SETTING
       keysecondary: ["yourself", "personal", "background"],
       comment: "USER_SETTING",

@@ -5,6 +5,7 @@ import {
   WorldViewEntry
 } from "../../models/agent-model";
 import { BaseSimpleTool, ToolParameter } from "../base-tool";
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * World View Tool - Creates the mandatory WORLD_VIEW worldbook entry
@@ -50,7 +51,7 @@ export class WorldViewTool extends BaseSimpleTool {
     // Build the WORLD_VIEW worldbook entry with fixed configuration
     const worldViewEntry: WorldViewEntry = {
       id: `wb_world_view_${Date.now()}`,
-      uid: (1200 + Math.floor(Math.random() * 1000)).toString(),
+      uid: uuidv4(),
       key: ["world", "universe", "realm", "setting", "reality"], // Fixed keywords for WORLD_VIEW
       keysecondary: ["background", "lore", "foundation"],
       comment: "WORLD_VIEW",

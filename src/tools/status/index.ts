@@ -5,6 +5,7 @@ import {
   StatusEntry
 } from "../../models/agent-model";
 import { BaseSimpleTool, ToolParameter } from "../base-tool";
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Status Tool - Creates the mandatory STATUS worldbook entry
@@ -56,7 +57,7 @@ export class StatusTool extends BaseSimpleTool {
     // Build the STATUS worldbook entry with fixed configuration
     const statusEntry: StatusEntry = {
       id: `wb_status_${Date.now()}`,
-      uid: (1000 + Math.floor(Math.random() * 1000)).toString(),
+      uid: uuidv4(),
       key: ["status", "current", "state", "condition", "situation"], // Fixed keywords for STATUS
       keysecondary: ["info", "update", "check"],
       comment: "STATUS",

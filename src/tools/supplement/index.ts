@@ -5,6 +5,7 @@ import {
   SupplementEntry
 } from "../../models/agent-model";
 import { BaseSimpleTool, ToolParameter } from "../base-tool";
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Supplement Tool - Creates supplementary worldbook entries
@@ -70,7 +71,7 @@ export class SupplementTool extends BaseSimpleTool {
     // Build the SUPPLEMENT worldbook entry
     const supplementEntry: SupplementEntry = {
       id: `wb_supplement_${Date.now()}`,
-      uid: (1300 + Math.floor(Math.random() * 1000)).toString(),
+      uid: uuidv4(),
       key: key,
       keysecondary: keysecondary,
       comment: comment,

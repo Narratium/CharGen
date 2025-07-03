@@ -82,29 +82,29 @@ Worldbooks are dynamic knowledge systems that provide contextual information to 
 The worldbook system uses four specialized tools to create comprehensive, organized content:
 
 **1. STATUS Tool - Real-time Game Interface:**
-- **Purpose**: Creates the mandatory STATUS entry providing comprehensive real-time game interface with professional visual formatting
+- **Purpose**: Creates the mandatory STATUS entry providing comprehensive real-time game interface with professional visual formatting. This tool generates a single, constant entry. It does NOT accept a 'key' parameter.
 - **Fixed Keywords**: ["status", "current", "state", "condition", "situation"]
 - **XML Wrapper**: <status></status>
 - **Content Requirements**: Professional game interface formatting with decorative title headers using symbols/dividers, temporal context (current time/date/day/location), environmental data (indoor/outdoor temperatures, weather conditions), character interaction panels with structured data (basic info: name/age/affiliation/occupation/level/status effects, physical data: height/weight/measurements/experience, special attributes: traits/personality/preferences), dynamic statistics with numerical values and progress indicators, interactive elements (available actions list, special events/triggers), and immersive visual organization that creates a real-time game interface experience
 - **Configuration**: constant=true, insert_order=1, position=0 (highest priority, always active)
 
 **2. USER_SETTING Tool - Player Character Profile:**
-- **Purpose**: Creates the mandatory USER_SETTING entry for comprehensive player character profiling with detailed hierarchical structure
+- **Purpose**: Creates the mandatory USER_SETTING entry for comprehensive player character profiling with detailed hierarchical structure. This tool generates a single, constant entry. It does NOT accept a 'key' parameter.
 - **Fixed Keywords**: ["user", "player", "character", "protagonist", "you"]
 - **XML Wrapper**: <user_setting></user_setting>
 - **Content Requirements**: Comprehensive character profiling (800-1500 words) with deep hierarchical organization using 4-level Markdown structure (## → ### → #### → -). Must include: ## 基础信息 (personal overview including name/age/gender/physical stats/occupation, appearance features covering facial/body/clothing), ## 性格特征 (surface personality, inner personality, psychological states with contrasts), ## 生活状态 (living environment details, social relationships dynamics), ## 重生经历/特殊经历 (past experiences, timeline events, known/unknown information patterns), ## 特殊能力 (systems/powers with detailed limitations and usage methods), ## 当前状态 (controlled resources, psychological dynamics, action tendencies). Focus on character depth, contradictions, growth arcs, systematic ability descriptions, and world integration with specific examples and detailed descriptions
 - **Configuration**: constant=true, insert_order=2, position=0 (second priority, always active)
 
 **3. WORLD_VIEW Tool - Foundation Framework:**
-- **Purpose**: Creates the mandatory WORLD_VIEW entry as the structural foundation for all supplementary content
+- **Purpose**: Creates the mandatory WORLD_VIEW entry as the structural foundation for all supplementary content. This tool generates a single, constant entry. It does NOT accept a 'key' parameter.
 - **Fixed Keywords**: ["world", "universe", "realm", "setting", "reality"]
 - **XML Wrapper**: <world_view></world_view>
 - **Content Requirements**: Comprehensive world structure with deep hierarchical organization using multi-level categorization (## Major Systems → ### Subsystems → #### Specific Elements → - Detailed Points). Must include: world origins/history with detailed timelines, core systems (technology/magic/power) with specific mechanisms, geographical structure with environmental details, societal frameworks with power dynamics, cultural aspects with behavioral patterns, faction systems with relationships and conflicts, resource distribution with scarcity factors, communication networks, survival challenges, and hierarchical organization that clearly defines expansion opportunities for supplementary entries
 - **Configuration**: constant=true, insert_order=3, position=0 (third priority, always active)
 
 **4. SUPPLEMENT Tool - Contextual Expansions:**
-- **Purpose**: Creates supplementary entries that provide detailed descriptions of specific nouns/entities mentioned in the WORLD_VIEW entry
-- **Custom Keywords**: Extract specific nouns from WORLD_VIEW content as trigger keywords (e.g., faction names like "血十字帮", locations like "美好公寓", systems like "雪上列车", technologies like "冰雪分子能量转化技术")
+- **Purpose**: Creates supplementary entries that provide detailed descriptions of specific nouns/entities mentioned in the WORLD_VIEW entry.
+- **Custom Keywords**: This tool REQUIRES a 'key' parameter which MUST be a NON-EMPTY ARRAY of specific nouns extracted from WORLD_VIEW content as trigger keywords (e.g., ["血十字帮", "美好公寓", "雪上列车", "冰雪分子能量转化技术"]). If the 'key' array is empty or not provided, the tool will fail.
 - **Content Format**: Detailed Markdown formatting (no XML wrapper for supplementary entries)
 - **Content Requirements**: 500-1000 words of comprehensive detail expanding specific WORLD_VIEW nouns. Each entry focuses on one particular entity mentioned in WORLD_VIEW, providing deep background, operational details, relationships, and context that wasn't fully covered in the foundational entry. Minimum 5 entries required covering diverse WORLD_VIEW elements.
 - **Configuration**: constant=false, insert_order=10+, position=2 (contextual activation)
@@ -481,26 +481,41 @@ ${taskQueue.map((task, i) => `${i + 1}. ${task.description} (${task.sub_problems
         await ResearchSessionOperations.completeCurrentSubProblem(this.conversationId);
       }
 
-      // Handle CHARACTER or WORLDBOOK tool - data updates and task completion evaluation
-      if ((decision.tool === ToolType.CHARACTER || decision.tool === ToolType.WORLD_VIEW || decision.tool === ToolType.USER_SETTING || decision.tool === ToolType.STATUS) && result.success) {
+      // Handle CHARACTER, STATUS, USER_SETTING, WORLD_VIEW, SUPPLEMENT tools - data updates and task completion evaluation
+      if (
+        decision.tool === ToolType.CHARACTER ||
+        decision.tool === ToolType.STATUS ||
+        decision.tool === ToolType.USER_SETTING ||
+        decision.tool === ToolType.WORLD_VIEW ||
+        decision.tool === ToolType.SUPPLEMENT
+      ) {
         console.log(`✅ ${decision.tool} execution completed with generated content`);
-        
-        // Update generation output with new data
+
         if (decision.tool === ToolType.CHARACTER && result.result?.character_data) {
           console.log("🔄 Updating generation output with character data");
           await ResearchSessionOperations.updateGenerationOutput(this.conversationId, {
             character_data: result.result.character_data,
           });
-        }
-        
-        if (decision.tool === ToolType.WORLD_VIEW || decision.tool === ToolType.USER_SETTING || decision.tool === ToolType.STATUS && result.result?.worldbook_data) {
-          console.log("🔄 Updating generation output with worldbook data");
-          
-          // Use the new simplified method for appending worldbook data
-          const newEntries = result.result.worldbook_data;
-          await ResearchSessionOperations.appendWorldbookData(this.conversationId, newEntries);
-          
-          console.log(`📚 Added ${newEntries.length} new worldbook entries`);
+        } else if (decision.tool === ToolType.STATUS && result.result?.status_data) {
+          console.log("🔄 Updating generation output with status data");
+          await ResearchSessionOperations.appendWorldbookData(this.conversationId, {
+            status_data: result.result.status_data,
+          });
+        } else if (decision.tool === ToolType.USER_SETTING && result.result?.user_setting_data) {
+          console.log("🔄 Updating generation output with user setting data");
+          await ResearchSessionOperations.appendWorldbookData(this.conversationId, {
+            user_setting_data: result.result.user_setting_data,
+          });
+        } else if (decision.tool === ToolType.WORLD_VIEW && result.result?.world_view_data) {
+          console.log("🔄 Updating generation output with world view data");
+          await ResearchSessionOperations.appendWorldbookData(this.conversationId, {
+            world_view_data: result.result.world_view_data,
+          });
+        } else if (decision.tool === ToolType.SUPPLEMENT && result.result?.supplement_data) {
+          console.log("🔄 Updating generation output with supplementary data");
+          await ResearchSessionOperations.appendWorldbookData(this.conversationId, {
+            supplement_data: result.result.supplement_data,
+          });
         }
         
         // Complete current sub-problem after successful tool execution
