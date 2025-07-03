@@ -70,7 +70,7 @@ export class SupplementTool extends BaseSimpleTool {
 
     // Build the SUPPLEMENT worldbook entry
     const supplementEntry: SupplementEntry = {
-      id: `wb_supplement_${Date.now()}`,
+      id: `supplement_${Date.now()}`,
       uid: uuidv4(),
       key: key,
       keysecondary: keysecondary,
